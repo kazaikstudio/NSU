@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload-Files</title>
+    <link rel="stylesheet" href="Upload.css">
+    <script src="Upload.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <div class="dashboard-header">
+            <div class="user-info">
+                <div class="account-actions">
+                    <a href="/api/auth/google" class="google-auth-btn" id="user-name-display">
+                        Loading...
+                    </a>
+                </div>
+                <div class="user-stats">
+                    <span class="file-count" id="file-count-display">0 Files Uploaded</span>
+                </div>
+            </div>
+
+            <div class="storage-bar">
+                <div class="storage-info">
+                    <a href="https://drive.google.com" target="_blank" class="drive-link">
+                        <div class="account-details">
+                            <span class="capacity">Loading storage...</span>
+                        </div>
+                    </a>
+                </div>
+                <div class="progress-wrapper">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 0%;"></div>
+                    </div>
+                    <span class="progress-text">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <main class="main-content">
+            <div class="upload-card">
+                <div class="edit_section">
+                    <div class="upload-zone" id="upload-zone">
+                        <input type="file" id="image-picker" accept="image/*" style="display:none" onchange="previewThumbnail(this)">
+                        
+                        <div id="default-content" onclick="document.getElementById('image-picker').click()">
+                            <div class="upload-icon">⬆</div>
+                            <p class="upload-text">Drag and Drop Your Image</p>
+                            <p class="or-text">or</p>
+                            <button class="browse-btn" type="button">Browse</button>
+                        </div>
+                        
+                        <div id="preview-content" style="display:none; width:100%; height:100%; position:relative;">
+                            <img id="thumb-preview" src="#" style="width:100%; height:100%; object-fit:cover; display:block;">
+                            
+                            <button class="remove-thumb-btn" type="button" onclick="removeThumbnail(event)" 
+                                    style="position: absolute; top: 10px; right: 10px; z-index: 10; cursor: pointer;">✕</button>
+                        </div>
+                    </div>
+
+                    <div class="edit-section">
+                        <div class="checkbox-group">
+                            <label class="round-check">
+                                Dancehall
+                                <input type="radio" name="genre" value="Dancehall">
+                                <span class="checkmark"></span>
+                            </label>
+                            <label class="round-check">
+                                Hiphop
+                                <input type="radio" name="genre" value="Hiphop">
+                                <span class="checkmark"></span>
+                            </label>
+                            <label class="round-check">
+                                Lakubukubu
+                                <input type="radio" name="genre" value="Lakubukubu">
+                                <span class="checkmark"></span>
+                            </label>
+                            <label class="round-check">
+                                Mixtape
+                                <input type="radio" name="genre" value="Mixtape">
+                                <span class="checkmark"></span>
+                            </label>
+                        </div>
+                        <p class="label">File name</p>
+                        <input type="text" class="edit-name" value="logo_mockup.png">
+                        <div class="btn-group-vertical">
+                            <input type="file" id="file-picker" style="display:none" onchange="updateEditName(this)">
+                            <button class="browse-btn secondary" onclick="document.getElementById('file-picker').click()">
+                                Browse File
+                            </button>
+                            <input type="file" id="file-picker" style="display: none;">
+                            <button class="upload-btn">Upload File</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="file-section">
+                    <div class="search-bar">
+                        <input type="text" placeholder="Search files...">
+                    </div>
+                    <h2>Uploaded files</h2>
+                    <div class="file-list" id="file-list-container">
+                        <div class="file-item" id="file-1">
+                            <div class="file-thumb">
+                                <span class="fallback-icon">🎵</span>
+                            </div>
+                            <div class="file-info-progress">
+                                <span class="file-name">logo_mockup.png</span>
+                                <div class="progress-bar-small"><div class="fill" style="width: 80%; background: #4a90e2;"></div></div>
+                            </div>
+                            <span class="action-icon" onclick="removeFile('file-1')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+    </div>
+</body>
+</html>
