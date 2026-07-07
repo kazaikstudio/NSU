@@ -15,7 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 5500;
+const PORT = process.env.PORT || 5500;
 const TOKEN_PATH = path.join(__dirname, '.credentials.json'); 
 
 const CLIENT_ID = process.env.CLIENT_ID || '648297965475-qilsr4vd4maubsdv57hms7n2vgv32lm2.apps.googleusercontent.com';
@@ -335,7 +335,7 @@ app.get('/api/auth/callback', async (req, res) => {
         fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
         
         // Redirecting straight back to your upload dashboard page on the live server
-        res.redirect('https://noll.onrender.com/Upload/Upload.html');
+        res.redirect('https://noll.up.railway.app/Upload/Upload.html');
     } catch (error) {
         console.error("Authentication fallback handler failure:", error);
         res.status(500).json({
