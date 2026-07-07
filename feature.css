@@ -1,0 +1,946 @@
+:root {
+    --text-main: #ffffff;
+    --text-muted: #b3b3b3;
+    --border-color: #ffffff1c;
+
+    --player-accent: #dcf80c;
+    --track-base: #4d4d4d;
+    --text-bright: #ffffff;
+    --text-dim: #7a7a7a;
+
+    --nav-logo: #ff4757;
+
+    --founder: #00000038;
+    --storage: #0103304a;
+
+    --gradient: linear-gradient(45deg, #000714, #001f34);
+
+    .dept-visuals { background: rgba(255, 85, 26, 0.2); color: #ff551a; border: 1px solid rgba(255, 85, 26, 0.3); }
+    .dept-music   { background: rgba(0, 157, 255, 0.2); color: #009dff; border: 1px solid rgba(0, 157, 255, 0.3); }
+    .dept-dancers { background: rgba(196, 223, 16, 0.2); color: #c4df10; border: 1px solid rgba(196, 223, 16, 0.3); }
+    .dept-djs     { background: rgba(224, 64, 251, 0.2); color: #e040fb; border: 1px solid rgba(224, 64, 251, 0.3); }
+
+    /* Color codes mapped to your branch accents */
+    .badge-visuals { background: rgba(255, 85, 26, 0.85); color: #ffffff; }
+    .badge-music   { background: rgba(0, 157, 255, 0.85); color: #ffffff; }
+    .badge-dancers { background: rgba(196, 223, 16, 0.85); color: #0d0d11; }
+    .badge-djs     { background: rgba(224, 64, 251, 0.85); color: #ffffff; }
+    .badge-studio  { background: rgba(255, 255, 255, 0.85); color: #0d0d11; }
+}
+
+.about-canvas {
+    width: 100%;
+    max-width: 1400px;
+    justify-content: center;
+    align-items: center;
+    margin: 40px auto 10px auto;
+    padding: 0 24px;
+    box-sizing: border-box;
+    color: var(--text-main);
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* ==========================================
+   NAVBAR BASE SHELL
+   ========================================== */
+.navbar {
+    border-bottom: 1px solid  var(--border-color);
+    position: sticky;
+    top: 0;
+    width: 100%;
+    z-index: 2000;
+}
+
+.nav-container {
+    max-width: 1800px;
+    margin: 0 auto;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #00000fed;
+}
+
+.nav-auth-btns {
+    display: flex;
+    gap: 15px;
+}
+
+.nav-logo {
+    color: var(--text-main);
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 50px;
+    text-decoration: none;
+    letter-spacing: 0.5px;
+}
+
+.nav-logo:hover {
+    color: var(--nav-logo);
+}
+
+.nav-link-btn {
+    color: var(--nav-logo);
+    font-size: 16px;
+    font-weight: 600;
+    text-decoration: none;
+    letter-spacing: 0.5px;
+}
+
+.nav-link-btn:hover {
+    color: var(--text-main);
+}
+
+.nav-link-btn:active {
+    transform: scale(0.96);
+}
+
+/* ==========================================
+   GLOBAL FEATURE SECTION LAYOUT
+   ========================================== */
+.features-section {
+    padding: 60px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.features-container {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+}
+
+.features-header {
+    text-align: center;
+}
+
+.features-header h2 {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    letter-spacing: 0.5px;
+    background: linear-gradient(90deg, #ffffff, #ff7b50);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.features-header p {
+    color: var(--text-muted, #a0a0ab);
+    font-size: 15px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px;
+}
+
+.feature-card.glass-panel {
+    background: rgba(24, 24, 28, 0.45);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.feature-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 16px 40px rgba(155, 39, 0, 0.3);
+}
+
+.card-icon-wrapper {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.visuals-accent { color: #ff551a; }
+.music-accent { color: #009dff; }
+.dancers-accent { color: #c4df10; }
+.djs-accent { color: #e040fb; }
+
+.feature-card h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main, #ffffff);
+    letter-spacing: 0.5px;
+}
+
+.feature-desc {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-muted, #a0a0ab);
+}
+
+.animate-up {
+    animation: featureSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.features-grid div:nth-child(1) { animation-delay: 0.05s; }
+.features-grid div:nth-child(2) { animation-delay: 0.10s; }
+.features-grid div:nth-child(3) { animation-delay: 0.15s; }
+.features-grid div:nth-child(4) { animation-delay: 0.20s; }
+
+@keyframes featureSlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   TEAM PROFILE SECTION (DOTS PAGINATION ENGINE)
+   ========================================================================== */
+.team-section {
+    padding: 60px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+.team-container {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.team-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.team-header h2 {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    letter-spacing: 0.5px;
+    background: linear-gradient(90deg, #ffffff, #c4df10);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.team-header p {
+    color: var(--text-muted, #a0a0ab);
+    font-size: 15px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.team-scroll-container {
+    position: relative;
+    width: 100%;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* --- Horizontal Slider Snap Engine --- */
+.team-scroll-grid {
+    display: flex;
+    gap: 24px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    padding: 12px 4px 20px 4px;
+    scrollbar-width: none;
+    border-radius: 20px;
+    scroll-snap-type: x mandatory;
+}
+
+.team-scroll-grid::-webkit-scrollbar {
+    display: none;
+}
+
+.team-scroll-grid .team-card.glass-panel {
+    flex: 0 0 300px;
+    box-sizing: border-box;
+    scroll-snap-align: start;
+}
+
+.team-card.glass-panel {
+    background: rgba(24, 24, 28, 0.45);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 20px; 
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.team-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.profile-image-wrapper {
+    position: relative;
+    width: 100%;
+    height: 280px; 
+    border-radius: 12px;
+    overflow: hidden;
+    background: #18181c;
+}
+
+.profile-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+
+.team-card:hover .profile-img {
+    transform: scale(1.04); 
+}
+
+.role-badge {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 2;
+}
+
+.profile-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.profile-info h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main, #ffffff);
+}
+
+.profile-bio {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--text-muted, #a0a0ab);
+}
+
+/* --- PAGINATION TRACK CONTAINER --- */
+.team-dots-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.team-dots-indicator .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.team-dots-indicator .dot.active {
+    background: var(--player-accent, #ff7b50);
+    transform: scale(1.25);
+    box-shadow: 0 0 10px var(--player-accent, rgba(255, 123, 80, 0.4));
+}
+
+/* ==========================================================================
+   NOLL STUDENTS PROFILE GALLERY STYLE
+   ========================================================================== */
+.students-section {
+    padding: 60px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.students-container {
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+}
+
+.students-header {
+    text-align: center;
+}
+
+.students-header h2 {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    letter-spacing: 0.5px;
+    background: linear-gradient(90deg, #ffffff, #009dff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.students-header p {
+    color: var(--text-muted, #a0a0ab);
+    font-size: 15px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.students-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+}
+
+.student-card.glass-panel {
+    background: rgba(24, 24, 28, 0.45);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 12px;
+}
+
+.student-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.student-image-frame {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #18181c;
+}
+
+.student-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.student-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to top, rgba(13, 13, 17, 0.95) 0%, rgba(13, 13, 17, 0.4) 50%, transparent 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 24px;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+}
+
+.student-overlay h3 {
+    margin: 8px 0 4px 0;
+    font-size: 18px;
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.student-focus {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted, #a0a0ab);
+    transform: translateY(4px);
+    opacity: 0.85;
+    transition: all 0.3s ease;
+}
+
+.student-card:hover .student-img {
+    transform: scale(1.06);
+}
+
+.student-card:hover .student-focus {
+    transform: translateY(0);
+    opacity: 1;
+    color: #ffffff;
+}
+
+.student-dept {
+    align-self: flex-start;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   NOLL STUDIO GROUP BANNER PROFILE DESIGN
+   ========================================================================== */
+.group-banner-section {
+    padding: 60px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.group-banner-container {
+    width: 100%;
+}
+
+.group-hero-frame.glass-panel {
+    position: relative;
+    width: 100%;
+    height: 600px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #141417;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+.group-hero-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 30%;
+    transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.group-hero-frame:hover .group-hero-img {
+    transform: scale(1.02);
+}
+
+.group-content-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        to top, 
+        rgba(13, 13, 17, 0.95) 0%, 
+        rgba(13, 13, 17, 0.5) 60%, 
+        rgba(13, 13, 17, 0.2) 100%
+    );
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40px;
+    box-sizing: border-box;
+}
+
+.group-meta-block {
+    max-width: 650px;
+}
+
+.studio-badge {
+    background: rgba(196, 223, 16, 0.15);
+    color: #c4df10;
+    border: 1px solid rgba(196, 223, 16, 0.3);
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    border-radius: 6px;
+    display: inline-block;
+    margin-bottom: 16px;
+}
+
+.group-meta-block h2 {
+    font-size: 32px;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 12px 0;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+}
+
+.group-meta-block p {
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--text-muted, #a0a0ab);
+    margin: 0;
+}
+
+.group-stats-row {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    background: rgba(24, 24, 28, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 20px 32px;
+    border-radius: 14px;
+    align-self: flex-start;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.stat-node {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.stat-num {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--player-accent, #ff7b50);
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #ffffff;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.stat-border-line {
+    width: 1px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* ==========================================================================
+   NOLL STUDIO CONCLUSION & JOIN CTA ACCENTS
+   ========================================================================== */
+.cta-section {
+    padding: 80px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.cta-container.glass-panel {
+    position: relative;
+    width: 100%;
+    background: rgba(24, 24, 28, 0.4);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 60px 40px;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+.cta-glow-blend {
+    position: absolute;
+    top: -50%;
+    left: -20%;
+    width: 140%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 123, 80, 0.07) 0%, rgba(196, 223, 16, 0.03) 50%, transparent 70%);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.cta-content {
+    position: relative;
+    z-index: 2;
+    max-width: 700px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.cta-mini-tag {
+    color: var(--player-accent, #ff7b50);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+
+.cta-content h2 {
+    font-size: 36px;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1.2;
+    letter-spacing: -0.5px;
+}
+
+.cta-content p {
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--text-muted, #a0a0ab);
+    margin: 0 0 12px 0;
+}
+
+.cta-action-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.cta-join-btn {
+    background: var(--player-accent, #ff7b50);
+    color: #0d0d11;
+    padding: 14px 32px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 20px rgba(255, 123, 80, 0.25);
+}
+
+.cta-join-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 28px rgba(255, 123, 80, 0.4);
+    background: #ff8c66; 
+}
+
+.cta-join-btn:active {
+    transform: translateY(-1px);
+}
+
+.cta-secondary-btn {
+    background: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 14px 32px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.cta-secondary-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* ==========================================================
+   MOBILE SCREEN DROPDOWN BREAKPOINT CONFIGURATION
+   ========================================================== */
+.nav-menu-toggle {
+    display: none;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    z-index: 2100;
+}
+
+.nav-logo-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-menu-toggle svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* ==========================================================
+   🧬 RESPONSIVE INTELLIGENT ADAPTIVE BREAKPOINTS
+   ========================================================== */
+@media (max-width: 768px) {
+    /* Mobile Overlay Menu Mechanics */
+    .nav-menu-toggle {
+        display: flex;
+    }
+    
+    .nav-auth-btns {
+        position: absolute;
+        top: 60px;
+        left: 50%;
+        width: 90%;
+        border-radius: 10px;
+        transform: translateX(-50%);
+        background-color: #00000fed;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 0;
+        padding: 0;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
+    }
+
+    .nav-auth-btns .nav-link-btn {
+        width: 100%;
+        text-align: center;
+        padding: 16px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        box-sizing: border-box;
+    }
+
+    .nav-auth-btns.active {
+        max-height: 160px;
+        padding-bottom: 8px;
+    }
+
+    /* SVG Toggle Transforms */
+    .nav-menu-toggle svg {
+        transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        transform-origin: center;
+    }
+
+    .nav-menu-toggle.active svg {
+        transform: rotate(180deg) scale(0.9);
+    }
+
+    .nav-menu-toggle.active svg #Vector {
+        stroke: #ff4a5a;
+        transition: stroke 0.3s ease;
+    }
+
+    .students-grid {
+        /* Scales smoothly to dual columns or clean rows on small viewports */
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
+    }
+
+    /* ==========================================================
+       FIXED TEAM SCROLL SCALING ENGINE
+       ========================================================== */
+    .team-scroll-container {
+        width: 100%;
+        overflow-x: auto;
+        display: block;
+    }
+
+    .team-scroll-grid .team-card.glass-panel {
+        /* Linearly scales from 280px at 320px viewport up to 350px at 768px viewport */
+        flex: 0 0 calc(280px + (350 - 280) * ((100vw - 320px) / (768 - 320)));
+        scroll-snap-align: center;
+    }
+
+    .profile-image-wrapper {
+        /* Linearly scales image aspect height matching the card scaling velocity */
+        height: calc(260px + (360 - 260) * ((100vw - 320px) / (768 - 320)));
+    }
+
+    /* Hero Banner Layout Compaction */
+    .group-hero-frame.glass-panel {
+        height: auto;
+        min-height: 520px;
+    }
+
+    .group-content-overlay {
+        padding: 24px;
+        justify-content: flex-end;
+        gap: 32px;
+    }
+
+    .group-meta-block h2 { font-size: 24px; }
+    .group-meta-block p { font-size: 14px; }
+
+    .group-stats-row {
+        width: 100%;
+        box-sizing: border-box;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px;
+    }
+
+    .stat-num { font-size: 20px; }
+    .stat-label { font-size: 10px; }
+}
+
+@media (max-width: 414px) {
+    /* Layout Spacing Adjustments for Small Screens */
+    .features-section, .team-section, .students-section, .group-banner-section, .cta-section {
+        padding: 40px 16px;
+    }
+
+    .features-header h2, .team-header h2, .students-header h2 {
+        font-size: 24px;
+    }
+
+    /* CTA Section Compression */
+    .cta-container.glass-panel {
+        padding: 40px 20px;
+    }
+    
+    .cta-content h2 {
+        font-size: 26px;
+    }
+    
+    .cta-content p {
+        font-size: 14px;
+    }
+
+    .cta-action-row {
+        flex-direction: column;
+        width: 100%;
+        gap: 12px;
+    }
+
+    .cta-join-btn, .cta-secondary-btn {
+        width: 100%;
+        box-sizing: border-box;
+        text-align: center;
+        padding: 12px 24px;
+    }
+
+    .students-grid {
+        /* Comfortably fits cards cleanly side-by-side or singular on hyper-small screens */
+        grid-template-columns: repeat(auto-fill, minmax(100%, 1fr));
+    }
+    
+    /* ==========================================================
+       ONE-CARD SMART SNAP ENGINE (MOBILE ENHANCED)
+       ========================================================== */
+    .team-scroll-container {
+        width: 100%;
+        overflow: hidden; /* Prevent parent container overflow blowout */
+    }
+
+    .team-scroll-grid {
+        /* Add explicit padding to alignment tracks to assist smooth snapping */
+        padding: 12px 20px 20px 20px; 
+        gap: 16px;
+    }
+
+    .team-scroll-grid .team-card.glass-panel {
+        /* Forces exactly one card to fill the remaining screen space */
+        flex: 0 0 calc(100vw - 40px); 
+        box-sizing: border-box;
+        scroll-snap-align: center;
+    }
+
+    .profile-image-wrapper {
+        /* Dynamically maintains a clean structural 4:3 portrait ratio based on mobile width */
+        height: calc((100vw - 40px) * 1.1); 
+        max-height: 380px;
+    }
+}
