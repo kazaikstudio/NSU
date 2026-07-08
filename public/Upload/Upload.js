@@ -1,5 +1,5 @@
 // --- 0. CONFIGURATION ---
-const BACKEND_URL = "";
+const BACKEND_URL = "https://your-app-name.onrender.com";
 
 // --- 1. INITIALIZATION ---
 window.addEventListener('DOMContentLoaded', () => {
@@ -14,6 +14,7 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Add your login button handler here if you have one on this page:
     const loginButton = document.getElementById('login-btn');
     if (loginButton) {
         loginButton.addEventListener('click', () => {
@@ -22,7 +23,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Search Bar Functionality
+// 4. Search Bar Functionality
 document.querySelector('.search-bar input').addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase();
     const fileItems = document.querySelectorAll('.file-item');
@@ -70,6 +71,7 @@ async function loadDriveMusic(folderId = null) {
     if (!container) return;
     
     try {
+        // CHANGED: Prepended BACKEND_URL
         const url = folderId ? `${BACKEND_URL}/api/media/drive?folderId=${folderId}` : `${BACKEND_URL}/api/media/drive`;
         const response = await fetch(url);
         const tracks = await response.json();
@@ -77,17 +79,15 @@ async function loadDriveMusic(folderId = null) {
         updateFileCountUI(tracks.length);
 
         if (tracks.length === 0) {
-            container.innerHTML = '<p class="no-files">No assets found in Drive folders.</p>';
+            container.innerHTML = '<p>No music files found.</p>';
             return;
         }
 
         container.innerHTML = tracks.map(track => {
             const safeTitle = track.title.replace(/'/g, "\\'");
-            // Make sure track.thumbnail is passed exactly as the 4th argument!
             const onClick = `selectFile('${track.id}', '${safeTitle}', '${track.thumbnail || ''}')`;
             
-            // Change this line to make sure the arguments match (id, name, isUploading, thumbnail, onClickStr, genre)
-            return createFileItem(track.id, track.title, false, track.thumbnail || '', onClick, track.genre || 'All');
+            return createFileItem(track.id, track.title, false, track.thumbnail, onClick);
         }).join('');
 
     } catch (error) {
@@ -104,7 +104,7 @@ async function uploadFileWithProgress() {
     if (!genre) return alert("Please select a genre!");
 
     const tempId = 'temp-' + Date.now();
-    document.getElementById('file-list-container').insertAdjacentHTML('afterbegin', createFileItem(tempId, `Uploading: ${filePicker.files[0].name}`, true, '', '', genre));
+    document.getElementById('file-list-container').insertAdjacentHTML('afterbegin', createFileItem(tempId, `Uploading: ${filePicker.files[0].name}`, true));
 
     const formData = new FormData();
     formData.append('file', filePicker.files[0]);
@@ -118,15 +118,11 @@ async function uploadFileWithProgress() {
     xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
             const percent = Math.round((event.loaded / event.total) * 100);
-            
-            // Target the fill class under your generated temporary ID block
             const bar = document.querySelector(`#${tempId} .fill`);
             const nameSpan = document.querySelector(`#${tempId} .file-name`);
 
             if (bar) {
-                // Change style.width directly instead of setProperty
-                bar.style.width = percent + '%';
-                
+                bar.style.setProperty('width', percent + '%', 'important');
                 if (percent >= 100 && nameSpan) {
                     nameSpan.innerText = "Processing on server...";
                 }
@@ -134,7 +130,8 @@ async function uploadFileWithProgress() {
         }
     };
 
-    xhr.open('POST', `${BACKEND_URL}/api/upload`, true);
+    // CHANGED: Corrected duplicate onload definition to single block and prepended BACKEND_URL
+    xhr.open('POST', `${BACKEND_URL}/api/upload', true);
     
     xhr.onload = async () => {
         document.getElementById(tempId)?.remove();
@@ -143,7 +140,7 @@ async function uploadFileWithProgress() {
             loadDriveMusic();
             updateStorageBar();
             if (filePicker) filePicker.value = "";
-            removeThumbnail(new Event('click'));
+            if (imagePicker) imagePicker.value = "";
         } else {
             alert("Upload failed. Check console for details.");
             console.error("Upload failed with status:", xhr.status);
@@ -153,88 +150,42 @@ async function uploadFileWithProgress() {
     xhr.onerror = () => alert("Network error during upload.");
     xhr.send(formData);
 }
-window.addEventListener('DOMContentLoaded', () => {
-    const dropZone = document.getElementById('upload-zone');
-    const imagePicker = document.getElementById('image-picker');
-
-    if (dropZone && imagePicker) {
-        // Prevent default browser behavior for all drag events
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            }, false);
-        });
-
-        // Optional: Add visual feedback classes when dragging over
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
-        });
-
-        // Handle the dropped files
-        dropZone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-
-            if (files.length > 0 && files[0].type.startsWith('image/')) {
-                // Link the file to the hidden file input element
-                imagePicker.files = files;
-                
-                // Call your existing preview function manually
-                previewThumbnail(imagePicker);
-            } else {
-                alert("Please drop a valid image file!");
-            }
-        });
-    }
-});
 
 async function saveFileChanges() {
     const nameInput = document.querySelector('.edit-name');
     const fileId = nameInput?.dataset.currentId;
     if (!fileId) return alert("Select a file to update first!");
 
+    // CHANGED: Prepended BACKEND_URL
     const res = await fetch(`${BACKEND_URL}/api/update-file/${fileId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newName: nameInput.value })
     });
-    if (res.ok) { 
-        alert("Updated successfully!"); 
-        removeThumbnail(new Event('click'));
-        loadDriveMusic(); 
-    }
+    if (res.ok) { alert("Updated successfully!"); loadDriveMusic(); }
 }
 
 async function deleteFile(fileId) {
     if (!confirm("Are you sure you want to delete this file?")) return;
+    // CHANGED: Prepended BACKEND_URL
     const res = await fetch(`${BACKEND_URL}/api/delete/${fileId}`, { method: 'DELETE' });
-    if (res.ok) { 
-        document.getElementById(fileId)?.remove(); 
-        removeThumbnail(new Event('click'));
-        loadDriveMusic(); 
-    }
+    if (res.ok) { document.getElementById(fileId)?.remove(); loadDriveMusic(); }
 }
 
 // --- 4. DATA & STORAGE HELPERS ---
 async function loadUserData() {
     try {
+        // CHANGED: Prepended BACKEND_URL
         const res = await fetch(`${BACKEND_URL}/api/user/info`);
         const data = await res.json();
-        
         const display = document.getElementById('user-name-display');
-        if (display) display.innerText = data.name || "Logged In";
-        
-        updateFileCountUI(data.fileCount || 0);
+        if (display) display.innerText = data.name;
     } catch (e) { console.error("User data error:", e); }
 }
 
 async function updateStorageBar() {
     try {
+        // CHANGED: Prepended BACKEND_URL
         const res = await fetch(`${BACKEND_URL}/api/drive/storage`);
         const data = await res.json();
         if (data.error) return;
@@ -242,29 +193,25 @@ async function updateStorageBar() {
         const format = (bytes) => (bytes / (1024**3) < 1) ? `${Math.round(bytes/(1024**2))} MB` : `${(bytes/(1024**3)).toFixed(1)} GB`;
         
         const perc = Math.min(Math.round((data.usedBytes / data.limitBytes) * 100), 100);
-        
-        const progressFill = document.querySelector('.progress-fill');
-        const progressText = document.querySelector('.progress-text');
-        const capacityText = document.querySelector('.account-details .capacity');
-        
-        if (progressFill) progressFill.style.width = perc + '%';
-        if (progressText) progressText.innerText = perc + '%';
-        if (capacityText) capacityText.innerText = `${format(data.usedBytes)} / ${format(data.limitBytes)} used`;
+        document.querySelector('.progress-fill').style.width = perc + '%';
+        document.querySelector('.progress-text').innerText = perc + '%';
+        document.querySelector('.account-details .capacity').innerText = `${format(data.usedBytes)} / ${format(data.limitBytes)} used`;
     } catch (e) { console.error("Storage error:", e); }
 }
 
 // --- 5. UI GENERATORS ---
-function createFileItem(id, name, isUploading = false, thumbnail = '', onClickStr = '', genre = 'All') {
+function createFileItem(id, name, isUploading = false, thumbnail = '', onClickStr = '') {
     let processedThumbnail = thumbnail;
     if (thumbnail && thumbnail.includes('drive.google.com/file/d/')) {
         const fileId = thumbnail.split('/d/')[1].split('/')[0];
         processedThumbnail = `https://drive.google.com/uc?export=view&id=${fileId}`;
     }
 
+    // CHANGED: Swapped 'http://localhost:5500' for dynamic `${BACKEND_URL}`
     const thumbContent = (processedThumbnail && processedThumbnail.startsWith('http')) 
         ? `<img src="${BACKEND_URL}/proxy-image?url=${encodeURIComponent(processedThumbnail)}" 
                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" 
-                style="width:100%; height:100%; object-fit:cover; border-radius:4px;">
+                style="width:100%; height:100%; object-fit:cover;">
            <span class="fallback-icon" style="display:none; font-size:24px;">🎵</span>`
         : '<span class="fallback-icon">🎵</span>';
 
@@ -273,17 +220,16 @@ function createFileItem(id, name, isUploading = false, thumbnail = '', onClickSt
             <div class="file-thumb">${thumbContent}</div>
             <div class="file-info-progress">
                 <span class="file-name">${name}</span>
-                <span class="file-genre" style="font-size:11px; color:#aaa;">${genre}</span>
                 
                 ${isUploading ? `
                     <div class="progress-bar-small">
-                        <div class="fill" style="width: 0%; height: 100%; background: #4a90e2;"></div>
+                        <div class="fill" style="width: 0%; height: 100%; background: blue;"></div>
                     </div>` 
                 : ''}
             </div>
             
            ${!isUploading ? `
-                <span class="action-icon" onclick="event.stopPropagation(); window.deleteFile('${id}')" 
+                <span class="action-icon" onclick="event.stopPropagation(); deleteFile('${id}')" 
                     style="cursor: pointer; color: #ff6b6b; display: flex; align-items: center; justify-content: center;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="3 6 5 6 21 6"></polyline>
@@ -302,50 +248,25 @@ function updateFileCountUI(count) {
 
 function selectFile(id, name, thumbUrl) {
     currentAction = 'update';
-    const nameInput = document.querySelector('.edit-name');
-    if (nameInput) {
-        nameInput.value = name;
-        nameInput.dataset.currentId = id;
-    }
-    
-    const uploadBtn = document.querySelector('.upload-btn');
-    if (uploadBtn) uploadBtn.innerText = "Save Changes";
-
+    document.querySelector('.edit-name').value = name;
+    document.querySelector('.edit-name').dataset.currentId = id;
     const thumb = document.getElementById('thumb-preview');
-
-    // If a thumbnail exists, format it and show the preview container
-    if (thumbUrl && thumbUrl.trim() !== '') {
-        if (thumbUrl.startsWith('http') && !thumbUrl.includes('/proxy-image?url=')) {
-            thumb.src = `${BACKEND_URL}/proxy-image?url=${encodeURIComponent(thumbUrl)}`;
-        } else {
-            thumb.src = thumbUrl;
-        }
-        thumb.style.display = 'block';
-        document.getElementById('default-content').style.display = 'none';
-        document.getElementById('preview-content').style.display = 'block';
-    } 
-
-
-    else {
-        if (thumb) {
-            thumb.src = '#';
-            thumb.style.display = 'none';
-        }
-        // Safely clear the picker file queue if any was staged from a previous item selection
-        const imagePicker = document.getElementById('image-picker');
-        if (imagePicker) imagePicker.value = "";
-
-        document.getElementById('preview-content').style.display = 'none';
-        document.getElementById('default-content').style.display = 'block';
-    }
+    if (thumb) { thumb.src = thumbUrl || ''; thumb.style.display = thumbUrl ? 'block' : 'none'; }
 }
+
 function handleFileSelection(input) {
     if (input.files && input.files[0]) {
+        console.log("File selected:", input.files[0].name);
+        
         const uploadBtn = document.querySelector('.upload-btn');
         if (uploadBtn) uploadBtn.innerText = "Send to Google Storage";
         
         const nameInput = document.querySelector('.edit-name');
         if (nameInput) nameInput.value = input.files[0].name;
+        
+        if (typeof updateEditName === 'function') {
+            updateEditName(input);
+        }
     }
 }
 
@@ -361,10 +282,10 @@ async function saveThumbnailUpdate() {
     formData.append('newName', nameInput.value);
 
     try {
+        // CHANGED: Prepended BACKEND_URL
         const res = await fetch(`${BACKEND_URL}/api/update-file/${fileId}`, { method: 'POST', body: formData });
         if (res.ok) {
             alert("Thumbnail updated!");
-            removeThumbnail(new Event('click'));
             await loadDriveMusic(); 
         } else {
             alert("Failed to update on server.");
@@ -392,30 +313,13 @@ function previewThumbnail(input) {
 }
 
 function removeThumbnail(event) {
-    if (event && event.stopPropagation) event.stopPropagation();
+    event.stopPropagation();
+    const input = document.getElementById('image-picker');
+    if (input) input.value = ""; 
     
-    // 1. Fully flush the image storage queue from the input file handler
-    const imageInput = document.getElementById('image-picker');
-    if (imageInput) imageInput.value = ""; 
-
-    // 2. Clear the image tag completely so old images don't flash next time it opens
-    const thumbImg = document.getElementById('thumb-preview');
-    if (thumbImg) {
-        thumbImg.src = "#";
-        thumbImg.style.display = "none";
-    }
-
-    // 3. Reset the UI view visibility toggles back to default drag & drop view
-    const previewContent = document.getElementById('preview-content');
-    const defaultContent = document.getElementById('default-content');
+    document.getElementById('preview-content').style.display = 'none';
+    document.getElementById('default-content').style.display = 'block';
     
-    if (previewContent) previewContent.style.display = 'none';
-    if (defaultContent) defaultContent.style.display = 'block';
-    
+    const uploadBtn = document.querySelector('.upload-btn');
+    if (uploadBtn) uploadBtn.innerText = "Upload-File";
 }
-
-// --- 6. GLOBAL SCOPE BINDINGS FOR HTML ATTRIBUTES ---
-window.removeThumbnail = removeThumbnail;
-window.previewThumbnail = previewThumbnail;
-window.deleteFile = deleteFile;
-window.selectFile = selectFile;

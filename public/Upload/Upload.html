@@ -12,8 +12,8 @@
         <div class="dashboard-header">
             <div class="user-info">
                 <div class="account-actions">
-                    <a href="https://noll.up.railway.app/api/auth/google" class="google-auth-btn" id="user-name-display">
-                        Login with Google
+                    <a href="/api/auth/google" class="google-auth-btn" id="user-name-display">
+                        Loading...
                     </a>
                 </div>
                 <div class="user-stats">
@@ -52,10 +52,8 @@
                         </div>
                         
                         <div id="preview-content" style="display:none; width:100%; height:100%; position:relative;">
-                            <img id="thumb-preview" src="#" style="width:100%; height:100%; object-fit:cover; display:block;">
-                            
-                            <button class="remove-thumb-btn" type="button" onclick="removeThumbnail(event)" 
-                                    style="position: absolute; top: 10px; right: 10px; z-index: 10; cursor: pointer;">✕</button>
+                            <img id="thumb-preview" src="#" style="width:100%; height:100%; object-fit:cover;">
+                            <button class="remove-thumb-btn" onclick="removeThumbnail(event)">✕</button>
                         </div>
                     </div>
 
