@@ -66,16 +66,16 @@ function updatePlayerVisibility() {
 function getProcessedThumbnail(thumbnail) {
     if (!thumbnail) return null;
     
-    // 1. Match production configuration schema
-    const BACKEND_URL = "https://noll.onrender.com";
+    // ✅ Updated to point to your live production Railway environment setup
+    const BACKEND_URL = "https://nsu-backend-production.up.railway.app";
 
-    // 2. Convert standard Google Drive viewing URLs into direct download streams
+    // Convert standard Google Drive viewing URLs into direct download streams
     if (thumbnail.includes('drive.google.com/file/d/')) {
         const fileId = thumbnail.split('/d/')[1].split('/')[0];
         thumbnail = `https://drive.google.com/uc?export=view&id=${fileId}`;
     }
     
-    // 3. Return the proxy URL pointed directly at your production Render server
+    // Fallback cleanly to absolute path routing context rules
     return `${BACKEND_URL}/proxy-image?url=${encodeURIComponent(thumbnail)}`;
 }
 
