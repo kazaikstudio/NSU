@@ -16,13 +16,13 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5500;
-const TOKEN_PATH = path.join(__dirname, '.credentials.json'); 
+const TOKEN_PATH = path.join(__dirname, '.credentials.json');
 
 const CLIENT_ID = process.env.CLIENT_ID || '648297965475-qilsr4vd4maubsdv57hms7n2vgv32lm2.apps.googleusercontent.com';
 const CLIENT_SECRET = process.env.CLIENT_SECRET || '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';
 
 // --- PERMANENT REDIRECT URI SETTING ---
-const REDIRECT_URI = 'https://noll.up.railway.app/api/auth/callback';
+const REDIRECT_URI = process.env.REDIRECT_URI || 'https://nsu-backend.up.railway.app/api/auth/callback';
 
 const oauth2Client = new google.auth.OAuth2(
   CLIENT_ID,
