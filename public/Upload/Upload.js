@@ -1,6 +1,6 @@
 // --- 0. CONFIGURATION ---
 // Leave blank to automatically adapt and run on https://noll.up.railway.app
-const BACKEND_URL = "";
+const BACKEND_URL = "https://nsu-backend.up.railway.app";
 
 // --- 1. INITIALIZATION & EVENTS ---
 window.addEventListener('DOMContentLoaded', () => {
