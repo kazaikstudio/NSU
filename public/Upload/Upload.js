@@ -1,9 +1,6 @@
 // --- 0. CONFIGURATION ---
 // Leave blank to automatically adapt and run on https://noll.up.railway.app
-const BACKEND_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:5500' 
-  : 'https://nsu-backend.up.railway.app';
-
+const BACKEND_URL = "https://nsu-backend.up.railway.app";
 
 // --- 1. INITIALIZATION & EVENTS ---
 window.addEventListener('DOMContentLoaded', () => {
