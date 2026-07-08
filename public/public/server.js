@@ -371,9 +371,18 @@ app.get('/api/stats/downloads', (req, res) => {
 
 // --- OAUTH CREDENTIAL STORAGE VERIFICATION ---
 if (fs.existsSync(TOKEN_PATH)) {
-    const savedTokens = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
-    oauth2Client.setCredentials(savedTokens);
-    console.log("🔒 Persistent Google Drive Session Restored from Local Storage.");
+    try {
+        const savedTokens = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+        
+        // Ensure we explicitly anchor our environment-defined client credentials
+        oauth2Client._clientId = CLIENT_ID;
+        oauth2Client._clientSecret = CLIENT_SECRET;
+        
+        oauth2Client.setCredentials(savedTokens);
+        console.log("🔒 Persistent Google Drive Session Restored from Local Storage.");
+    } catch (parseError) {
+        console.error("⚠️ Failed to parse local credentials file:", parseError);
+    }
 } else {
     console.log("ℹ️ No active session file found.");
 }
