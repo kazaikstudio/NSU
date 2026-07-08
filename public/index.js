@@ -155,7 +155,17 @@ function renderToContainer(track, genre) {
 
 async function fetchAndRenderMusic() {
     try {
-        const response = await fetch('/api/media/drive');
+        // ✅ Explicitly point to your live Railway production backend
+        const BACKEND_BASE = 'https://nsu-backend-production.up.railway.app';
+        const response = await fetch(`${BACKEND_BASE}/api/media/drive`);
+        
+        // Safety Catch: If the server returns an error code (404, 500, etc.), do not pass it to .json()
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Backend returned status ${response.status}:`, errorText);
+            return; // Exit early to avoid breaking the UI script
+        }
+
         const tracks = await response.json();
         tracksCache = tracks;
         
@@ -178,7 +188,9 @@ async function fetchAndRenderMusic() {
         // 3. Set 'Global' as the default view
         switchGenreView('Global');
         
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error("Failed to parse or render music payload:", e); 
+    }
 }
 
 function highlightPlayingTrack() {
