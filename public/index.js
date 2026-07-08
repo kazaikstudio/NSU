@@ -303,21 +303,13 @@ async function selectRow(element, trackId, trackTitle) {
     document.querySelectorAll('.file-row-item').forEach(row => row.classList.remove('active-row'));
     element.classList.add('active-row');
 
-    const favorites = JSON.parse(localStorage.getItem('myFavorites') || '[]');
-    const favBtn = document.querySelector('.toggleFavorite');
-
     const downloadContainer = document.getElementById('download-container');
     if (downloadContainer) {
         downloadContainer.classList.add('is-visible');
     }
 
-    if (favBtn) {
-        if (favorites.includes(trackId)) {
-            favBtn.classList.add('is-favorited');
-        } else {
-            favBtn.classList.remove('is-favorited');
-        }
-    }
+    // ✅ Sync visual favorites token state globally across instances
+    syncFavoriteButtonsUI(trackId);
 
     try {
         const response = await fetch(`${BACKEND_BASE}/api/stats/downloads`);
@@ -475,16 +467,29 @@ function toggleMute() {
     }
 }
 
+// Toggles the state variable, button class, and native audio property
 function toggleLoop() {
     isLooping = !isLooping;
-    document.querySelector('.loop-toggle').classList.toggle('active', isLooping);
     
-    // ✅ Keep native audio looping synced with state variable
+    // Updates the class on all loop buttons (handles both desktop and mobile variants)
+    document.querySelectorAll('.loop-toggle').forEach(btn => {
+        btn.classList.toggle('active', isLooping);
+    });
+    
+    // Sync native audio element loop property
     const audio = document.getElementById('global-audio-node');
     if (audio) {
         audio.loop = isLooping;
     }
 }
+
+// Initializer to bind the click event when the DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    // Bind click event cleanly to any loop button on the page
+    document.querySelectorAll('.loop-toggle').forEach(btn => {
+        btn.addEventListener('click', toggleLoop);
+    });
+});
 
 function toggleShare(trackId, title) {
     if (navigator.share) {
@@ -591,14 +596,12 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // We render favorites inside fetchAndRenderMusic once data caching completes safely.
     await fetchAndRenderMusic();
     renderInfiniteSlider();
 
     updateDownloadStats();
     setInterval(updateDownloadStats, 10000);
 
-    // ✅ Cleaned up direct event handlers here to prevent accidental double-execution
     document.getElementById('master-play-trigger')?.addEventListener('click', togglePlayPause);
     document.querySelector('.skip-forward')?.addEventListener('click', () => playNavigation('next'));
     document.querySelector('.skip-rewind')?.addEventListener('click', () => playNavigation('prev'));
@@ -608,7 +611,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         toggleShare(currentTrackId, title);
     });
 
-    // ✅ Single delegated listener for favorite buttons handles both player bars and container targets perfectly
+    // ✅ Single listener for context clicks prevents duplicate runs safely
     document.body.addEventListener('click', (event) => {
         if (event.target.closest('.toggleFavorite')) {
             handleFavoriteToggle();
@@ -662,7 +665,6 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
     const audio = document.getElementById('global-audio-node');
     if (!audio) return;
 
-    // ✅ Sync native element with existing variable state configuration
     audio.loop = isLooping;
 
     audio.addEventListener('play', () => {
@@ -677,16 +679,7 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
         }, 5000);
     });
 
-    const favorites = JSON.parse(localStorage.getItem('myFavorites') || '[]');
-    const favBtn = document.querySelector('.toggleFavorite');
-
-    if (favBtn) {
-        if (favorites.includes(trackId)) {
-            favBtn.classList.add('is-favorited');
-        } else {
-            favBtn.classList.remove('is-favorited');
-        }
-    }
+    syncFavoriteButtonsUI(trackId);
 
     audio.play().then(() => {
         if (playBtn) { playBtn.innerHTML = pauseSVG; playBtn.title = "Pause"; }
@@ -699,24 +692,49 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
     linkEngineEvents();
 }
 
+// ✅ Helper to update all favorite button element instances at once
+document.body.addEventListener('click', (event) => {
+    if (event.target.closest('.toggleFavorite')) {
+        handleFavoriteToggle(); // Targets currentTrackId automatically
+    }
+});
+function syncFavoriteButtonsUI(trackId) {
+    const favorites = JSON.parse(localStorage.getItem('myFavorites') || '[]');
+    const isFav = favorites.includes(trackId);
+    
+    document.querySelectorAll('.toggleFavorite').forEach(btn => {
+        if (isFav) {
+            btn.classList.add('is-favorited');
+        } else {
+            btn.classList.remove('is-favorited');
+        }
+    });
+}
+
 function handleFavoriteToggle() {
+    console.log("Toggle clicked for ID:", currentTrackId);
     if (!currentTrackId) {
         alert("Please select or play a track first!");
         return;
     }
 
     let favorites = JSON.parse(localStorage.getItem('myFavorites') || '[]');
-    const favBtn = document.querySelector('.toggleFavorite');
 
     if (favorites.includes(currentTrackId)) {
+        // Remove track safely
         favorites = favorites.filter(id => id !== currentTrackId);
-        if (favBtn) favBtn.classList.remove('is-favorited');
     } else {
+        // Add track safely
         favorites.push(currentTrackId);
-        if (favBtn) favBtn.classList.add('is-favorited');
     }
 
+    // 1. Save updated state back to disk
     localStorage.setItem('myFavorites', JSON.stringify(favorites));
+    
+    // 2. Clear/Re-sync classes globally across all layout elements
+    syncFavoriteButtonsUI(currentTrackId);
+    
+    // 3. Refresh the actual collection view layout
     renderFavorites();
 }
 
@@ -737,6 +755,8 @@ function renderFavorites() {
         if (track) {
             const safeTitle = track.title.replace(/'/g, "\\'");
             const onClick = `selectRow(this, '${track.id}', '${safeTitle}')`;
+
+            // Pass 'false' here to hide the "Download" text label elegantly
             container.insertAdjacentHTML('beforeend', createFileItem(track.id, safeTitle, false, track.thumbnail, onClick, false));
         }
     });
