@@ -1,14 +1,15 @@
-import 'dotenv/config';
-import { Buffer } from 'buffer';
 
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+import 'dotenv/config';
+
+import { Buffer } from 'buffer';
 import express from 'express';
 import { google } from 'googleapis';
-import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { Readable } from 'stream';
-
 import fetch from 'node-fetch';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,10 +19,9 @@ const app = express();
 const PORT = process.env.PORT || 5500;
 const TOKEN_PATH = path.join(__dirname, '.credentials.json');
 
+// Pull clean, non-cached configuration elements
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
-
-// --- DYNAMIC PRODUCTION REDIRECT URI FALLBACK (UPDATED) ---
 const REDIRECT_URI = process.env.REDIRECT_URI || 'https://nsu-backend-production.up.railway.app/api/auth/callback';
 
 const oauth2Client = new google.auth.OAuth2(
@@ -311,12 +311,19 @@ app.get('/api/auth/callback', async (req, res) => {
     }
 
     try {
+        // FORCE the client wrapper to use live environment keys immediately before the swap handshake
+        oauth2Client._clientId = process.env.CLIENT_ID;
+        oauth2Client._clientSecret = process.env.CLIENT_SECRET;
+        oauth2Client.redirectUri = process.env.REDIRECT_URI || 'https://nsu-backend-production.up.railway.app/api/auth/callback';
+
+        console.log("SENDING ID:", process.env.CLIENT_ID?.substring(0, 10) + "...");
+console.log("SECRET LENGTH:", process.env.CLIENT_SECRET?.length);
+
         const { tokens } = await oauth2Client.getToken(code);
         oauth2Client.setCredentials(tokens);
         fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
         
         console.log("🎯 Google Auth Tokens saved successfully to local container disk layer!");
-        // Returns the user straight back to the main UI canvas workspace
         res.redirect('https://noll.up.railway.app/Upload/Upload.html');
     } catch (error) {
         console.error("Authentication fallback handler failure:", error);
