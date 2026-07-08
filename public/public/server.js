@@ -21,8 +21,8 @@ const TOKEN_PATH = path.join(__dirname, '.credentials.json');
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 
-// --- DYNAMIC PRODUCTION REDIRECT URI FALLBACK ---
-const REDIRECT_URI = process.env.REDIRECT_URI || 'https://noll.up.railway.app/api/auth/callback';
+// --- DYNAMIC PRODUCTION REDIRECT URI FALLBACK (UPDATED) ---
+const REDIRECT_URI = process.env.REDIRECT_URI || 'https://nsu-backend-production.up.railway.app/api/auth/callback';
 
 const oauth2Client = new google.auth.OAuth2(
   CLIENT_ID,
@@ -316,6 +316,7 @@ app.get('/api/auth/callback', async (req, res) => {
         fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
         
         console.log("🎯 Google Auth Tokens saved successfully to local container disk layer!");
+        // Returns the user straight back to the main UI canvas workspace
         res.redirect('https://noll.up.railway.app/Upload/Upload.html');
     } catch (error) {
         console.error("Authentication fallback handler failure:", error);
