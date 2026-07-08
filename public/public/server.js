@@ -21,8 +21,8 @@ const TOKEN_PATH = path.join(__dirname, '.credentials.json');
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 
-// --- PERMANENT REDIRECT URI SETTING ---
-const REDIRECT_URI = process.env.REDIRECT_URI || 'https://nsu-backend.up.railway.app/api/auth/callback';
+// --- DYNAMIC PRODUCTION REDIRECT URI FALLBACK ---
+const REDIRECT_URI = process.env.REDIRECT_URI || 'https://noll.up.railway.app/api/auth/callback';
 
 const oauth2Client = new google.auth.OAuth2(
   CLIENT_ID,
@@ -62,9 +62,10 @@ function saveCounts() {
     fs.writeFileSync(COUNTS_FILE, JSON.stringify(downloadCounts, null, 2));
 }
 
-// Cors Headers Middleware
+// Permissive CORS Headers Middleware
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     next();
 });
 
@@ -132,7 +133,6 @@ app.get('/api/media/drive', async (req, res) => {
     }
 });
 
-// FIXED: Consolidated Uploader Engine (resolved thumbFile variable missing reference error)
 app.post('/api/upload', upload.fields([
     { name: 'file', maxCount: 1 },
     { name: 'thumbnail', maxCount: 1 }
@@ -143,7 +143,7 @@ app.post('/api/upload', upload.fields([
         }
 
         const audioFile = req.files['file'][0];
-        const thumbFile = req.files['thumbnail'] ? req.files['thumbnail'][0] : null; // Safe extraction fallback
+        const thumbFile = req.files['thumbnail'] ? req.files['thumbnail'][0] : null;
         const { genre } = req.body;
         
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
@@ -153,13 +153,11 @@ app.post('/api/upload', upload.fields([
 
         if (!targetFolderId) return res.status(404).send('Genre folder not found');
 
-        // 1. Upload Audio Track
         const audio = await drive.files.create({
             requestBody: { name: audioFile.originalname, parents: [targetFolderId], mimeType: audioFile.mimetype },
             media: { mimeType: audioFile.mimetype, body: Readable.from(audioFile.buffer) }
         });
 
-        // 2. Upload Thumbnail if present
         let thumbId = null;
         if (thumbFile) {
             const thumb = await drive.files.create({
@@ -169,7 +167,6 @@ app.post('/api/upload', upload.fields([
             });
             thumbId = thumb.data.id;
 
-            // Make thumbnail public so proxy image endpoints can resolve it
             await drive.permissions.create({
                 fileId: thumb.data.id,
                 requestBody: { role: 'reader', type: 'anyone' }
@@ -295,22 +292,6 @@ app.get('/api/drive/storage', async (req, res) => {
     }
 });
 
-// --- OAUTH CREDENTIAL STORAGE VERIFICATION ---
-if (fs.existsSync(TOKEN_PATH)) {
-    const savedTokens = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
-    oauth2Client.setCredentials(savedTokens);
-    console.log("🔒 Persistent Google Drive Session Restored from Local Storage.");
-} else {
-    console.log("ℹ️ No active session file found. Navigate to http://localhost:5500/api/auth/google to authorize once.");
-}
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'index.html'));
-});
-
-app.use(express.static(__dirname));
-app.use(express.static(path.join(__dirname, '..')));
-
 app.get('/api/auth/google', (req, res) => {
     const url = oauth2Client.generateAuthUrl({
         access_type: 'offline', 
@@ -335,8 +316,6 @@ app.get('/api/auth/callback', async (req, res) => {
         fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
         
         console.log("🎯 Google Auth Tokens saved successfully to local container disk layer!");
-        
-        // Redirecting straight back to your upload dashboard page on the live server
         res.redirect('https://noll.up.railway.app/Upload/Upload.html');
     } catch (error) {
         console.error("Authentication fallback handler failure:", error);
@@ -389,5 +368,22 @@ app.get('/api/stats/downloads', (req, res) => {
     res.json({ counts: downloadCounts, total: Object.values(downloadCounts).reduce((a, b) => a + b, 0) });
 });
 
-app.listen(PORT, () => console.log(`🚀 Audio Management Web Interface Server actively parsing on node port:${PORT}`));
+// --- OAUTH CREDENTIAL STORAGE VERIFICATION ---
+if (fs.existsSync(TOKEN_PATH)) {
+    const savedTokens = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
+    oauth2Client.setCredentials(savedTokens);
+    console.log("🔒 Persistent Google Drive Session Restored from Local Storage.");
+} else {
+    console.log("ℹ️ No active session file found.");
+}
 
+// --- STATIC FILES & FALLBACKS (MUST STAY AT THE VERY BOTTOM) ---
+app.use('/Upload', express.static(path.join(__dirname, 'Upload')));
+app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, '..')));
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'index.html'));
+});
+
+app.listen(PORT, () => console.log(`🚀 Audio Management Web Interface Server actively parsing on node port:${PORT}`));
