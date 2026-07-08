@@ -1,5 +1,5 @@
 // --- 0. CONFIGURATION ---
-const BACKEND_URL = "https://noll.onrender.com";
+const BACKEND_URL = "";
 
 // --- 1. INITIALIZATION ---
 window.addEventListener('DOMContentLoaded', () => {
