@@ -11,18 +11,18 @@ import { Readable } from 'stream';
 
 import fetch from 'node-fetch';
 
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 5500;
+const PORT = process.env.PORT || 5500;
 const TOKEN_PATH = path.join(__dirname, '.credentials.json'); 
 
 const CLIENT_ID = process.env.CLIENT_ID || '648297965475-qilsr4vd4maubsdv57hms7n2vgv32lm2.apps.googleusercontent.com';
 const CLIENT_SECRET = process.env.CLIENT_SECRET || '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';
 
-const REDIRECT_URI = 'https://noll.onrender.com/api/auth/callback';
+// --- PERMANENT REDIRECT URI SETTING ---
+const REDIRECT_URI = 'https://noll.up.railway.app/api/auth/callback';
 
 const oauth2Client = new google.auth.OAuth2(
   CLIENT_ID,
@@ -43,7 +43,7 @@ function getGenreFromParent(parentId) {
 
 app.use(express.json());
 
-// --- MULTER CONFIGURATION (Consolidated single initialization) ---
+// --- MULTER CONFIGURATION ---
 const storage = multer.memoryStorage();
 const upload = multer({
     storage: storage,
@@ -62,7 +62,7 @@ function saveCounts() {
     fs.writeFileSync(COUNTS_FILE, JSON.stringify(downloadCounts, null, 2));
 }
 
-// Your proxy route
+// Cors Headers Middleware
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     next();
@@ -81,8 +81,6 @@ app.get('/proxy-image', async (req, res) => {
 });
 
 // --- HELPER FUNCTIONS ---
-
-// Find Folder ID by Name
 async function getFolderId(drive, folderName, parentId = null) {
     let query = `name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
     if (parentId) {
@@ -100,19 +98,15 @@ app.get('/api/media/drive', async (req, res) => {
     try {
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
-        // 1. Define your Folder IDs here or fetch them by name from the root
-        // If you know the IDs, hardcode them for speed:
         const GENRE_FOLDERS = {
             '13GcS9mASxpOfxD5YCwNZFYuEPitW6PEP': 'Dancehall',
             '17ZZS_3-C1qRLzITG9J8k67JhmZL1f0xW': 'Hiphop',
             '1bNh9eXh5np3LYkaE_V5-z4tGjCBUFtYF': 'Lakubukubu',
             '16YX6z_3m4vp-YC83oTUnp4bazYgwMZWE': 'Mixtape',
-            
         };
 
         const uniqueTracksMap = new Map();
 
-        // 2. Loop through each folder ID and fetch files
         for (const [folderId, genreName] of Object.entries(GENRE_FOLDERS)) {
             const filesInFolder = await drive.files.list({
                 q: `'${folderId}' in parents and trashed = false`,
@@ -138,17 +132,18 @@ app.get('/api/media/drive', async (req, res) => {
     }
 });
 
-// 2. CONSOLIDATED UPLOADER ENGINE
+// FIXED: Consolidated Uploader Engine (resolved thumbFile variable missing reference error)
 app.post('/api/upload', upload.fields([
     { name: 'file', maxCount: 1 },
     { name: 'thumbnail', maxCount: 1 }
 ]), async (req, res) => {
     try {
         if (!req.files || !req.files['file']) {
-            return res.status(400).send('Missing file or thumbnail');
+            return res.status(400).send('Missing file data asset.');
         }
 
         const audioFile = req.files['file'][0];
+        const thumbFile = req.files['thumbnail'] ? req.files['thumbnail'][0] : null; // Safe extraction fallback
         const { genre } = req.body;
         
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
@@ -158,26 +153,30 @@ app.post('/api/upload', upload.fields([
 
         if (!targetFolderId) return res.status(404).send('Genre folder not found');
 
-        // 1. Upload Audio
+        // 1. Upload Audio Track
         const audio = await drive.files.create({
             requestBody: { name: audioFile.originalname, parents: [targetFolderId], mimeType: audioFile.mimetype },
             media: { mimeType: audioFile.mimetype, body: Readable.from(audioFile.buffer) }
         });
 
-        // 2. Upload Thumbnail (Treat as a separate asset)
-        const thumb = await drive.files.create({
-            requestBody: { name: thumbFile.originalname, parents: [targetFolderId], mimeType: thumbFile.mimetype },
-            media: { mimeType: thumbFile.mimetype, body: Readable.from(thumbFile.buffer) },
-            fields: 'id, webViewLink'
-        });
+        // 2. Upload Thumbnail if present
+        let thumbId = null;
+        if (thumbFile) {
+            const thumb = await drive.files.create({
+                requestBody: { name: thumbFile.originalname, parents: [targetFolderId], mimeType: thumbFile.mimetype },
+                media: { mimeType: thumbFile.mimetype, body: Readable.from(thumbFile.buffer) },
+                fields: 'id, webViewLink'
+            });
+            thumbId = thumb.data.id;
 
-        // Make thumbnail public so your proxy can read it
-        await drive.permissions.create({
-            fileId: thumb.data.id,
-            requestBody: { role: 'reader', type: 'anyone' }
-        });
+            // Make thumbnail public so proxy image endpoints can resolve it
+            await drive.permissions.create({
+                fileId: thumb.data.id,
+                requestBody: { role: 'reader', type: 'anyone' }
+            });
+        }
 
-        console.log("Upload successful. Audio:", audio.data.id, "Thumb:", thumb.data.id);
+        console.log("Upload successful. Audio:", audio.data.id, "Thumb:", thumbId);
         res.json({ success: true, fileId: audio.data.id });
         
     } catch (e) {
@@ -186,7 +185,6 @@ app.post('/api/upload', upload.fields([
     }
 });
 
-// 3. THUMBNAIL MANAGER UPLOADER 
 app.post('/api/upload-thumbnail', upload.single('image'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).send('No graphic asset attached.');
@@ -196,7 +194,6 @@ app.post('/api/upload-thumbnail', upload.single('image'), async (req, res) => {
     }
 });
 
-// 4. RENAME ENGINE VIA METADATA INJECTION
 app.post('/api/rename/:fileId', async (req, res) => {
     try {
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
@@ -210,7 +207,6 @@ app.post('/api/rename/:fileId', async (req, res) => {
     }
 });
 
-// 5. EXTENDED UPDATE PROPERTY SCHEMAS (Includes thumbnail manipulation logic)
 app.post('/api/update-file/:fileId', upload.single('thumbnail'), async (req, res) => {
     try {
         const { fileId } = req.params;
@@ -220,13 +216,11 @@ app.post('/api/update-file/:fileId', upload.single('thumbnail'), async (req, res
         const updatePayload = {};
         if (newName) updatePayload.name = newName;
 
-        // If a new thumbnail file was uploaded
         if (req.file) {
-            // Convert buffer to URL-safe Base64
             const base64Data = req.file.buffer.toString('base64')
                 .replace(/\+/g, '-')
                 .replace(/\//g, '_')
-                .replace(/=+$/, ''); // Remove padding
+                .replace(/=+$/, '');
 
             updatePayload.contentHints = {
                 thumbnail: {
@@ -248,7 +242,6 @@ app.post('/api/update-file/:fileId', upload.single('thumbnail'), async (req, res
     }
 });
 
-// 6. RESOURCE TRASH REMOVAL CONTROLLER
 app.delete('/api/delete/:fileId', async (req, res) => {
     try {
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
@@ -260,7 +253,6 @@ app.delete('/api/delete/:fileId', async (req, res) => {
     }
 });
 
-// 7. USER TRACK METRIC DATA LOADER
 app.get('/api/user/info', async (req, res) => {
     try {
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
@@ -282,7 +274,6 @@ app.get('/api/user/info', async (req, res) => {
     }
 });
 
-// 8. ACCURATE HARDWARE METRIC REPORTING
 app.get('/api/drive/storage', async (req, res) => {
     try {
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
@@ -304,8 +295,7 @@ app.get('/api/drive/storage', async (req, res) => {
     }
 });
 
-// --- OAUTH FLOW SETUP & REBOOT SESSION CORES ---
-
+// --- OAUTH CREDENTIAL STORAGE VERIFICATION ---
 if (fs.existsSync(TOKEN_PATH)) {
     const savedTokens = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
     oauth2Client.setCredentials(savedTokens);
@@ -314,7 +304,6 @@ if (fs.existsSync(TOKEN_PATH)) {
     console.log("ℹ️ No active session file found. Navigate to http://localhost:5500/api/auth/google to authorize once.");
 }
 
-// CHANGED: Music.html updated to index.html here
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
@@ -331,11 +320,8 @@ app.get('/api/auth/google', (req, res) => {
     res.redirect(url);
 });
 
-// COMPLETED: Finished token capture initialization logic safely
 app.get('/api/auth/callback', async (req, res) => {
     const { code } = req.query;
-    
-    // Safety check: if no code is present, don't let the server crash
     if (!code) {
         return res.status(400).json({
             error: "Bad Request",
@@ -348,12 +334,10 @@ app.get('/api/auth/callback', async (req, res) => {
         oauth2Client.setCredentials(tokens);
         fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
         
-        // Redirect explicitly back to your live GitHub Pages frontend
-        res.redirect('https://noll.onrender.com/Upload/Upload.html');
+        // Redirecting straight back to your upload dashboard page on the live server
+        res.redirect('https://noll.up.railway.app/Upload/Upload.html');
     } catch (error) {
         console.error("Authentication fallback handler failure:", error);
-        
-        // FIX: Sending a clean JSON object prevents Quirks Mode and displays the real error details
         res.status(500).json({
             status: "error",
             error_context: "Authorization sequence token capture intercept broke.",
@@ -365,37 +349,29 @@ app.get('/api/auth/callback', async (req, res) => {
 app.get('/api/stream/:id', async (req, res) => {
     try {
         const fileId = req.params.id;
-        // Check if the request explicitly asks for a download
         const isDownload = req.query.download === 'true'; 
         
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
         
-        // --- ONLY INCREMENT IF IT IS A TRUE DOWNLOAD ---
         if (isDownload) {
             downloadCounts[fileId] = (downloadCounts[fileId] || 0) + 1;
             saveCounts();
-            console.log(`Track ${fileId} downloaded. Total: ${downloadCounts[fileId]}`);
         }
 
-        // 1. Get file metadata
         const fileMetadata = await drive.files.get({
             fileId: fileId,
             fields: 'name'
         });
         const fileName = fileMetadata.data.name;
 
-        // 2. Stream the file
         const response = await drive.files.get(
             { fileId: fileId, alt: 'media' },
             { responseType: 'stream' }
         );
         
-        // 3. Set headers based on action
         if (isDownload) {
-            // Force download
             res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
         } else {
-            // Force browser to handle it as a media stream
             res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
         }
         res.setHeader('Content-Type', 'audio/mpeg');
@@ -412,3 +388,4 @@ app.get('/api/stats/downloads', (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🚀 Audio Management Web Interface Server actively parsing on node port:${PORT}`));
+
