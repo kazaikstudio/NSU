@@ -1229,12 +1229,6 @@ section.sidebar-right {
     color: #cdcdcd;
     transition: background 0.15s ease;
 }
-.file-name {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 250px;
-}
 
 /* ==========================================================
    MOBILE SCREEN DROPDOWN BREAKPOINT CONFIGURATION
@@ -1245,6 +1239,13 @@ section.sidebar-right {
     justify-content: center;
     align-items: center;
     text-align: center;
+
+    .file-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 90%;
+    }
 }
 }
 @media (max-width: 800px) {
@@ -1263,6 +1264,12 @@ section.sidebar-right {
 
     .toggle_2 {
         display: none;
+    }
+    .file-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 300px;
     }
 
     .nav-auth-btns {
