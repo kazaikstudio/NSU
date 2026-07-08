@@ -1,5 +1,5 @@
 // --- 0. CONFIGURATION ---
-const BACKEND_URL = "https://nsu-backend.up.railway.app";
+const BACKEND_URL = "https://nsu-backend-production.up.railway.app";
 
 // --- 1. INITIALIZATION & EVENTS ---
 window.addEventListener('DOMContentLoaded', () => {
