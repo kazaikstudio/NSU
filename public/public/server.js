@@ -1,3 +1,4 @@
+
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -16,8 +17,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5500;
-const TOKEN_PATH = path.join(__dirname, '.credentials.json'); 
+const TOKEN_PATH = path.join(__dirname, '.credentials.json');
 
+// Pull clean, non-cached configuration elements
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI || 'https://nsu-backend-production.up.railway.app/api/auth/callback';
@@ -27,6 +29,17 @@ const oauth2Client = new google.auth.OAuth2(
   CLIENT_SECRET,
   REDIRECT_URI
 );
+
+const GENRE_MAP = {
+    '13GcS9mASxpOfxD5YCwNZFYuEPitW6PEP': 'Dancehall',
+    '17ZZS_3-C1qRLzITG9J8k67JhmZL1f0xW': 'Hiphop',
+    '1bNh9eXh5np3LYkaE_V5-z4tGjCBUFtYF': 'Lakubukubu',
+    '16YX6z_3m4vp-YC83oTUnp4bazYgwMZWE': 'Mixtape',
+};
+
+function getGenreFromParent(parentId) {
+    return GENRE_MAP[parentId] || 'All';
+}
 
 app.use(express.json());
 
@@ -49,7 +62,7 @@ function saveCounts() {
     fs.writeFileSync(COUNTS_FILE, JSON.stringify(downloadCounts, null, 2));
 }
 
-// Permissive CORS Headers Middleware Setup
+// Permissive CORS Headers Middleware
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
@@ -82,26 +95,26 @@ async function getFolderId(drive, folderName, parentId = null) {
 }
 
 // --- API ENDPOINTS ---
-
-// FIXED: Now dynamically scans and loads tracks for your index layout instead of using static obsolete folder IDs
 app.get('/api/media/drive', async (req, res) => {
     try {
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
         const uniqueTracksMap = new Map();
 
-        // 1. Locate the 'ALL Music' root element dynamically
+        // 1. Find the root 'ALL Music' folder dynamically
         const mainParentId = await getFolderId(drive, 'ALL Music');
         if (!mainParentId) {
-            return res.json([]); 
+            return res.json([]); // Return empty if root directory hasn't been created yet
         }
 
-        // 2. Map target sub-containers to compile target catalog metrics
+        // 2. Map target subfolder names we want to scan
         const genresToFetch = ['Dancehall', 'Hiphop', 'Lakubukubu', 'Mixtape'];
 
         for (const genreName of genresToFetch) {
+            // Find the subfolder ID dynamically under 'ALL Music'
             const folderId = await getFolderId(drive, genreName, mainParentId);
             
             if (folderId) {
+                // Fetch files matching this dynamic folder ID
                 const filesInFolder = await drive.files.list({
                     q: `'${folderId}' in parents and trashed = false`,
                     fields: 'files(id, name, thumbnailLink)'
@@ -137,7 +150,7 @@ app.post('/api/upload', upload.fields([
         }
 
         const audioFile = req.files['file'][0];
-        const thumbFile = req.files['thumbnail'] ? req.files['thumbnail'][0] : null; 
+        const thumbFile = req.files['thumbnail'] ? req.files['thumbnail'][0] : null;
         const { genre } = req.body;
         
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
@@ -295,7 +308,6 @@ app.get('/api/auth/google', (req, res) => {
     res.redirect(url);
 });
 
-// UPDATED: Dynamic Railway Environment Routing Layer
 app.get('/api/auth/callback', async (req, res) => {
     const { code } = req.query;
     if (!code) {
@@ -306,20 +318,28 @@ app.get('/api/auth/callback', async (req, res) => {
     }
 
     try {
+        // 1. Instantiating a completely isolated client wrapper for this specific exchange
         const freshClient = new google.auth.OAuth2(
-            process.env.CLIENT_ID || CLIENT_ID,
-            process.env.CLIENT_SECRET || CLIENT_SECRET,
-            process.env.REDIRECT_URI || REDIRECT_URI
+            process.env.CLIENT_ID,
+            process.env.CLIENT_SECRET,
+            process.env.REDIRECT_URI || 'https://nsu-backend-production.up.railway.app/api/auth/callback'
         );
 
+        // 2. Swapping the incoming fresh single-use code for tokens
         const { tokens } = await freshClient.getToken(code);
+        
+        // 3. Synergize tokens back to the primary oauth2Client stack
         oauth2Client.setCredentials(tokens);
+        
+        // 4. Persist newly captured tokens to disk layer storage
         fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
         
         console.log("🎯 Google Auth Tokens saved successfully to local container disk layer!");
         res.redirect('https://noll.up.railway.app/Upload/Upload.html');
     } catch (error) {
+        // CRITICAL: Printing out the raw Google API error message into your Railway console
         console.error("❌ GOOGLE AUTH EXCHANGE FAILURE:", error.message || error);
+        
         res.status(500).json({
             status: "error",
             error_context: "Authorization sequence token capture intercept broke.",
@@ -373,8 +393,11 @@ app.get('/api/stats/downloads', (req, res) => {
 if (fs.existsSync(TOKEN_PATH)) {
     try {
         const savedTokens = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf8'));
-        oauth2Client._clientId = process.env.CLIENT_ID || CLIENT_ID;
-        oauth2Client._clientSecret = process.env.CLIENT_SECRET || CLIENT_SECRET;
+        
+        // Ensure we explicitly anchor our environment-defined client credentials
+        oauth2Client._clientId = CLIENT_ID;
+        oauth2Client._clientSecret = CLIENT_SECRET;
+        
         oauth2Client.setCredentials(savedTokens);
         console.log("🔒 Persistent Google Drive Session Restored from Local Storage.");
     } catch (parseError) {
@@ -384,7 +407,7 @@ if (fs.existsSync(TOKEN_PATH)) {
     console.log("ℹ️ No active session file found.");
 }
 
-// --- STATIC FILES & FALLBACKS ---
+// --- STATIC FILES & FALLBACKS (MUST STAY AT THE VERY BOTTOM) ---
 app.use('/Upload', express.static(path.join(__dirname, 'Upload')));
 app.use(express.static(__dirname));
 app.use(express.static(path.join(__dirname, '..')));
