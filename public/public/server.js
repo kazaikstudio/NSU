@@ -334,6 +334,8 @@ app.get('/api/auth/callback', async (req, res) => {
         oauth2Client.setCredentials(tokens);
         fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
         
+        console.log("🎯 Google Auth Tokens saved successfully to local container disk layer!");
+        
         // Redirecting straight back to your upload dashboard page on the live server
         res.redirect('https://noll.up.railway.app/Upload/Upload.html');
     } catch (error) {
