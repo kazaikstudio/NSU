@@ -3,10 +3,16 @@ let tracksCache = [];
 let playerHideTimer = null;
 let currentTrackId = null;
 let isLooping = false;
+let touchStartY = 0;
+let touchEndY = 0;
+let isSeeking = false; // ✅ Track seeking state to prevent layout flickering
+
+// Centralized production backend endpoint setup
+const BACKEND_BASE = "https://nsu-backend-production.up.railway.app";
 
 async function updateDownloadStats() {
     try {
-        const response = await fetch('/api/stats/downloads');
+        const response = await fetch(`${BACKEND_BASE}/api/stats/downloads`);
         if (!response.ok) return;
         const data = await response.json(); // { counts: { id: num } }
         
@@ -29,7 +35,9 @@ async function updateDownloadStats() {
 function togglePopupMenu(event) {
     event.stopPropagation(); // Stops click from triggering window listener instantly
     const mobileMenu = document.getElementById("myMobileMenu");
-    mobileMenu.classList.toggle("active");
+    if (mobileMenu) {
+        mobileMenu.classList.toggle("active");
+    }
 }
 
 // Automatically close the menu if the user taps outside of it
@@ -49,7 +57,6 @@ function toggleSidebar() {
         sidebar.classList.toggle('hidden');
         if (btn) btn.classList.toggle('is-active', !sidebar.classList.contains('hidden'));
         
-        // Add a safety check here: only toggle if mainContent is found
         if (mainContent) {
             mainContent.classList.toggle('full-width', sidebar.classList.contains('hidden'));
         }
@@ -59,16 +66,13 @@ function toggleSidebar() {
 function updatePlayerVisibility() {
     const footer = document.querySelector('.master-player-bar');
     const audio = document.getElementById('global-audio-node');
-    if (audio && audio.src) footer.classList.add('is-visible');
+    if (audio && audio.src && footer) footer.classList.add('is-visible');
 }
 
 // --- 2. HELPERS ---
 function getProcessedThumbnail(thumbnail) {
     if (!thumbnail) return null;
     
-    // ✅ Updated to point to your live production Railway environment setup
-    const BACKEND_URL = "https://nsu-backend-production.up.railway.app";
-
     // Convert standard Google Drive viewing URLs into direct download streams
     if (thumbnail.includes('drive.google.com/file/d/')) {
         const fileId = thumbnail.split('/d/')[1].split('/')[0];
@@ -76,7 +80,7 @@ function getProcessedThumbnail(thumbnail) {
     }
     
     // Fallback cleanly to absolute path routing context rules
-    return `${BACKEND_URL}/proxy-image?url=${encodeURIComponent(thumbnail)}`;
+    return `${BACKEND_BASE}/proxy-image?url=${encodeURIComponent(thumbnail)}`;
 }
 
 function filterTracks() {
@@ -84,14 +88,11 @@ function filterTracks() {
     const allContainers = document.querySelectorAll('.genre-canvas-view');
 
     allContainers.forEach(container => {
-        // Iterate through all rows in this container
         container.querySelectorAll('.file-row-item').forEach(row => {
             const title = row.querySelector('.file-name').innerText.toLowerCase();
             const isMatch = title.includes(query);
-
             row.style.display = isMatch ? 'flex' : 'none';
         });
-
     });
 }
 
@@ -103,7 +104,6 @@ function createFileItem(id, name, isUploading = false, thumbnail = '', onClickSt
            <span class="fallback-icon" style="display:none;">🎵</span>`
         : '<span class="fallback-icon">🎵</span>';
 
-    // Conditionally render the label
     const labelHtml = showLabel ? '<span class="dl-text"> Download</span>' : '';
 
     return `
@@ -142,7 +142,6 @@ function renderToContainer(track, genre) {
     const container = document.getElementById(`media-container-${genre}`);
     if (!container) return;
 
-    // THE KILL SWITCH: If this ID is already in this specific container, STOP.
     if (container.querySelector(`[id="${track.id}"]`)) {
         console.log(`Duplicate prevented for ${track.id} in ${genre}`);
         return;
@@ -155,15 +154,12 @@ function renderToContainer(track, genre) {
 
 async function fetchAndRenderMusic() {
     try {
-        // ✅ Explicitly point to your live Railway production backend
-        const BACKEND_BASE = 'https://nsu-backend-production.up.railway.app';
         const response = await fetch(`${BACKEND_BASE}/api/media/drive`);
         
-        // Safety Catch: If the server returns an error code (404, 500, etc.), do not pass it to .json()
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Backend returned status ${response.status}:`, errorText);
-            return; // Exit early to avoid breaking the UI script
+            return; 
         }
 
         const tracks = await response.json();
@@ -176,10 +172,8 @@ async function fetchAndRenderMusic() {
         
         // 2. Render tracks
         tracksCache.forEach(track => {
-            // Change 'All' to 'Global' here
             renderToContainer(track, 'Global');
             
-            // Change 'All' to 'Global' here
             if (track.genre && track.genre !== 'Global') {
                 renderToContainer(track, track.genre);
             }
@@ -194,10 +188,7 @@ async function fetchAndRenderMusic() {
 }
 
 function highlightPlayingTrack() {
-    // Remove active from everyone
     document.querySelectorAll('.file-row-item').forEach(row => row.classList.remove('active-row'));
-    
-    // If currentTrackId exists, find it and add the class
     const activeRow = document.getElementById(currentTrackId);
     if (activeRow) {
         activeRow.classList.add('active-row');
@@ -206,14 +197,10 @@ function highlightPlayingTrack() {
 
 function switchGenreView(genreName) {
     const buttons = document.querySelectorAll('.Select_btn_container .genre-btn');
-    
-    // 1. Reset active status across all elements smoothly
     buttons.forEach(btn => btn.classList.remove('active'));
 
-    // 2. Identify and activate current target safely via data attribute
     let currentTarget = document.querySelector(`.Select_btn_container [data-genre="${genreName}"]`);
     
-    // Fallback if data attribute is absent
     if (!currentTarget) {
         currentTarget = Array.from(buttons).find(btn => 
             btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(genreName)
@@ -224,7 +211,6 @@ function switchGenreView(genreName) {
         currentTarget.classList.add('active');
     }
 
-    // 3. Update Content Canvas Views (Handling class lists and display states safely)
     const canvases = document.querySelectorAll('.media-table-container .genre-canvas-view');
     canvases.forEach(canvas => {
         canvas.style.display = 'none';
@@ -237,7 +223,6 @@ function switchGenreView(genreName) {
         activeCanvas.classList.add('active');
     }
 
-    // 4. Update the Title Dynamic String context cleanly
     const headerTitle = document.querySelector('.media-table-container .col-title');
     if (headerTitle) {
         headerTitle.textContent = genreName === 'All' || genreName === 'Global' 
@@ -245,12 +230,10 @@ function switchGenreView(genreName) {
             : `${genreName} Tracks`;
     }
 
-    // 5. Update the track count in UI statistics seamlessly
     if (typeof updateStats === 'function') {
         updateStats();
     }
     
-    // 6. Keep the active/playing audio node highlight state synced
     if (typeof highlightPlayingTrack === 'function') {
         highlightPlayingTrack();
     }
@@ -263,23 +246,21 @@ function renderInfiniteSlider() {
     const displayPool = tracksCache.slice(0, 5);
     if (displayPool.length === 0) return;
 
-    // 1. Calculate dynamic width AND height based on screen size
     const windowWidth = window.innerWidth;
     let cardWidth;
     let cardHeight;
 
     if (windowWidth < 480) {
         cardWidth = '140px'; 
-        cardHeight = '180px'; // Mobile proportions
+        cardHeight = '180px'; 
     } else if (windowWidth < 768) {
         cardWidth = '180px'; 
-        cardHeight = '220px'; // Tablet proportions
+        cardHeight = '220px'; 
     } else {
         cardWidth = '220px'; 
-        cardHeight = '260px'; // Desktop proportions
+        cardHeight = '260px'; 
     }
 
-    // 2. Map through and apply inline width and height strings
     let htmlContent = displayPool.map(track => {
         const thumbUrl = getProcessedThumbnail(track.thumbnail);
         return `
@@ -300,13 +281,12 @@ function renderInfiniteSlider() {
     sliderTrack.innerHTML = htmlContent + htmlContent;
 }
 
-// 3. Make sure it recalculates if the user rotates their phone or resizes the browser
 window.addEventListener('resize', renderInfiniteSlider);
 
 function downloadCurrentTrack() {
     if (!currentTrackId) { alert("No track is currently loaded to download."); return; }
     const link = document.createElement('a');
-    link.href = `/api/stream/${currentTrackId}`;
+    link.href = `${BACKEND_BASE}/api/stream/${currentTrackId}`;
     link.setAttribute('download', '');
     document.body.appendChild(link);
     link.click();
@@ -317,15 +297,13 @@ function downloadCurrentTrack() {
 async function selectRow(element, trackId, trackTitle) {
     currentTrackId = trackId;
 
-    // 1. Update row styles
     document.querySelectorAll('.file-row-item').forEach(row => row.classList.remove('active-row'));
     element.classList.add('active-row');
 
-    // 2. Sync Favorite Button Visual State
     const favorites = JSON.parse(localStorage.getItem('myFavorites') || '[]');
     const favBtn = document.querySelector('.toggleFavorite');
 
-     const downloadContainer = document.getElementById('download-container');
+    const downloadContainer = document.getElementById('download-container');
     if (downloadContainer) {
         downloadContainer.classList.add('is-visible');
     }
@@ -338,9 +316,8 @@ async function selectRow(element, trackId, trackTitle) {
         }
     }
 
-    // 3. Fetch and display download count
     try {
-        const response = await fetch('/api/stats/downloads');
+        const response = await fetch(`${BACKEND_BASE}/api/stats/downloads`);
         const data = await response.json();
         const countSpan = element.querySelector('.track-dl-count');
         if (countSpan) {
@@ -350,11 +327,10 @@ async function selectRow(element, trackId, trackTitle) {
         console.error("Error fetching download stats:", err);
     }
 
-    // 4. Update Player
     if (playerHideTimer) clearTimeout(playerHideTimer);
     const track = tracksCache.find(t => t.id === trackId);
     if (track) {
-        mountPlayerEngine(`/api/stream/${trackId}`, trackTitle, trackId, track.thumbnail);
+        mountPlayerEngine(`${BACKEND_BASE}/api/stream/${trackId}`, trackTitle, trackId, track.thumbnail);
         updatePlayerVisibility();
     }
     highlightPlayingTrack();
@@ -362,13 +338,12 @@ async function selectRow(element, trackId, trackTitle) {
 
 async function handleDownload(trackId) {
     const link = document.createElement('a');
-    link.href = `/api/stream/${trackId}?download=true`;
+    link.href = `${BACKEND_BASE}/api/stream/${trackId}?download=true`;
     link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    // Update stats
     setTimeout(updateDownloadStats, 1000);
 }
 
@@ -380,50 +355,86 @@ function linkEngineEvents() {
     const progressTrack = document.querySelector('.progress-bar-track');
     if (!audio || !progressTrack) return;
 
-    // --- Core Calculation Logic ---
-    const seekToPosition = (clientX) => {
+    const calculatePercentage = (clientX) => {
         const rect = progressTrack.getBoundingClientRect();
-        // Calculate percentage, clamping between 0 and 1
         let percentage = (clientX - rect.left) / rect.width;
         if (percentage < 0) percentage = 0;
         if (percentage > 1) percentage = 1;
-        
+        return percentage;
+    };
+
+    const seekToPosition = (clientX) => {
+        const percentage = calculatePercentage(clientX);
+        if (progressFill) progressFill.style.width = `${percentage * 100}%`;
         audio.currentTime = percentage * audio.duration;
     };
 
-    // --- Desktop Mouse Interactions ---
-    progressTrack.addEventListener('click', (e) => seekToPosition(e.clientX));
-    progressTrack.addEventListener('mousedown', (e) => {
+    const updateSliderUI = (clientX) => {
+        const percentage = calculatePercentage(clientX);
+        if (progressFill) progressFill.style.width = `${percentage * 100}%`;
+        if (elapsedEl && audio.duration) {
+            const currentAudioTime = percentage * audio.duration;
+            const m = Math.floor(currentAudioTime / 60);
+            const s = Math.floor(currentAudioTime % 60);
+            elapsedEl.innerText = `${m}:${s.toString().padStart(2, '0')}`;
+        }
+    };
+
+    // Click handler
+    progressTrack.addEventListener('click', (e) => {
         seekToPosition(e.clientX);
-        const onMouseMove = (e) => seekToPosition(e.clientX);
-        const onMouseUp = () => {
+    });
+
+    // Desktop Drag Seek Mouse handlers
+    progressTrack.addEventListener('mousedown', (e) => {
+        isSeeking = true;
+        updateSliderUI(e.clientX);
+        
+        const onMouseMove = (moveEvent) => {
+            if (isSeeking) updateSliderUI(moveEvent.clientX);
+        };
+        
+        const onMouseUp = (upEvent) => {
+            if (isSeeking) {
+                seekToPosition(upEvent.clientX);
+                isSeeking = false;
+            }
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
         };
+        
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     });
 
-    // --- Mobile Touch/Swipe Increment Hooks ---
+    // Mobile/Touch Handlers
     progressTrack.addEventListener('touchstart', (e) => {
-        // Prevent accidental page scrolling or player hiding while scrubbing
+        isSeeking = true;
         if (typeof resetPlayerAutohideTimer === 'function') resetPlayerAutohideTimer();
-        seekToPosition(e.touches[0].clientX);
+        updateSliderUI(e.touches[0].clientX);
     }, { passive: false });
 
     progressTrack.addEventListener('touchmove', (e) => {
-        e.preventDefault(); // Lock viewport scrolling while swiping timeline
-        if (typeof resetPlayerAutohideTimer === 'function') resetPlayerAutohideTimer();
-        seekToPosition(e.touches[0].clientX);
+        e.preventDefault(); 
+        if (isSeeking) {
+            if (typeof resetPlayerAutohideTimer === 'function') resetPlayerAutohideTimer();
+            updateSliderUI(e.touches[0].clientX);
+        }
     }, { passive: false });
 
-    progressTrack.addEventListener('touchend', () => {
+    progressTrack.addEventListener('touchend', (e) => {
+        if (isSeeking) {
+            if (e.changedTouches && e.changedTouches.length > 0) {
+                seekToPosition(e.changedTouches[0].clientX);
+            }
+            isSeeking = false;
+        }
         if (typeof resetPlayerAutohideTimer === 'function') resetPlayerAutohideTimer();
     });
 
-    // --- Audio Event Sync Observers ---
+    // Global Engine Native Update hooks
     audio.addEventListener('timeupdate', () => {
-        if (!audio.duration) return;
+        if (!audio.duration || isSeeking) return; // ✅ Blocks rendering overrides when dragging
         const percentage = (audio.currentTime / audio.duration) * 100;
         if (progressFill) progressFill.style.width = `${percentage}%`;
         if (elapsedEl) {
@@ -447,23 +458,20 @@ function linkEngineEvents() {
 function toggleMute() {
     const audio = document.getElementById('global-audio-node');
     const icon = document.getElementById('volume-icon');
-    const path = document.getElementById('volume-path');
     
     if (!audio) return;
-
     audio.muted = !audio.muted;
 
     if (audio.muted) {
-        // Change to Mute Icon (just the speaker, no sound waves)
         icon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                           <line x1="23" y1="9" x2="17" y2="15"></line>
                           <line x1="17" y1="9" x2="23" y2="15"></line>`;
     } else {
-        // Change back to Volume Up Icon
         icon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                           <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.57 8.43a5 5 0 0 1 0 7.07"></path>`;
     }
 }
+
 function toggleLoop() {
     isLooping = !isLooping;
     document.querySelector('.loop-toggle').classList.toggle('active', isLooping);
@@ -477,8 +485,10 @@ function toggleShare(trackId, title) {
         alert('Link copied to clipboard!');
     }
     const btn = document.querySelector('.share-toggle');
-    btn.classList.add('active');
-    setTimeout(() => btn.classList.remove('active'), 1000);
+    if (btn) {
+        btn.classList.add('active');
+        setTimeout(() => btn.classList.remove('active'), 1000);
+    }
 }
 
 const playSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: 2px;"><path d="M7.50632 3.14928C6.1753 2.29363 4.4248 3.24931 4.4248 4.83164V19.1683C4.4248 20.7506 6.1753 21.7063 7.50632 20.8507L18.6571 13.6823C19.8817 12.8951 19.8817 11.1049 18.6571 10.3176L7.50632 3.14928Z" fill="currentColor"/></svg>`;
@@ -488,15 +498,15 @@ function togglePlayPause() {
     const audio = document.getElementById('global-audio-node');
     const playBtn = document.getElementById('master-play-trigger');
     if (!audio) return;
-    if (audio.paused) { audio.play(); playBtn.innerHTML = pauseSVG; playBtn.title = "Pause"; } 
-    else { audio.pause(); playBtn.innerHTML = playSVG; playBtn.title = "Play"; }
+    if (audio.paused) { 
+        audio.play(); 
+        if (playBtn) { playBtn.innerHTML = pauseSVG; playBtn.title = "Pause"; }
+    } else { 
+        audio.pause(); 
+        if (playBtn) { playBtn.innerHTML = playSVG; playBtn.title = "Play"; }
+    }
 }
 
-// --- Update or add these variables near top of your script under Section 1 ---
-let touchStartY = 0;
-let touchEndY = 0;
-
-// Modify your initPlayerEvents function to handle the strict 10s idle fade
 function initPlayerEvents() {
     const audio = document.getElementById('global-audio-node');
     const footer = document.querySelector('.master-player-bar');
@@ -514,7 +524,6 @@ function initPlayerEvents() {
     });
 }
 
-// Global safe manager to handle 10-second idle countdowns
 function resetPlayerAutohideTimer() {
     const footer = document.querySelector('.master-player-bar');
     const audio = document.getElementById('global-audio-node');
@@ -523,58 +532,40 @@ function resetPlayerAutohideTimer() {
     
     if (footer && audio && !audio.paused) {
         footer.classList.add('is-visible');
-        
-        // Hide strictly after 10 seconds (10000ms) of active playback with no interaction
         playerHideTimer = setTimeout(() => {
             footer.classList.remove('is-visible');
         }, 10000);
     }
 }
 
-// Register mobile touch gesture hooks to detect swipe configurations
 function setupMobileSwipeDetection() {
-    const footer = document.querySelector('.master-player-bar');
-
-    // 1. Capture the exact Y-coordinate when the finger touches down anywhere on the screen
     window.addEventListener('touchstart', (e) => {
         touchStartY = e.changedTouches[0].screenY;
     }, { passive: true });
 
-    // 2. Evaluate the action right when the finger leaves the glass surface
     window.addEventListener('touchend', (e) => {
         touchEndY = e.changedTouches[0].screenY;
-        
-        // Positive value means the movement went downwards
         const swipeDistance = touchEndY - touchStartY;
-
-        // Threshold of 40px ensures it was an intentional downward swipe drag
         if (swipeDistance > 40) { 
             resetPlayerAutohideTimer();
         }
     }, { passive: true });
 }
 
-// Add initialization triggers inside your DOMContentLoaded block
 document.addEventListener('DOMContentLoaded', () => {
     setupMobileSwipeDetection();
-    
-    // Wire up interaction resets so tapping inside the player panel resets the 10s countdown
     document.querySelector('.master-player-bar')?.addEventListener('click', () => {
         resetPlayerAutohideTimer();
     });
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    /* ==========================================================================
-       1. MOBILE NAVIGATION TOGGLE ENGINE
-       ========================================================================== */
     const menuToggleBtn = document.querySelector('.nav-menu-toggle');
     const navigationMenuTray = document.querySelector('.nav-auth-btns');
 
     if (menuToggleBtn && navigationMenuTray) {
         menuToggleBtn.addEventListener('click', () => {
             const isExpanded = menuToggleBtn.getAttribute('aria-expanded') === 'true';
-
             menuToggleBtn.setAttribute('aria-expanded', !isExpanded);
             menuToggleBtn.classList.toggle('active');
             navigationMenuTray.classList.toggle('active');
@@ -604,7 +595,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 4. Initialize UI events
     document.querySelector('.toggleFavorite')?.addEventListener('click', handleFavoriteToggle);
     document.getElementById('master-play-trigger')?.addEventListener('click', togglePlayPause);
     document.querySelector('.skip-forward')?.addEventListener('click', () => playNavigation('next'));
@@ -638,42 +628,42 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
     const thumbContainer = document.getElementById('player-thumb');
     const footer = document.querySelector('.master-player-bar');
 
-    // 1. Clean up existing node
     const oldAudio = document.getElementById('global-audio-node');
     if (oldAudio) {
         oldAudio.pause();
         oldAudio.remove();
     }
 
-    // 2. Thumbnail Logic
     if (thumbnail) {
         const thumbUrl = getProcessedThumbnail(thumbnail);
-        thumbContainer.innerHTML = `
-            <img src="${thumbUrl}" class="playing-thumb-img" 
-                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-            <span class="default-artwork" style="display:none;">🎵</span>`;
+        if (thumbContainer) {
+            thumbContainer.innerHTML = `
+                <img src="${thumbUrl}" class="playing-thumb-img" 
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <span class="default-artwork" style="display:none;">🎵</span>`;
+        }
     } else {
-        thumbContainer.innerHTML = `<span class="default-artwork">🎵</span>`;
+        if (thumbContainer) thumbContainer.innerHTML = `<span class="default-artwork">🎵</span>`;
     }
 
-    // 3. Create new node
-    engineMount.innerHTML = `<audio id="global-audio-node" src="${filePath}"></audio>`;
+    if (engineMount) {
+        engineMount.innerHTML = `<audio id="global-audio-node" src="${filePath}"></audio>`;
+    }
     const audio = document.getElementById('global-audio-node');
+    if (!audio) return;
 
-    // 4. Unified Event Listeners
     audio.addEventListener('play', () => {
         if (playerHideTimer) clearTimeout(playerHideTimer);
-        footer.classList.add('is-visible');
+        if (footer) footer.classList.add('is-visible');
     });
 
     audio.addEventListener('pause', () => {
         if (playerHideTimer) clearTimeout(playerHideTimer);
         playerHideTimer = setTimeout(() => {
-            footer.classList.remove('is-visible');
+            if (footer) footer.classList.remove('is-visible');
         }, 5000);
     });
 
-    // 5. Sync Favorite Icon State
     const favorites = JSON.parse(localStorage.getItem('myFavorites') || '[]');
     const favBtn = document.querySelector('.toggleFavorite');
 
@@ -685,27 +675,18 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
         }
     }
 
-    // 6. Player Playback Logic
-    const pauseSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/></svg>`;
-    const playSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-left: 2px;"><path d="M7.50632 3.14928C6.1753 2.29363 4.4248 3.24931 4.4248 4.83164V19.1683C4.4248 20.7506 6.1753 21.7063 7.50632 20.8507L18.6571 13.6823C19.8817 12.8951 19.8817 11.1049 18.6571 10.3176L7.50632 3.14928Z" fill="currentColor"/></svg>`;
-
     audio.play().then(() => {
-        playBtn.innerHTML = pauseSVG;
-        playBtn.title = "Pause";
+        if (playBtn) { playBtn.innerHTML = pauseSVG; playBtn.title = "Pause"; }
     }).catch(() => {
-        playBtn.innerHTML = playSVG;
-        playBtn.title = "Play";
+        if (playBtn) { playBtn.innerHTML = playSVG; playBtn.title = "Play"; }
     });
 
-    // 7. Update UI title and re-link events
     const titleEl = document.getElementById('player-title');
     if (titleEl) titleEl.innerText = cleanName;
     linkEngineEvents();
 }
 
-/* FAVORITES*/
 function handleFavoriteToggle() {
-    console.log("Toggle clicked for ID:", currentTrackId);
     if (!currentTrackId) {
         alert("Please select or play a track first!");
         return;
@@ -715,13 +696,11 @@ function handleFavoriteToggle() {
     const favBtn = document.querySelector('.toggleFavorite');
 
     if (favorites.includes(currentTrackId)) {
-        // Remove
         favorites = favorites.filter(id => id !== currentTrackId);
-        favBtn.classList.remove('is-favorited');
+        if (favBtn) favBtn.classList.remove('is-favorited');
     } else {
-        // Add
         favorites.push(currentTrackId);
-        favBtn.classList.add('is-favorited');
+        if (favBtn) favBtn.classList.add('is-favorited');
     }
 
     localStorage.setItem('myFavorites', JSON.stringify(favorites));
@@ -745,8 +724,6 @@ function renderFavorites() {
         if (track) {
             const safeTitle = track.title.replace(/'/g, "\\'");
             const onClick = `selectRow(this, '${track.id}', '${safeTitle}')`;
-
-            // Pass 'false' here to hide the "Download" text
             container.insertAdjacentHTML('beforeend', createFileItem(track.id, safeTitle, false, track.thumbnail, onClick, false));
         }
     });
