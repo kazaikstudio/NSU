@@ -18,8 +18,8 @@ const app = express();
 const PORT = process.env.PORT || 5500;
 const TOKEN_PATH = path.join(__dirname, '.credentials.json');
 
-const CLIENT_ID = process.env.CLIENT_ID || '648297965475-qilsr4vd4maubsdv57hms7n2vgv32lm2.apps.googleusercontent.com';
-const CLIENT_SECRET = process.env.CLIENT_SECRET || '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';
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
 
 // --- DYNAMIC PRODUCTION REDIRECT URI FALLBACK (UPDATED) ---
 const REDIRECT_URI = process.env.REDIRECT_URI || 'https://nsu-backend-production.up.railway.app/api/auth/callback';
