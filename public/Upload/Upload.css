@@ -178,14 +178,28 @@ body, html {
 .round-check input:checked ~ .checkmark:after { display: block; }
 
 /* --- Action Button Layouts --- */
-.browse-btn { background: #4a90e2; color: white; padding: 12px 40px; border-radius: 25px; border: none; cursor: pointer; font-weight: 600; }
-.secondary { background: #ff000039; color: #333; }
+.browse-btn {
+    background: #4a90e2;
+    color: white;
+    padding: 12px 40px;
+    border-radius: 25px;
+    border: none; cursor: pointer; font-weight: 600; }
+.secondary {
+    background: #ff000039;
+    color: #333;
+    width: 70%;
+}
 
+
+.btn-group-vertical{
+    display: flex;
+    gap: 10px;
+}
 .upload-btn {
     background: #34a853;
     color: white;
     padding: 12px;
-    width: 150px;
+    width: 100%;
     border-radius: 20px;
     border: none; cursor: pointer;
     font-weight: 600;
@@ -214,17 +228,16 @@ body, html {
 }
 .fallback-icon { font-size: 20px; }
 
-/* --- Unified Track Progress Bars --- */
-.file-item .progress-bar-small {
-    display: none; /* Hidden by default */
+.progress-bar-small {
+    width: 100%;
     height: 6px;
-    background: #e0e0e0;
+    background-color: #d7d7d7;
     border-radius: 3px;
-    margin-top: 4px;
     overflow: hidden;
+    margin-top: 5px;
 }
 .file-item.uploading .progress-bar-small {
-    display: block !important; /* Visible explicitly when item has .uploading status modifier */
+    display: block !important;
 }
 .file-item.uploading .file-name {
     color: #888;
@@ -278,4 +291,43 @@ body, html {
     cursor: pointer;
     color: #ff6b6b;
     padding: 5px;
+}
+
+.remove-thumb-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    
+    /* Perfect Circle Dimensions */
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    
+    /* Red Styling & Text */
+    background-color: #dc3545;
+    color: #ffffff;
+    border: none;
+    font-size: 14px;
+    font-weight: bold;
+    
+    /* Centering the ✕ icon */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    /* Interactive States */
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Brightens on hover */
+.remove-thumb-btn:hover {
+    background-color: #c82333;
+}
+
+/* Slight scale effect when clicked */
+.remove-thumb-btn:active {
+    transform: scale(0.95);
 }
