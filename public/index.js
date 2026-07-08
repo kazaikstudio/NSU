@@ -266,8 +266,13 @@ function renderInfiniteSlider() {
 
     let htmlContent = displayPool.map(track => {
         const thumbUrl = getProcessedThumbnail(track.thumbnail);
+        // Clean single quotes out of track titles to avoid breaking the inline JS string block
+        const safeTitle = track.title.replace(/'/g, "\\'");
+        
         return `
-            <div class="slide-card" style="width: ${cardWidth}; height: ${cardHeight} !important; flex-shrink: 0;">
+            <div class="slide-card" 
+                 style="width: ${cardWidth}; height: ${cardHeight} !important; flex-shrink: 0; cursor: pointer;"
+                 onclick="selectRow(this, '${track.id}', '${safeTitle}')">
                 <div class="slide-thumb-wrapper" style="width: 100%; aspect-ratio: 1/1;">
                     ${thumbUrl ? `
                         <img src="${thumbUrl}" 
