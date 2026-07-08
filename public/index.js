@@ -5,7 +5,7 @@ let currentTrackId = null;
 let isLooping = false;
 let touchStartY = 0;
 let touchEndY = 0;
-let isSeeking = false; // ✅ Track seeking state to prevent layout flickering
+let isSeeking = false; // Track seeking state to prevent layout flickering
 
 // Centralized production backend endpoint setup
 const BACKEND_BASE = "https://nsu-backend-production.up.railway.app";
@@ -179,7 +179,10 @@ async function fetchAndRenderMusic() {
             }
         });
 
-        // 3. Set 'Global' as the default view
+        // 3. Render Favorites now that tracksCache is loaded successfully
+        renderFavorites();
+
+        // 4. Set 'Global' as the default view
         switchGenreView('Global');
         
     } catch (e) { 
@@ -475,6 +478,12 @@ function toggleMute() {
 function toggleLoop() {
     isLooping = !isLooping;
     document.querySelector('.loop-toggle').classList.toggle('active', isLooping);
+    
+    // ✅ Keep native audio looping synced with state variable
+    const audio = document.getElementById('global-audio-node');
+    if (audio) {
+        audio.loop = isLooping;
+    }
 }
 
 function toggleShare(trackId, title) {
@@ -582,20 +591,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // We render favorites inside fetchAndRenderMusic once data caching completes safely.
     await fetchAndRenderMusic();
-    renderFavorites();
     renderInfiniteSlider();
 
     updateDownloadStats();
     setInterval(updateDownloadStats, 10000);
 
-    document.body.addEventListener('click', (event) => {
-        if (event.target.closest('.toggleFavorite')) {
-            handleFavoriteToggle();
-        }
-    });
-
-    document.querySelector('.toggleFavorite')?.addEventListener('click', handleFavoriteToggle);
+    // ✅ Cleaned up direct event handlers here to prevent accidental double-execution
     document.getElementById('master-play-trigger')?.addEventListener('click', togglePlayPause);
     document.querySelector('.skip-forward')?.addEventListener('click', () => playNavigation('next'));
     document.querySelector('.skip-rewind')?.addEventListener('click', () => playNavigation('prev'));
@@ -603,6 +606,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelector('.share-toggle')?.addEventListener('click', () => {
         const title = document.getElementById('player-title')?.innerText || "Track";
         toggleShare(currentTrackId, title);
+    });
+
+    // ✅ Single delegated listener for favorite buttons handles both player bars and container targets perfectly
+    document.body.addEventListener('click', (event) => {
+        if (event.target.closest('.toggleFavorite')) {
+            handleFavoriteToggle();
+        }
     });
 });
 
@@ -651,6 +661,9 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
     }
     const audio = document.getElementById('global-audio-node');
     if (!audio) return;
+
+    // ✅ Sync native element with existing variable state configuration
+    audio.loop = isLooping;
 
     audio.addEventListener('play', () => {
         if (playerHideTimer) clearTimeout(playerHideTimer);
