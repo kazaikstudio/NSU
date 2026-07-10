@@ -32,6 +32,45 @@ async function updateDownloadStats() {
     }
 }
 
+document.addEventListener("DOMContentLoaded", () => {
+    const searchToolbar = document.querySelector('.content-toolbar');
+    const floatingBtn = document.querySelector('.floating-search-btn');
+
+    // Create the observer
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            // entry.isIntersecting is true if the search bar is visible on screen
+            if (entry.isIntersecting) {
+                // Search bar is visible -> Hide the floating button
+                floatingBtn.classList.remove('active');
+            } else {
+                // Search bar is scrolled off -> Show the floating button
+                floatingBtn.classList.add('active');
+            }
+        });
+    }, {
+        threshold: 0
+    });
+
+    // Start watching the existing search bar toolbar
+    if (searchToolbar) {
+        observer.observe(searchToolbar);
+    }
+});
+
+// Your existing smooth scroll function
+function scrollToSearch(event) {
+    event.preventDefault(); 
+    const searchInput = document.getElementById('trackSearchInput');
+    if (searchInput) {
+        searchInput.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+        });
+        searchInput.focus();
+    }
+}
+
 function togglePopupMenu(event) {
     event.stopPropagation(); // Stops click from triggering window listener instantly
     const mobileMenu = document.getElementById("myMobileMenu");
@@ -254,29 +293,29 @@ function renderInfiniteSlider() {
     let cardHeight;
 
     if (windowWidth < 480) {
-        cardWidth = '140px'; 
-        cardHeight = '180px'; 
+        cardWidth = '140px';
+        cardHeight = '180px';
     } else if (windowWidth < 768) {
-        cardWidth = '180px'; 
-        cardHeight = '220px'; 
+        cardWidth = '180px';
+        cardHeight = '220px';
     } else {
-        cardWidth = '220px'; 
-        cardHeight = '260px'; 
+        cardWidth = '220px';
+        cardHeight = '260px';
     }
 
     let htmlContent = displayPool.map(track => {
         const thumbUrl = getProcessedThumbnail(track.thumbnail);
         // Clean single quotes out of track titles to avoid breaking the inline JS string block
         const safeTitle = track.title.replace(/'/g, "\\'");
-        
+
         return `
-            <div class="slide-card" 
+            <div class="slide-card"
                  style="width: ${cardWidth}; height: ${cardHeight} !important; flex-shrink: 0; cursor: pointer;"
                  onclick="selectRow(this, '${track.id}', '${safeTitle}')">
                 <div class="slide-thumb-wrapper" style="width: 100%; aspect-ratio: 1/1;">
                     ${thumbUrl ? `
-                        <img src="${thumbUrl}" 
-                             class="slide-thumb-img" 
+                        <img src="${thumbUrl}"
+                             class="slide-thumb-img"
                              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" 
                              style="width:100%; height:100%; object-fit:cover;">
                         <div class="thumb-placeholder" style="display:none; width:100%; height:100%; align-items:center; justify-content:center;">🎵</div>
@@ -313,7 +352,7 @@ async function selectRow(element, trackId, trackTitle) {
         downloadContainer.classList.add('is-visible');
     }
 
-    // ✅ Sync visual favorites token state globally across instances
+    // Sync visual favorites token state globally across instances
     syncFavoriteButtonsUI(trackId);
 
     try {
@@ -353,6 +392,7 @@ function linkEngineEvents() {
     const elapsedEl = document.querySelector('.time-stamp.elapsed');
     const totalEl = document.querySelector('.time-stamp.total');
     const progressTrack = document.querySelector('.progress-bar-track');
+    const footer = document.querySelector('.master-player-bar');
     if (!audio || !progressTrack) return;
 
     const calculatePercentage = (clientX) => {
@@ -410,14 +450,14 @@ function linkEngineEvents() {
     // Mobile/Touch Handlers
     progressTrack.addEventListener('touchstart', (e) => {
         isSeeking = true;
-        if (typeof resetPlayerAutohideTimer === 'function') resetPlayerAutohideTimer();
+        resetPlayerAutohideTimer();
         updateSliderUI(e.touches[0].clientX);
     }, { passive: false });
 
     progressTrack.addEventListener('touchmove', (e) => {
         e.preventDefault(); 
         if (isSeeking) {
-            if (typeof resetPlayerAutohideTimer === 'function') resetPlayerAutohideTimer();
+            resetPlayerAutohideTimer();
             updateSliderUI(e.touches[0].clientX);
         }
     }, { passive: false });
@@ -429,12 +469,12 @@ function linkEngineEvents() {
             }
             isSeeking = false;
         }
-        if (typeof resetPlayerAutohideTimer === 'function') resetPlayerAutohideTimer();
+        resetPlayerAutohideTimer();
     });
 
     // Global Engine Native Update hooks
     audio.addEventListener('timeupdate', () => {
-        if (!audio.duration || isSeeking) return; // ✅ Blocks rendering overrides when dragging
+        if (!audio.duration || isSeeking) return; // Blocks rendering overrides when dragging
         const percentage = (audio.currentTime / audio.duration) * 100;
         if (progressFill) progressFill.style.width = `${percentage}%`;
         if (elapsedEl) {
@@ -453,6 +493,15 @@ function linkEngineEvents() {
     });
     
     audio.addEventListener('ended', () => playNavigation('next'));
+
+    // --- AUTO HIDE ENGINE EVENTS MAP ---
+    audio.addEventListener('play', () => {
+        resetPlayerAutohideTimer();
+    });
+
+    audio.addEventListener('pause', () => {
+        if (playerHideTimer) { clearTimeout(playerHideTimer); playerHideTimer = null; }
+    });
 }
 
 function toggleMute() {
@@ -564,7 +613,11 @@ function setupMobileSwipeDetection() {
 
     window.addEventListener('touchend', (e) => {
         touchEndY = e.changedTouches[0].screenY;
+        
+        // Positive result = Swipe Down | Negative result = Swipe Up
         const swipeDistance = touchEndY - touchStartY;
+        
+        // Only trigger if swipe distance is greater than 40px downwards
         if (swipeDistance > 40) { 
             resetPlayerAutohideTimer();
         }

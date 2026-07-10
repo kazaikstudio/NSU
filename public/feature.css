@@ -25,7 +25,7 @@
     .badge-music   { background: rgba(0, 157, 255, 0.85); color: #ffffff; }
     .badge-dancers { background: rgba(196, 223, 16, 0.85); color: #0d0d11; }
     .badge-djs     { background: rgba(224, 64, 251, 0.85); color: #ffffff; }
-    .badge-studio  { background: rgba(255, 255, 255, 0.85); color: #0d0d11; }
+    .badge-studio  { background: rgba(0, 255, 221, 0.908); color: #0d0d11; }
 }
 
 .about-canvas {
