@@ -33,36 +33,25 @@ async function updateDownloadStats() {
 }
 
 function switchView(event, targetViewId) {
-    // 1. Instantly kill standard routing behavior 
-    if (event) {
-        if (typeof event.preventDefault === 'function') event.preventDefault();
-        event.stopPropagation();
-    }
+    if (event) event.preventDefault(); // Stop standard native anchor routing
 
-    try {
-        const views = ['home-view', 'music-view'];
+    const views = ['home-view', 'music-view'];
 
-        views.forEach(viewId => {
-            const viewElement = document.getElementById(viewId);
-            if (viewElement) {
-                if (viewId === targetViewId) {
-                    viewElement.classList.add('active');
-                    viewElement.style.setProperty('display', 'block', 'important');
-                } else {
-                    viewElement.classList.remove('active');
-                    viewElement.style.setProperty('display', 'none', 'important');
-                }
+    views.forEach(viewId => {
+        // Using querySelector instead of getElementById to bypass production DOM rendering glitches
+        const viewElement = document.querySelector(`#${viewId}`);
+        if (viewElement) {
+            if (viewId === targetViewId) {
+                viewElement.classList.add('active');
+                viewElement.style.setProperty('display', 'block', 'important');
+            } else {
+                viewElement.classList.remove('active');
+                viewElement.style.setProperty('display', 'none', 'important');
             }
-        });
+        }
+    });
 
-        // Smooth scroll handling
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    } catch (error) {
-        console.error("View switching encountered a production error:", error);
-    }
-
-    return false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -155,38 +144,194 @@ function filterTracks() {
     });
 }
 
-// --- 3. UI GENERATORS ---
 function createFileItem(id, name, isUploading = false, thumbnail = '', onClickStr = '', showLabel = true) {
     const thumbUrl = getProcessedThumbnail(thumbnail);
     const fallbackImage = 'Pic/noll.jpg';
 
-    const thumbContent = thumbUrl 
+    const thumbContent = thumbUrl
         ? `<img src="${thumbUrl}" onerror="this.src='${fallbackImage}';"; class="thumb-img">`
         : `<img src="${fallbackImage}" class="thumb-img">`;
 
     const labelHtml = showLabel ? '<span class="dl-text"> Download</span>' : '';
+    const escapedNameForInlineJS = name.replace(/'/g, "\\\\\'");
+
+    let waveBarsHtml = '';
+    const totalBars = 200;
+
+    for (let i = 0; i < totalBars; i++) {
+        // Base randomization range
+        let baseHeight = Math.floor(Math.random() * 16) + 8; // 8px to 24px
+
+        let waveProfile = Math.sin((i / totalBars) * Math.PI); 
+
+        // Final layout height calculation
+        let height = Math.floor(baseHeight * (0.3 + 0.7 * waveProfile));
+        if (height < 4) height = 4; // Absolute minimum floor check
+
+        waveBarsHtml += `<div class="wave-bar" style="height: ${height}px;"></div>`;
+    }
 
     return `
         <div class="file-row-item" id="${id}" onclick="${onClickStr}">
             <div class="file-thumb">${thumbContent}</div>
+
             <div class="file-info-progress">
                 <div class="file-name">${name}</div>
             </div>
-            
-            <div class="dcn">
-                <span class="num track-dl-count" id="count-${id}">0</span>
-            </div>
-            
-            <button class="download-btn" onclick="event.stopPropagation(); handleDownload('${id}');" title="Download">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>${labelHtml}
+
+            <button class="row-play-btn play-trigger"
+                    onclick="event.stopPropagation(); handleRowPlayPause(this.closest('.file-row-item'), '${id}', '${escapedNameForInlineJS}');" 
+                    title="Play Track">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="row-icon-svg">
+                    <path d="M8 5v14l11-7z"></path>
+                </svg>
             </button>
+
+            <!-- Fixed matching structural container target hooks -->
+            <div class="waveform waveform-container">
+                ${waveBarsHtml}
+            </div>
+
+            <div class="dcn">
+                <div class="download-Container">
+                <span class="time-stamp elapsed">0:00</span>
+                    <button class="download-btn"
+                            onclick="event.stopPropagation(); handleDownload('${id}');" 
+                            title="Download">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>${labelHtml}
+                    </button>
+                    <span class="num track-dl-count" id="count-${id}">0</span>
+                </div>
+            </div>
         </div>
     `;
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    const audioNode = document.getElementById('global-audio-node');
+    
+    if (audioNode) {
+        // Fires continuously as the audio plays
+        audioNode.addEventListener('timeupdate', () => {
+            if (!audioNode.duration) return;
+            
+            // 1. Calculate the current playback fraction (a decimal between 0 and 1)
+            const progressFraction = audioNode.currentTime / audioNode.duration;
+            
+            // 2. Update the visual wave bars for the active track row
+            updateWavebarsFill(progressFraction);
+            
+            // 3. Update the matching timestamp string inside the active track's row
+            let activeRow = document.getElementById(currentTrackId);
+            if (!activeRow && currentTrackId) {
+                activeRow = document.querySelector(`.file-row-item[id="${currentTrackId}"]`);
+            }
+            if (!activeRow) {
+                activeRow = document.querySelector('.file-row-item.active-row');
+            }
+            
+            if (activeRow) {
+                const timeLabel = activeRow.querySelector('.time-stamp.elapsed');
+                if (timeLabel) {
+                    timeLabel.innerText = formatTimeLayout(audioNode.currentTime);
+                }
+            }
+        });
+    }
+});
+
+function togglePlayPause() {
+    const audio = document.getElementById('global-audio-node');
+    const playBtns = document.querySelectorAll('.play-master-trigger, #master-play-trigger');
+    if (!audio) return;
+
+    // SVG Paths
+    const playPath = "M8 5v14l11-7z";
+    const pausePath = "M6 19h4V5H6v14zm8-14v14h4V5h-4z";
+
+    // Find the active row using ID or the active class fallback
+    let activeRow = document.getElementById(currentTrackId);
+    if (!activeRow) {
+        activeRow = document.querySelector('.file-row-item.active-row');
+    }
+
+    if (audio.paused) { 
+        audio.play(); 
+        
+        // Update master player controls
+        if (typeof pauseSVG !== 'undefined') {
+            playBtns.forEach(btn => { btn.innerHTML = pauseSVG; btn.title = "Pause"; });
+        }
+        
+        // Update the active track row icon to PAUSE shape
+        if (activeRow) {
+            const rowSvgPath = activeRow.querySelector('.row-icon-svg path');
+            if (rowSvgPath) rowSvgPath.setAttribute('d', pausePath);
+        }
+    } else { 
+        audio.pause(); 
+        
+        // Update master player controls
+        if (typeof playSVG !== 'undefined') {
+            playBtns.forEach(btn => { btn.innerHTML = playSVG; btn.title = "Play"; });
+        }
+        
+        // Update the active track row icon back to PLAY shape
+        if (activeRow) {
+            const rowSvgPath = activeRow.querySelector('.row-icon-svg path');
+            if (rowSvgPath) rowSvgPath.setAttribute('d', playPath);
+        }
+    }
+}
+function handleRowPlayPause(rowElement, trackId, trackTitle) {
+    const audio = document.getElementById('global-audio-node');
+    
+    // If the clicked track is ALREADY the active track and audio engine exists,
+    // simply toggle between play and pause states natively!
+    if (currentTrackId === trackId && audio) {
+        togglePlayPause();
+        return;
+    }
+    
+    // Otherwise, it's a completely new track! 
+    // Set the tracking ID and initialize the structural selection layout engine
+    currentTrackId = trackId;
+    selectRow(rowElement, trackId, trackTitle);
+}
+
+const updateWavebarsFill = (percentage) => {
+    // 1. Establish the target row through explicit ID mapping or context tracking strings
+    let activeRow = null;
+    if (currentTrackId) {
+        activeRow = document.getElementById(currentTrackId) || 
+                    document.querySelector(`.file-row-item[id="${currentTrackId}"]`);
+    }
+    
+    // 2. Direct fallback lookup mapping your active class injection
+    if (!activeRow) {
+        activeRow = document.querySelector('.file-row-item.active-row');
+    }
+    
+    if (!activeRow) return;
+    
+    // 3. Find the rendered bars explicitly targeting the classes in your template layout
+    const bars = activeRow.querySelectorAll('.waveform-container .wave-bar');
+    if (!bars.length) return;
+    
+    const cutoffIndex = Math.floor(percentage * bars.length);
+    
+    bars.forEach((bar, idx) => {
+        if (idx < cutoffIndex) {
+            bar.classList.add('played');
+        } else {
+            bar.classList.remove('played');
+        }
+    });
+};
 
 function updateStats() {
     const countElement = document.getElementById('audio-count');
@@ -350,23 +495,47 @@ function downloadCurrentTrack() {
 async function selectRow(element, trackId, trackTitle) {
     currentTrackId = trackId;
 
-    document.querySelectorAll('.file-row-item').forEach(row => row.classList.remove('active-row'));
+    // SVG shapes
+    const playPath = "M8 5v14l11-7z";
+    const pausePath = "M6 19h4V5H6v14zm8-14v14h4V5h-4z";
+
+    // 1. GLOBAL RESET: Clear all active styles and flip all row icons back to PLAY
+    document.querySelectorAll('.file-row-item').forEach(row => {
+        row.classList.remove('active-row', 'is-playing');
+        
+        const oldRowTimer = row.querySelector('.time-stamp.elapsed');
+        if (oldRowTimer) oldRowTimer.innerText = "0:00";
+
+        const oldPath = row.querySelector('.row-icon-svg path');
+        if (oldPath) oldPath.setAttribute('d', playPath);
+    });
+
+    // 2. TARGET SELECTION: Identify the clicked container
+    let targetRow = null;
     if (element && element.classList.contains('file-row-item')) {
-        element.classList.add('active-row');
+        targetRow = element;
     } else {
-        const structuralRow = document.getElementById(trackId);
-        if (structuralRow) structuralRow.classList.add('active-row');
+        targetRow = document.getElementById(trackId);
     }
 
+    if (targetRow) {
+        targetRow.classList.add('active-row', 'is-playing');
+
+        // FORCE TARGET ROW ICON TO PAUSE SHAPE ON FRESH BOOT
+        const rowSvgPath = targetRow.querySelector('.row-icon-svg path');
+        if (rowSvgPath) rowSvgPath.setAttribute('d', pausePath);
+    }
+
+    // 3. UI BAR STATES
     const downloadContainer = document.getElementById('download-container');
     if (downloadContainer) downloadContainer.classList.add('is-visible');
 
     syncFavoriteButtonsUI(trackId);
 
+    // 4. STATS SYNCING
     try {
         const response = await fetch(`${BACKEND_BASE}/api/stats/downloads`);
         const data = await response.json();
-        const targetRow = document.getElementById(trackId);
         if (targetRow) {
             const countSpan = targetRow.querySelector('.track-dl-count');
             if (countSpan) countSpan.innerText = data.counts[trackId] || 0;
@@ -375,6 +544,7 @@ async function selectRow(element, trackId, trackTitle) {
         console.error("Error fetching download stats:", err);
     }
 
+    // 5. ENGINE LOADING
     if (playerHideTimer) clearTimeout(playerHideTimer);
     const track = tracksCache.find(t => t.id === trackId);
     if (track) {
@@ -523,6 +693,7 @@ function linkEngineEvents() {
     audio.addEventListener('pause', () => {
         if (playerHideTimer) { clearTimeout(playerHideTimer); playerHideTimer = null; }
     });
+    updateWavebarsFill(audio.currentTime / audio.duration);
 }
 
 function toggleMute() {
@@ -724,14 +895,72 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
 
     syncFavoriteButtonsUI(trackId);
 
+    // Dynamic Play/Pause State Syncing
     audio.play().then(() => {
         playBtns.forEach(btn => { btn.innerHTML = pauseSVG; btn.title = "Pause"; });
-    }).catch(() => {
+        
+        // Reset ALL row play buttons back to standard play icons
+        document.querySelectorAll('.row-icon-svg path').forEach(path => {
+            path.setAttribute('d', "M8 5v14l11-7z");
+        });
+        
+        // Find our selected row container and force its child icon to match the pause shape
+        const activeRow = document.getElementById(trackId);
+        if (activeRow) {
+            const rowSvgPath = activeRow.querySelector('.row-icon-svg path');
+            if (rowSvgPath) rowSvgPath.setAttribute('d', "M6 19h4V5H6v14zm8-14v14h4V5h-4z");
+        }
+    }).catch((err) => {
+        console.error("Playback failed or was interrupted:", err);
         playBtns.forEach(btn => { btn.innerHTML = playSVG; btn.title = "Play"; });
+        
+        // If the playback fails, ensure the row icon safely drops back to the play shape
+        const activeRow = document.getElementById(trackId);
+        if (activeRow) {
+            const rowSvgPath = activeRow.querySelector('.row-icon-svg path');
+            if (rowSvgPath) rowSvgPath.setAttribute('d', "M8 5v14l11-7z");
+        }
     });
 
     document.querySelectorAll('.player-title-node, #player-title').forEach(el => el.innerText = cleanName);
     linkEngineEvents();
+
+    const audioNode = document.getElementById('global-audio-node');
+
+// Master clean SVG strings matching your custom row setup
+const playSVG = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="row-icon-svg">
+        <path d="M8 5v14l11-7z"></path>
+    </svg>`;
+
+const pauseSVG = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="row-icon-svg">
+        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path>
+    </svg>`;
+
+// Whenever the browser audio begins playing
+audioNode.addEventListener('play', () => {
+    const activeRow = document.querySelector('.file-row-item.active-row');
+    if (activeRow) {
+        const playButton = activeRow.querySelector('.row-play-btn.play-trigger');
+        if (playButton) {
+            playButton.innerHTML = pauseSVG;
+            playButton.title = "Pause Track";
+        }
+    }
+});
+
+// Whenever the browser audio stalls or pauses
+audioNode.addEventListener('pause', () => {
+    const activeRow = document.querySelector('.file-row-item.active-row');
+    if (activeRow) {
+        const playButton = activeRow.querySelector('.row-play-btn.play-trigger');
+        if (playButton) {
+            playButton.innerHTML = playSVG;
+            playButton.title = "Play Track";
+        }
+    }
+});
 }
 
 function syncFavoriteButtonsUI(trackId) {
