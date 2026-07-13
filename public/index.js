@@ -31,6 +31,7 @@ async function updateDownloadStats() {
     }
 }
 
+
 function switchView(event, targetViewId) {
     // 1. Stop native browser anchor routing 
     if (event) event.preventDefault(); 
