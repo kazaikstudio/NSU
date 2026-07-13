@@ -2,12 +2,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NSU Media Portal</title>
-    <link rel="stylesheet" href="music.css">
+    <link rel="stylesheet" href="index.css">
     <link rel="stylesheet" href="bg.css">
     <script src="index.js" defer=""></script>
 </head>
 <body>
-
     <nav class="navbar">
         <div class="nav-container">
             <!-- Unified Brand/Logo Section Wrapper -->
@@ -39,6 +38,7 @@
         </div>
     </nav>
 
+    <div id="home-view" class="page-view"> 
     <!-- Floating Search Button -->
     <a href="#trackSearchInput" class="floating-search-btn" aria-label="Go to Search" onclick="scrollToSearch(event)">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -155,12 +155,19 @@
     <div class="player-trigger-zone"></div>
     <footer class="master-player-bar">
             <div class="now-playing-col">
-                <div class="current-track-thumb" id="player-thumb">
-                    <span class="default-artwork">🎵</span>
-                </div>
+                <a href="music.html"
+                class="current-track-thumb"
+                id="player-thumb"
+                onclick="switchView(event, 'music-view');">
+                    <img src="Pic/noll.jpg" alt="Album Artwork" class="default-artwork">
+                </a>
+            </div>
+             <div class="track-info-metadata">
+                <div class="player-title-node" id="player-title">Attention</div>
             </div>
 
             <div class="player-controls-col">
+
                     <div class="control-actions-group">
                         <button class="ctrl-btn skip-rewind" title="Previous">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -197,15 +204,6 @@
 
             <div class="player-volume-col">
 
-                    <div class="volume">
-                        <button class="volume-toggle" id="volume-btn" onclick="toggleMute()" title="Mute/Unmute">
-                            <svg id="volume-icon" width="22px" height="22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                                <path id="volume-path" d="M19.07 4.93a10 10 0 0 1 0 14.14M15.57 8.43a5 5 0 0 1 0 7.07"></path>
-                            </svg>
-                        </button>
-                    </div>
-
                     <button class="toggle-sidebar-right" onclick="toggleSidebar()">
                         <svg width="22px" height="22px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"></rect>
@@ -214,68 +212,12 @@
                         </svg>
                     </button>
 
-                    <div class="menu-container">
-                    <button class="pop_up_menu" onclick="togglePopupMenu(event)">
-                        <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 0 16 16" width="16px">
-                            <path d="m 5 1 c -1.65625 0 -3 1.34375 -3 3 v 9 c 0 1.65625 1.34375 3 3 3 h 6 c 1.65625 0 3 -1.34375 3 -3 v -6 c 0 -0.90625 -0.359375 -1.773438 -1 -2.414062 l -2.585938 -2.585938 c -0.640624 -0.640625 -1.507812 -1 -2.414062 -1 z m 0 2 h 3 c 0.375 0 0.734375 0.148438 1 0.414062 v 3.585938 h 3 v 6 c 0 0.5625 -0.4375 1 -1 1 h -6 c -0.5625 0 -1 -0.4375 -1 -1 v -9 c 0 -0.5625 0.4375 -1 1 -1 z m 1.5 1 c -0.824219 0 -1.5 0.675781 -1.5 1.5 s 0.675781 1.5 1.5 1.5 s 1.5 -0.675781 1.5 -1.5 s -0.675781 -1.5 -1.5 -1.5 z m 0 1 c 0.28125 0 0.5 0.21875 0.5 0.5 s -0.21875 0.5 -0.5 0.5 s -0.5 -0.21875 -0.5 -0.5 s 0.21875 -0.5 0.5 -0.5 z m -1.5 3 v 1 h 6 v -1 z m 0 2 v 1 h 6 v -1 z m 0 2 v 1 h 6 v -1 z m 0 0"/>
+                    <button class="info-btn toggleFavorite">
+                        <svg class="heart-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
                         </svg>
                     </button>
 
-                    <div id="myMobileMenu" class="mobile-popup-panel">
-                        <button class="toggleFavorite" title="Favorite" onclick="handleFavoriteToggle()">
-                            <svg width="22px" height="22px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path id="fav-icon" d="M4.45067 13.9082L11.4033 20.4395C11.6428 20.6644 11.7625 20.7769 11.9037 20.8046C11.9673 20.8171 12.0327 20.8171 12.0963 20.8046C12.2375 20.7769 12.3572 20.6644 12.5967 20.4395L19.5493 13.9082C21.5055 12.0706 21.743 9.0466 20.0978 6.92607L19.7885 6.52734C17.8203 3.99058 13.8696 4.41601 12.4867 7.31365C12.2913 7.72296 11.7087 7.72296 11.5133 7.31365C10.1304 4.41601 6.17972 3.99058 4.21154 6.52735L3.90219 6.92607C2.25695 9.0466 2.4945 12.0706 4.45067 13.9082Z" stroke="#9e9e9e" stroke-width="2" fill="none"></path>
-                            </svg>
-                            <span>Favorite</span>
-                        </button>
-
-                        <button class="ctrl-btn loop-toggle" title="Repeat">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="17 1 21 5 17 9"></polyline>
-                                <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
-                                <polyline points="7 23 3 19 7 15"></polyline>
-                                <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
-                            </svg>
-                            <span>Repeat</span>
-                        </button>
-
-                        <button class="ctrl-btn share-toggle" title="Share" onclick="toggleShare('track-123', 'Track Title')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="18" cy="5" r="3"></circle>
-                                <circle cx="6" cy="12" r="3"></circle>
-                                <circle cx="18" cy="19" r="3"></circle>
-                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-                            </svg>
-                            <span>Share</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="toggle_2">
-                    <button class="toggleFavorite" title="Favorite" onclick="handleFavoriteToggle()">
-                        <svg width="22px" height="22px" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path id="fav-icon" d="M4.45067 13.9082L11.4033 20.4395C11.6428 20.6644 11.7625 20.7769 11.9037 20.8046C11.6428 20.6644 11.7625 20.7769 11.9037 20.8046C11.9673 20.8171 12.0327 20.8171 12.0963 20.8046C12.2375 20.7769 12.3572 20.6644 12.5967 20.4395L19.5493 13.9082C21.5055 12.0706 21.743 9.0466 20.0978 6.92607L19.7885 6.52734C17.8203 3.99058 13.8696 4.41601 12.4867 7.31365C12.2913 7.72296 11.7087 7.72296 11.5133 7.31365C10.1304 4.41601 6.17972 3.99058 4.21154 6.52735L3.90219 6.92607C2.25695 9.0466 2.4945 12.0706 4.45067 13.9082Z" stroke="#9e9e9e" stroke-width="2" fill="none"></path>
-                        </svg>
-                    </button>
-                    <button class="ctrl-btn loop-toggle" title="Repeat">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="17 1 21 5 17 9"></polyline>
-                            <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
-                            <polyline points="7 23 3 19 7 15"></polyline>
-                            <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
-                        </svg>
-                    </button>
-                    <button class="ctrl-btn share-toggle" title="Share" onclick="toggleShare('track-123', 'Track Title')">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="18" cy="5" r="3"></circle>
-                            <circle cx="6" cy="12" r="3"></circle>
-                            <circle cx="18" cy="19" r="3"></circle>
-                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-                        </svg>
-                    </button>
-                </div>
             </div>
 
     </footer>
@@ -293,5 +235,121 @@
         <input type="file" id="mediaFileInput" name="mediaFile" onchange="submitSilentForm()">
     </form>
 
+    </div>
+
+    <div id="music-view" class="page-view hidden" style="display: none;">
+        <div class="player-container">
+            <!-- Header -->
+            <header class="player-header">
+                <a href="index.html" class="header-btn" onclick="switchView(event, 'home-view');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m6 9 6 6 6-6"/>
+                    </svg>
+                </a>
+
+                <span class="header-title">Now Playing</span>
+
+                <button class="header-btn" onclick="downloadCurrentTrack()" title="Download Track">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" x2="12" y1="15" y2="3"/>
+                    </svg>
+                </button>
+            </header>
+
+            <!-- Album Artwork Stage Area -->
+            <div class="artwork-container">
+                <div class="artwork-outer-ring">
+                    <div class="artwork-inner-node artwork">
+                        <img src="Pic/noll.jpg" alt="Artwork Thumbnail" class="playing-thumb-img" id="main-artwork-node">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Track Information & Interactive Meta Section -->
+            <div class="track-info-wrapper">
+                <button class="info-btn toggleFavorite">
+                    <svg class="heart-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+                    </svg>
+                </button>
+
+                <div class="track-meta">
+                    <h1 id="player-title" class="track-title">Select a Track</h1>
+                    <p id="player-artist" class="track-artist">Global Library</p>
+                </div>
+
+                <button class="ctrl-btn share-toggle" title="Share" onclick="toggleShare('track-123', 'Track Title')">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="18" cy="5" r="3"></circle>
+                            <circle cx="6" cy="12" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        </svg>
+                </button>
+            </div>
+
+            <!-- Progress Section containing Waveform Track Timeline -->
+            <div class="progress-container">
+                <div class="waveform" id="waveform">
+                    <!-- Javascript will populate wave bars here seamlessly -->
+                </div>
+                <div class="waveform-timeline">
+                    <!-- ADDED CLASSES HERE -->
+                    <span class="time-stamp elapsed">0:00</span>
+                    <span class="time-stamp total">0:00</span>
+                </div>
+            </div>
+
+            <!-- Primary Controls Playback Section -->
+            <div class="main-controls">
+                <button class="ctrl-btn loop-toggle" title="Repeat">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="17 1 21 5 17 9"></polyline>
+                            <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                            <polyline points="7 23 3 19 7 15"></polyline>
+                            <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                        </svg>
+                </button>
+
+                <button class="control-btn skip-rewind">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/>
+                        <line x1="5" x2="5" y1="5" y2="19"/>
+                    </svg>
+                </button>
+
+                <button id="master-play-trigger" class="control-btn play-pause">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: translateX(2px);">
+                        <polygon points="6 3 20 12 6 21 6 3"/>
+                    </svg>
+                </button>
+
+                <button class="control-btn skip-forward">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/>
+                        <line x1="19" x2="19" y1="5" y2="19"/>
+                    </svg>
+                </button>
+
+                <div class="volume">
+                        <button class="volume-toggle" id="volume-btn" onclick="toggleMute()" title="Mute/Unmute">
+                            <svg id="volume-icon" width="22px" height="22px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                <path id="volume-path" d="M19.07 4.93a10 10 0 0 1 0 14.14M15.57 8.43a5 5 0 0 1 0 7.07"></path>
+                            </svg>
+                        </button>
+                </div>
+            </div>
+
+            <!-- Structural Context Views Section (Hidden Layout Targets for Data) -->
+            <div id="hidden-audio-engine-mount" style="display: none;"></div>
+            <div id="media-container-Global" class="genre-canvas-view" style="display: none;"></div>
+            <div id="media-container-Favorites" class="genre-canvas-view" style="display: none;"></div>
+            <div id="auto-slider-track" style="display: none;"></div>
+        </div>
+    </div>
 
 </body></html>

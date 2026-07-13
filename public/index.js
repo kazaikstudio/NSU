@@ -32,33 +32,48 @@ async function updateDownloadStats() {
     }
 }
 
+function switchView(event, targetViewId) {
+    if (event) event.preventDefault(); // Stop standard native anchor routing
+
+    // List of active main layout container IDs
+    const views = ['home-view', 'music-view'];
+    
+    views.forEach(viewId => {
+        const viewElement = document.getElementById(viewId);
+        if (viewElement) {
+            if (viewId === targetViewId) {
+                viewElement.classList.remove('hidden');
+                viewElement.style.display = 'flex'; // Explicitly forces your flex layout orientation
+            } else {
+                viewElement.classList.add('hidden');
+                viewElement.style.display = 'none'; // Clear from structural paint tree completely
+            }
+        }
+    });
+
+    // Auto-scroll framing smoothly to the top of the newly displayed view context
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     const searchToolbar = document.querySelector('.content-toolbar');
     const floatingBtn = document.querySelector('.floating-search-btn');
 
-    // Create the observer
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            // entry.isIntersecting is true if the search bar is visible on screen
-            if (entry.isIntersecting) {
-                // Search bar is visible -> Hide the floating button
-                floatingBtn.classList.remove('active');
-            } else {
-                // Search bar is scrolled off -> Show the floating button
-                floatingBtn.classList.add('active');
-            }
-        });
-    }, {
-        threshold: 0
-    });
+    if (searchToolbar && floatingBtn) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    floatingBtn.classList.remove('active');
+                } else {
+                    floatingBtn.classList.add('active');
+                }
+            });
+        }, { threshold: 0 });
 
-    // Start watching the existing search bar toolbar
-    if (searchToolbar) {
         observer.observe(searchToolbar);
     }
 });
 
-// Your existing smooth scroll function
 function scrollToSearch(event) {
     event.preventDefault(); 
     const searchInput = document.getElementById('trackSearchInput');
@@ -79,7 +94,6 @@ function togglePopupMenu(event) {
     }
 }
 
-// Automatically close the menu if the user taps outside of it
 window.addEventListener("click", function(event) {
     const mobileMenu = document.getElementById("myMobileMenu");
     if (mobileMenu && mobileMenu.classList.contains("active")) {
@@ -111,14 +125,10 @@ function updatePlayerVisibility() {
 // --- 2. HELPERS ---
 function getProcessedThumbnail(thumbnail) {
     if (!thumbnail) return null;
-    
-    // Convert standard Google Drive viewing URLs into direct download streams
     if (thumbnail.includes('drive.google.com/file/d/')) {
         const fileId = thumbnail.split('/d/')[1].split('/')[0];
         thumbnail = `https://drive.google.com/uc?export=view&id=${fileId}`;
     }
-    
-    // Fallback cleanly to absolute path routing context rules
     return `${BACKEND_BASE}/proxy-image?url=${encodeURIComponent(thumbnail)}`;
 }
 
@@ -138,10 +148,11 @@ function filterTracks() {
 // --- 3. UI GENERATORS ---
 function createFileItem(id, name, isUploading = false, thumbnail = '', onClickStr = '', showLabel = true) {
     const thumbUrl = getProcessedThumbnail(thumbnail);
+    const fallbackImage = 'Pic/noll.jpg';
+
     const thumbContent = thumbUrl 
-        ? `<img src="${thumbUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" class="thumb-img">
-           <span class="fallback-icon" style="display:none;">🎵</span>`
-        : '<span class="fallback-icon">🎵</span>';
+        ? `<img src="${thumbUrl}" onerror="this.src='${fallbackImage}';"; class="thumb-img">`
+        : `<img src="${fallbackImage}" class="thumb-img">`;
 
     const labelHtml = showLabel ? '<span class="dl-text"> Download</span>' : '';
 
@@ -182,7 +193,6 @@ function renderToContainer(track, genre) {
     if (!container) return;
 
     if (container.querySelector(`[id="${track.id}"]`)) {
-        console.log(`Duplicate prevented for ${track.id} in ${genre}`);
         return;
     }
 
@@ -194,36 +204,24 @@ function renderToContainer(track, genre) {
 async function fetchAndRenderMusic() {
     try {
         const response = await fetch(`${BACKEND_BASE}/api/media/drive`);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Backend returned status ${response.status}:`, errorText);
-            return; 
-        }
+        if (!response.ok) return;
 
         const tracks = await response.json();
         tracksCache = tracks;
         
-        // 1. Clear all containers
         document.querySelectorAll('.genre-canvas-view').forEach(container => {
             container.innerHTML = ''; 
         });
         
-        // 2. Render tracks
         tracksCache.forEach(track => {
             renderToContainer(track, 'Global');
-            
             if (track.genre && track.genre !== 'Global') {
                 renderToContainer(track, track.genre);
             }
         });
 
-        // 3. Render Favorites now that tracksCache is loaded successfully
         renderFavorites();
-
-        // 4. Set 'Global' as the default view
         switchGenreView('Global');
-        
     } catch (e) { 
         console.error("Failed to parse or render music payload:", e); 
     }
@@ -242,16 +240,12 @@ function switchGenreView(genreName) {
     buttons.forEach(btn => btn.classList.remove('active'));
 
     let currentTarget = document.querySelector(`.Select_btn_container [data-genre="${genreName}"]`);
-    
     if (!currentTarget) {
         currentTarget = Array.from(buttons).find(btn => 
             btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(genreName)
         );
     }
-
-    if (currentTarget) {
-        currentTarget.classList.add('active');
-    }
+    if (currentTarget) currentTarget.classList.add('active');
 
     const canvases = document.querySelectorAll('.media-table-container .genre-canvas-view');
     canvases.forEach(canvas => {
@@ -272,13 +266,8 @@ function switchGenreView(genreName) {
             : `${genreName} Tracks`;
     }
 
-    if (typeof updateStats === 'function') {
-        updateStats();
-    }
-    
-    if (typeof highlightPlayingTrack === 'function') {
-        highlightPlayingTrack();
-    }
+    updateStats();
+    highlightPlayingTrack();
 }
 
 function renderInfiniteSlider() {
@@ -289,8 +278,8 @@ function renderInfiniteSlider() {
     if (displayPool.length === 0) return;
 
     const windowWidth = window.innerWidth;
-    let cardWidth;
-    let cardHeight;
+    let cardWidth = '220px';
+    let cardHeight = '260px';
 
     if (windowWidth < 480) {
         cardWidth = '140px';
@@ -298,14 +287,12 @@ function renderInfiniteSlider() {
     } else if (windowWidth < 768) {
         cardWidth = '180px';
         cardHeight = '220px';
-    } else {
-        cardWidth = '220px';
-        cardHeight = '260px';
     }
+
+    const fallbackImage = 'Pic/noll.jpg';
 
     let htmlContent = displayPool.map(track => {
         const thumbUrl = getProcessedThumbnail(track.thumbnail);
-        // Clean single quotes out of track titles to avoid breaking the inline JS string block
         const safeTitle = track.title.replace(/'/g, "\\'");
 
         return `
@@ -313,13 +300,10 @@ function renderInfiniteSlider() {
                  style="width: ${cardWidth}; height: ${cardHeight} !important; flex-shrink: 0; cursor: pointer;"
                  onclick="selectRow(this, '${track.id}', '${safeTitle}')">
                 <div class="slide-thumb-wrapper" style="width: 100%; aspect-ratio: 1/1;">
-                    ${thumbUrl ? `
-                        <img src="${thumbUrl}"
-                             class="slide-thumb-img"
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" 
-                             style="width:100%; height:100%; object-fit:cover;">
-                        <div class="thumb-placeholder" style="display:none; width:100%; height:100%; align-items:center; justify-content:center;">🎵</div>
-                    ` : '<div class="thumb-placeholder">🎵</div>'}
+                    <img src="${thumbUrl ? thumbUrl : fallbackImage}"
+                         class="slide-thumb-img"
+                         onerror="this.src='${fallbackImage}';"; 
+                         style="width:100%; height:100%; object-fit:cover;">
                 </div>
                 <div class="slide-file-name">${track.title}</div>
             </div>`;
@@ -327,17 +311,29 @@ function renderInfiniteSlider() {
 
     sliderTrack.innerHTML = htmlContent + htmlContent;
 }
-
 window.addEventListener('resize', renderInfiniteSlider);
 
 function downloadCurrentTrack() {
-    if (!currentTrackId) { alert("No track is currently loaded to download."); return; }
+    if (!currentTrackId) { 
+        alert("No track is currently loaded to download.");
+        return; 
+    }
+    
     const link = document.createElement('a');
-    link.href = `${BACKEND_BASE}/api/stream/${currentTrackId}`;
+    // 1. Appended ?download=true to force content-disposition attachment headers
+    link.href = `${BACKEND_BASE}/api/stream/${currentTrackId}?download=true`;
+    
+    // 2. Standardize cross-origin parameters
     link.setAttribute('download', '');
+    link.target = '_blank'; 
+    link.style.display = 'none';
+    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    // 3. Optional: Sync download statistics counter animations right after
+    setTimeout(updateDownloadStats, 1000);
 }
 
 // --- 5. PLAYER & INTERACTIONS ---
@@ -345,22 +341,25 @@ async function selectRow(element, trackId, trackTitle) {
     currentTrackId = trackId;
 
     document.querySelectorAll('.file-row-item').forEach(row => row.classList.remove('active-row'));
-    element.classList.add('active-row');
-
-    const downloadContainer = document.getElementById('download-container');
-    if (downloadContainer) {
-        downloadContainer.classList.add('is-visible');
+    if (element && element.classList.contains('file-row-item')) {
+        element.classList.add('active-row');
+    } else {
+        const structuralRow = document.getElementById(trackId);
+        if (structuralRow) structuralRow.classList.add('active-row');
     }
 
-    // Sync visual favorites token state globally across instances
+    const downloadContainer = document.getElementById('download-container');
+    if (downloadContainer) downloadContainer.classList.add('is-visible');
+
     syncFavoriteButtonsUI(trackId);
 
     try {
         const response = await fetch(`${BACKEND_BASE}/api/stats/downloads`);
         const data = await response.json();
-        const countSpan = element.querySelector('.track-dl-count');
-        if (countSpan) {
-            countSpan.innerText = data.counts[trackId] || 0;
+        const targetRow = document.getElementById(trackId);
+        if (targetRow) {
+            const countSpan = targetRow.querySelector('.track-dl-count');
+            if (countSpan) countSpan.innerText = data.counts[trackId] || 0;
         }
     } catch (err) {
         console.error("Error fetching download stats:", err);
@@ -382,123 +381,135 @@ async function handleDownload(trackId) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
     setTimeout(updateDownloadStats, 1000);
 }
 
 function linkEngineEvents() {
     const audio = document.getElementById('global-audio-node');
-    const progressFill = document.querySelector('.progress-fill');
-    const elapsedEl = document.querySelector('.time-stamp.elapsed');
-    const totalEl = document.querySelector('.time-stamp.total');
-    const progressTrack = document.querySelector('.progress-bar-track');
-    const footer = document.querySelector('.master-player-bar');
-    if (!audio || !progressTrack) return;
+    const progressFills = document.querySelectorAll('.progress-fill');
+    const elapsedEls = document.querySelectorAll('.time-stamp.elapsed');
+    const totalEls = document.querySelectorAll('.time-stamp.total');
+    
+    // Core structural target mapping both normal sliders AND your dynamic layout waveform container
+    const progressTracks = document.querySelectorAll('.progress-bar-track, #waveform');
+    if (!audio || progressTracks.length === 0) return;
 
-    const calculatePercentage = (clientX) => {
-        const rect = progressTrack.getBoundingClientRect();
+    const calculatePercentage = (clientX, track) => {
+        const rect = track.getBoundingClientRect();
         let percentage = (clientX - rect.left) / rect.width;
         if (percentage < 0) percentage = 0;
         if (percentage > 1) percentage = 1;
         return percentage;
     };
 
-    const seekToPosition = (clientX) => {
-        const percentage = calculatePercentage(clientX);
-        if (progressFill) progressFill.style.width = `${percentage * 100}%`;
+    // Updates colors on dynamic wave bars based on percentage completion 
+    const updateWavebarsFill = (percentage) => {
+        const bars = document.querySelectorAll('#waveform .wave-bar');
+        if (!bars.length) return;
+        const cutoffIndex = Math.floor(percentage * bars.length);
+        
+        bars.forEach((bar, idx) => {
+            if (idx < cutoffIndex) {
+                bar.classList.add('played'); // Stylize inside CSS (e.g. background: var(--primary))
+            } else {
+                bar.classList.remove('played');
+            }
+        });
+    };
+
+    const seekToPosition = (clientX, track) => {
+        const percentage = calculatePercentage(clientX, track);
+        progressFills.forEach(fill => fill.style.width = `${percentage * 100}%`);
+        updateWavebarsFill(percentage);
         audio.currentTime = percentage * audio.duration;
     };
 
-    const updateSliderUI = (clientX) => {
-        const percentage = calculatePercentage(clientX);
-        if (progressFill) progressFill.style.width = `${percentage * 100}%`;
-        if (elapsedEl && audio.duration) {
+    const updateSliderUI = (clientX, track) => {
+        const percentage = calculatePercentage(clientX, track);
+        progressFills.forEach(fill => fill.style.width = `${percentage * 100}%`);
+        updateWavebarsFill(percentage);
+        if (audio.duration) {
             const currentAudioTime = percentage * audio.duration;
             const m = Math.floor(currentAudioTime / 60);
             const s = Math.floor(currentAudioTime % 60);
-            elapsedEl.innerText = `${m}:${s.toString().padStart(2, '0')}`;
+            elapsedEls.forEach(el => el.innerText = `${m}:${s.toString().padStart(2, '0')}`);
         }
     };
 
-    // Click handler
-    progressTrack.addEventListener('click', (e) => {
-        seekToPosition(e.clientX);
-    });
+    // Bind event listeners to tracking timelines layout systems
+    progressTracks.forEach(track => {
+        track.addEventListener('click', (e) => seekToPosition(e.clientX, track));
 
-    // Desktop Drag Seek Mouse handlers
-    progressTrack.addEventListener('mousedown', (e) => {
-        isSeeking = true;
-        updateSliderUI(e.clientX);
-        
-        const onMouseMove = (moveEvent) => {
-            if (isSeeking) updateSliderUI(moveEvent.clientX);
-        };
-        
-        const onMouseUp = (upEvent) => {
+        track.addEventListener('mousedown', (e) => {
+            isSeeking = true;
+            updateSliderUI(e.clientX, track);
+            
+            const onMouseMove = (moveEvent) => {
+                if (isSeeking) updateSliderUI(moveEvent.clientX, track);
+            };
+            
+            const onMouseUp = (upEvent) => {
+                if (isSeeking) {
+                    seekToPosition(upEvent.clientX, track);
+                    isSeeking = false;
+                }
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+            
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        track.addEventListener('touchstart', (e) => {
+            isSeeking = true;
+            resetPlayerAutohideTimer();
+            updateSliderUI(e.touches[0].clientX, track);
+        }, { passive: false });
+
+        track.addEventListener('touchmove', (e) => {
             if (isSeeking) {
-                seekToPosition(upEvent.clientX);
+                e.preventDefault();
+                resetPlayerAutohideTimer();
+                updateSliderUI(e.touches[0].clientX, track);
+            }
+        }, { passive: false });
+
+        track.addEventListener('touchend', (e) => {
+            if (isSeeking) {
+                if (e.changedTouches && e.changedTouches.length > 0) {
+                    seekToPosition(e.changedTouches[0].clientX, track);
+                }
                 isSeeking = false;
             }
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-        };
-        
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    });
-
-    // Mobile/Touch Handlers
-    progressTrack.addEventListener('touchstart', (e) => {
-        isSeeking = true;
-        resetPlayerAutohideTimer();
-        updateSliderUI(e.touches[0].clientX);
-    }, { passive: false });
-
-    progressTrack.addEventListener('touchmove', (e) => {
-        e.preventDefault(); 
-        if (isSeeking) {
             resetPlayerAutohideTimer();
-            updateSliderUI(e.touches[0].clientX);
-        }
-    }, { passive: false });
-
-    progressTrack.addEventListener('touchend', (e) => {
-        if (isSeeking) {
-            if (e.changedTouches && e.changedTouches.length > 0) {
-                seekToPosition(e.changedTouches[0].clientX);
-            }
-            isSeeking = false;
-        }
-        resetPlayerAutohideTimer();
+        });
     });
 
-    // Global Engine Native Update hooks
     audio.addEventListener('timeupdate', () => {
-        if (!audio.duration || isSeeking) return; // Blocks rendering overrides when dragging
+        if (!audio.duration || isSeeking) return;
         const percentage = (audio.currentTime / audio.duration) * 100;
-        if (progressFill) progressFill.style.width = `${percentage}%`;
-        if (elapsedEl) {
+        
+        progressFills.forEach(fill => fill.style.width = `${percentage}%`);
+        updateWavebarsFill(audio.currentTime / audio.duration);
+
+        elapsedEls.forEach(el => {
             const m = Math.floor(audio.currentTime / 60);
             const s = Math.floor(audio.currentTime % 60);
-            elapsedEl.innerText = `${m}:${s.toString().padStart(2, '0')}`;
-        }
+            el.innerText = `${m}:${s.toString().padStart(2, '0')}`;
+        });
     });
 
     audio.addEventListener('loadedmetadata', () => {
-        if (totalEl) {
+        totalEls.forEach(el => {
             const m = Math.floor(audio.duration / 60);
             const s = Math.floor(audio.duration % 60);
-            totalEl.innerText = `${m}:${s.toString().padStart(2, '0')}`;
-        }
+            el.innerText = `${m}:${s.toString().padStart(2, '0')}`;
+        });
     });
     
     audio.addEventListener('ended', () => playNavigation('next'));
-
-    // --- AUTO HIDE ENGINE EVENTS MAP ---
-    audio.addEventListener('play', () => {
-        resetPlayerAutohideTimer();
-    });
-
+    audio.addEventListener('play', () => resetPlayerAutohideTimer());
     audio.addEventListener('pause', () => {
         if (playerHideTimer) { clearTimeout(playerHideTimer); playerHideTimer = null; }
     });
@@ -507,43 +518,27 @@ function linkEngineEvents() {
 function toggleMute() {
     const audio = document.getElementById('global-audio-node');
     const icon = document.getElementById('volume-icon');
-    
     if (!audio) return;
+    
     audio.muted = !audio.muted;
-
-    if (audio.muted) {
-        icon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                          <line x1="23" y1="9" x2="17" y2="15"></line>
-                          <line x1="17" y1="9" x2="23" y2="15"></line>`;
-    } else {
-        icon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.57 8.43a5 5 0 0 1 0 7.07"></path>`;
+    if (icon) {
+        if (audio.muted) {
+            icon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                              <line x1="23" y1="9" x2="17" y2="15"></line>
+                              <line x1="17" y1="9" x2="23" y2="15"></line>`;
+        } else {
+            icon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.57 8.43a5 5 0 0 1 0 7.07"></path>`;
+        }
     }
 }
 
-// Toggles the state variable, button class, and native audio property
 function toggleLoop() {
     isLooping = !isLooping;
-    
-    // Updates the class on all loop buttons (handles both desktop and mobile variants)
-    document.querySelectorAll('.loop-toggle').forEach(btn => {
-        btn.classList.toggle('active', isLooping);
-    });
-    
-    // Sync native audio element loop property
+    document.querySelectorAll('.loop-toggle').forEach(btn => btn.classList.toggle('active', isLooping));
     const audio = document.getElementById('global-audio-node');
-    if (audio) {
-        audio.loop = isLooping;
-    }
+    if (audio) audio.loop = isLooping;
 }
-
-// Initializer to bind the click event when the DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    // Bind click event cleanly to any loop button on the page
-    document.querySelectorAll('.loop-toggle').forEach(btn => {
-        btn.addEventListener('click', toggleLoop);
-    });
-});
 
 function toggleShare(trackId, title) {
     if (navigator.share) {
@@ -564,32 +559,16 @@ const pauseSVG = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xm
 
 function togglePlayPause() {
     const audio = document.getElementById('global-audio-node');
-    const playBtn = document.getElementById('master-play-trigger');
+    const playBtns = document.querySelectorAll('.play-master-trigger, #master-play-trigger');
     if (!audio) return;
+
     if (audio.paused) { 
         audio.play(); 
-        if (playBtn) { playBtn.innerHTML = pauseSVG; playBtn.title = "Pause"; }
+        playBtns.forEach(btn => { btn.innerHTML = pauseSVG; btn.title = "Pause"; });
     } else { 
         audio.pause(); 
-        if (playBtn) { playBtn.innerHTML = playSVG; playBtn.title = "Play"; }
+        playBtns.forEach(btn => { btn.innerHTML = playSVG; btn.title = "Play"; });
     }
-}
-
-function initPlayerEvents() {
-    const audio = document.getElementById('global-audio-node');
-    const footer = document.querySelector('.master-player-bar');
-    if (!audio || !footer) return;
-    
-    audio.onplay = null; 
-    audio.onpause = null;
-    
-    audio.addEventListener('play', () => {
-        resetPlayerAutohideTimer();
-    });
-    
-    audio.addEventListener('pause', () => {
-        if (playerHideTimer) { clearTimeout(playerHideTimer); playerHideTimer = null; }
-    });
 }
 
 function resetPlayerAutohideTimer() {
@@ -613,11 +592,7 @@ function setupMobileSwipeDetection() {
 
     window.addEventListener('touchend', (e) => {
         touchEndY = e.changedTouches[0].screenY;
-        
-        // Positive result = Swipe Down | Negative result = Swipe Up
         const swipeDistance = touchEndY - touchStartY;
-        
-        // Only trigger if swipe distance is greater than 40px downwards
         if (swipeDistance > 40) { 
             resetPlayerAutohideTimer();
         }
@@ -629,9 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.master-player-bar')?.addEventListener('click', () => {
         resetPlayerAutohideTimer();
     });
-});
 
-document.addEventListener('DOMContentLoaded', () => {
     const menuToggleBtn = document.querySelector('.nav-menu-toggle');
     const navigationMenuTray = document.querySelector('.nav-auth-btns');
 
@@ -660,18 +633,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateDownloadStats();
     setInterval(updateDownloadStats, 10000);
 
-    document.getElementById('master-play-trigger')?.addEventListener('click', togglePlayPause);
-    document.querySelector('.skip-forward')?.addEventListener('click', () => playNavigation('next'));
-    document.querySelector('.skip-rewind')?.addEventListener('click', () => playNavigation('prev'));
-    document.querySelector('.loop-toggle')?.addEventListener('click', toggleLoop);
-    document.querySelector('.share-toggle')?.addEventListener('click', () => {
-        const title = document.getElementById('player-title')?.innerText || "Track";
-        toggleShare(currentTrackId, title);
-    });
-
-    // ✅ Single listener for context clicks prevents duplicate runs safely
-    document.body.addEventListener('click', (event) => {
-        if (event.target.closest('.toggleFavorite')) {
+    document.body.addEventListener('click', (e) => {
+        if (e.target.closest('#master-play-trigger') || e.target.closest('.play-master-trigger')) {
+            togglePlayPause();
+        }
+        if (e.target.closest('.skip-forward')) playNavigation('next');
+        if (e.target.closest('.skip-rewind')) playNavigation('prev');
+        if (e.target.closest('.loop-toggle')) toggleLoop();
+        if (e.target.closest('.share-toggle')) {
+            const title = document.getElementById('player-title')?.innerText || "Track";
+            toggleShare(currentTrackId, title);
+        }
+        if (e.target.closest('.toggleFavorite')) {
             handleFavoriteToggle();
         }
     });
@@ -688,16 +661,18 @@ function playNavigation(direction) {
     let nextIndex = (direction === 'next') ? (currentIndex + 1) % tracksCache.length : (currentIndex - 1 + tracksCache.length) % tracksCache.length;
     const targetTrack = tracksCache[nextIndex];
     if (targetTrack) {
-        const element = document.getElementById(targetTrack.id);
-        if (element) selectRow(element, targetTrack.id, targetTrack.title);
+        selectRow(null, targetTrack.id, targetTrack.title);
     }
 }
 
 function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
     const engineMount = document.getElementById('hidden-audio-engine-mount');
-    const playBtn = document.getElementById('master-play-trigger');
-    const thumbContainer = document.getElementById('player-thumb');
+    const playBtns = document.querySelectorAll('.play-master-trigger, #master-play-trigger');
+    
+    // 1. ADDED '#main-artwork-node' TO THE TARGET SELECTOR ARRAY
+    const thumbContainers = document.querySelectorAll('.player-thumb-node, #player-thumb, #main-artwork-node');
     const footer = document.querySelector('.master-player-bar');
+    const fallbackImage = 'Pic/noll.jpg'; 
 
     const oldAudio = document.getElementById('global-audio-node');
     if (oldAudio) {
@@ -705,17 +680,17 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
         oldAudio.remove();
     }
 
-    if (thumbnail) {
-        const thumbUrl = getProcessedThumbnail(thumbnail);
-        if (thumbContainer) {
-            thumbContainer.innerHTML = `
-                <img src="${thumbUrl}" class="playing-thumb-img" 
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                <span class="default-artwork" style="display:none;">🎵</span>`;
+    const thumbUrl = thumbnail ? getProcessedThumbnail(thumbnail) : fallbackImage;
+    
+    // 2. UPDATED LOGIC: Safely updates both parent wrappers AND direct <img> nodes
+    thumbContainers.forEach(container => {
+        if (container.tagName === 'IMG') {
+            container.src = thumbUrl;
+            container.onerror = function() { this.src = fallbackImage; };
+        } else {
+            container.innerHTML = `<img src="${thumbUrl}" class="playing-thumb-img" onerror="this.src='${fallbackImage}';">`;
         }
-    } else {
-        if (thumbContainer) thumbContainer.innerHTML = `<span class="default-artwork">🎵</span>`;
-    }
+    });
 
     if (engineMount) {
         engineMount.innerHTML = `<audio id="global-audio-node" src="${filePath}"></audio>`;
@@ -740,59 +715,39 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
     syncFavoriteButtonsUI(trackId);
 
     audio.play().then(() => {
-        if (playBtn) { playBtn.innerHTML = pauseSVG; playBtn.title = "Pause"; }
+        playBtns.forEach(btn => { btn.innerHTML = pauseSVG; btn.title = "Pause"; });
     }).catch(() => {
-        if (playBtn) { playBtn.innerHTML = playSVG; playBtn.title = "Play"; }
+        playBtns.forEach(btn => { btn.innerHTML = playSVG; btn.title = "Play"; });
     });
 
-    const titleEl = document.getElementById('player-title');
-    if (titleEl) titleEl.innerText = cleanName;
+    document.querySelectorAll('.player-title-node, #player-title').forEach(el => el.innerText = cleanName);
     linkEngineEvents();
 }
 
-// ✅ Helper to update all favorite button element instances at once
-document.body.addEventListener('click', (event) => {
-    if (event.target.closest('.toggleFavorite')) {
-        handleFavoriteToggle(); // Targets currentTrackId automatically
-    }
-});
 function syncFavoriteButtonsUI(trackId) {
     const favorites = JSON.parse(localStorage.getItem('myFavorites') || '[]');
     const isFav = favorites.includes(trackId);
-    
+
     document.querySelectorAll('.toggleFavorite').forEach(btn => {
-        if (isFav) {
-            btn.classList.add('is-favorited');
-        } else {
-            btn.classList.remove('is-favorited');
-        }
+        btn.classList.toggle('is-favorited', isFav);
     });
 }
 
 function handleFavoriteToggle() {
-    console.log("Toggle clicked for ID:", currentTrackId);
     if (!currentTrackId) {
         alert("Please select or play a track first!");
         return;
     }
 
     let favorites = JSON.parse(localStorage.getItem('myFavorites') || '[]');
-
     if (favorites.includes(currentTrackId)) {
-        // Remove track safely
         favorites = favorites.filter(id => id !== currentTrackId);
     } else {
-        // Add track safely
         favorites.push(currentTrackId);
     }
 
-    // 1. Save updated state back to disk
     localStorage.setItem('myFavorites', JSON.stringify(favorites));
-    
-    // 2. Clear/Re-sync classes globally across all layout elements
     syncFavoriteButtonsUI(currentTrackId);
-    
-    // 3. Refresh the actual collection view layout
     renderFavorites();
 }
 
@@ -804,7 +759,7 @@ function renderFavorites() {
     container.innerHTML = '';
 
     if (favorites.length === 0) {
-        container.innerHTML = '<p class="empty-msg">You haven\'t added any favorites yet.</p>';
+        container.innerHTML = '<div class="no-favorites" style="padding: 15px; color: #888;">No favorited tracks yet.</div>';
         return;
     }
 
@@ -813,11 +768,23 @@ function renderFavorites() {
         if (track) {
             const safeTitle = track.title.replace(/'/g, "\\'");
             const onClick = `selectRow(this, '${track.id}', '${safeTitle}')`;
-
-            // Pass 'false' here to hide the "Download" text label elegantly
-            container.insertAdjacentHTML('beforeend', createFileItem(track.id, safeTitle, false, track.thumbnail, onClick, false));
+            container.insertAdjacentHTML('beforeend', createFileItem(track.id, safeTitle, false, track.thumbnail, onClick));
         }
     });
+}
 
-    updateDownloadStats();
+// --- 6. WAVEFORM STRUCTURAL RENDERING ---
+const waveformContainer = document.getElementById('waveform');
+if (waveformContainer) {
+    const totalBars = 36;
+    for (let i = 0; i < totalBars; i++) {
+        const bar = document.createElement('div');
+        bar.classList.add('wave-bar');
+        
+        let height = Math.floor(Math.random() * 28) + 6;
+        if(i < 6 || i > 30) height = Math.floor(Math.random() * 10) + 6;
+        
+        bar.style.height = `${height}px`;
+        waveformContainer.appendChild(bar);
+    }
 }
