@@ -38,14 +38,15 @@ function switchView(event, targetViewId) {
     const views = ['home-view', 'music-view'];
 
     views.forEach(viewId => {
-        const viewElement = document.getElementById(viewId);
+        // Using querySelector instead of getElementById to bypass production DOM rendering glitches
+        const viewElement = document.querySelector(`#${viewId}`);
         if (viewElement) {
             if (viewId === targetViewId) {
                 viewElement.classList.add('active');
-                viewElement.style.setProperty('display', 'block', 'important'); // Force show active
+                viewElement.style.setProperty('display', 'block', 'important');
             } else {
                 viewElement.classList.remove('active');
-                viewElement.style.setProperty('display', 'none', 'important');  // Force hide inactive
+                viewElement.style.setProperty('display', 'none', 'important');
             }
         }
     });
