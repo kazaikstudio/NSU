@@ -304,33 +304,45 @@ function handleRowPlayPause(rowElement, trackId, trackTitle) {
 }
 
 const updateWavebarsFill = (percentage) => {
-    // 1. Establish the target row through explicit ID mapping or context tracking strings
     let activeRow = null;
     if (currentTrackId) {
         activeRow = document.getElementById(currentTrackId) || 
                     document.querySelector(`.file-row-item[id="${currentTrackId}"]`);
     }
     
-    // 2. Direct fallback lookup mapping your active class injection
     if (!activeRow) {
         activeRow = document.querySelector('.file-row-item.active-row');
     }
     
-    if (!activeRow) return;
-    
-    // 3. Find the rendered bars explicitly targeting the classes in your template layout
-    const bars = activeRow.querySelectorAll('.waveform-container .wave-bar');
-    if (!bars.length) return;
-    
-    const cutoffIndex = Math.floor(percentage * bars.length);
-    
-    bars.forEach((bar, idx) => {
-        if (idx < cutoffIndex) {
-            bar.classList.add('played');
-        } else {
-            bar.classList.remove('played');
+    if (activeRow) {
+        const rowBars = activeRow.querySelectorAll('.waveform-container .wave-bar, .waveform .wave-bar');
+        if (rowBars.length > 0) {
+            const rowCutoff = Math.floor(percentage * rowBars.length);
+            rowBars.forEach((bar, idx) => {
+                if (idx < rowCutoff) {
+                    bar.classList.add('played');
+                } else {
+                    bar.classList.remove('played');
+                }
+            });
         }
-    });
+    }
+    
+    // --- 2. UPDATE THE MASTER PLAYER WAVEFORM (#waveform) ---
+    const masterWaveform = document.getElementById('waveform');
+    if (masterWaveform) {
+        const masterBars = masterWaveform.querySelectorAll('.wave-bar');
+        if (masterBars.length > 0) {
+            const masterCutoff = Math.floor(percentage * masterBars.length);
+            masterBars.forEach((bar, idx) => {
+                if (idx < masterCutoff) {
+                    bar.classList.add('played');
+                } else {
+                    bar.classList.remove('played');
+                }
+            });
+        }
+    }
 };
 
 function updateStats() {
@@ -570,7 +582,6 @@ function linkEngineEvents() {
     const elapsedEls = document.querySelectorAll('.time-stamp.elapsed');
     const totalEls = document.querySelectorAll('.time-stamp.total');
     
-    // Core structural target mapping both normal sliders AND your dynamic layout waveform container
     const progressTracks = document.querySelectorAll('.progress-bar-track, #waveform');
     if (!audio || progressTracks.length === 0) return;
 
@@ -582,32 +593,17 @@ function linkEngineEvents() {
         return percentage;
     };
 
-    // Updates colors on dynamic wave bars based on percentage completion 
-    const updateWavebarsFill = (percentage) => {
-        const bars = document.querySelectorAll('#waveform .wave-bar');
-        if (!bars.length) return;
-        const cutoffIndex = Math.floor(percentage * bars.length);
-        
-        bars.forEach((bar, idx) => {
-            if (idx < cutoffIndex) {
-                bar.classList.add('played'); // Stylize inside CSS (e.g. background: var(--primary))
-            } else {
-                bar.classList.remove('played');
-            }
-        });
-    };
-
     const seekToPosition = (clientX, track) => {
         const percentage = calculatePercentage(clientX, track);
         progressFills.forEach(fill => fill.style.width = `${percentage * 100}%`);
-        updateWavebarsFill(percentage);
+        updateWavebarsFill(percentage); // Now uses global version!
         audio.currentTime = percentage * audio.duration;
     };
 
     const updateSliderUI = (clientX, track) => {
         const percentage = calculatePercentage(clientX, track);
         progressFills.forEach(fill => fill.style.width = `${percentage * 100}%`);
-        updateWavebarsFill(percentage);
+        updateWavebarsFill(percentage); // Now uses global version!
         if (audio.duration) {
             const currentAudioTime = percentage * audio.duration;
             const m = Math.floor(currentAudioTime / 60);
@@ -668,10 +664,10 @@ function linkEngineEvents() {
 
     audio.addEventListener('timeupdate', () => {
         if (!audio.duration || isSeeking) return;
-        const percentage = (audio.currentTime / audio.duration) * 100;
+        const percentage = (audio.currentTime / audio.duration);
         
-        progressFills.forEach(fill => fill.style.width = `${percentage}%`);
-        updateWavebarsFill(audio.currentTime / audio.duration);
+        progressFills.forEach(fill => fill.style.width = `${percentage * 100}%`);
+        updateWavebarsFill(percentage); // Now uses global version!
 
         elapsedEls.forEach(el => {
             const m = Math.floor(audio.currentTime / 60);
@@ -1015,15 +1011,29 @@ function renderFavorites() {
 // --- 6. WAVEFORM STRUCTURAL RENDERING ---
 const waveformContainer = document.getElementById('waveform');
 if (waveformContainer) {
-    const totalBars = 36;
+    waveformContainer.innerHTML = ''; // Clear out any old lingering bars first
+    const totalBars = 200;
+    
     for (let i = 0; i < totalBars; i++) {
         const bar = document.createElement('div');
         bar.classList.add('wave-bar');
         
-        let height = Math.floor(Math.random() * 28) + 6;
-        if(i < 6 || i > 30) height = Math.floor(Math.random() * 10) + 6;
+        // 1. Generate a base random variance (ranges between 10px and 32px)
+        let randomHeight = Math.floor(Math.random() * 22) + 10;
         
-        bar.style.height = `${height}px`;
+        // 2. Use a smooth sine curve profile across the 200 bars.
+        // This naturally forces the ends short and lets the center rise up.
+        let waveProfile = Math.sin((i / totalBars) * Math.PI);
+        
+        // 3. Add secondary layered waves to create realistic "peaks and valleys"
+        let microDetail = Math.sin((i / totalBars) * Math.PI * 8) * 0.25;
+        let smoothFactor = waveProfile + microDetail;
+        
+        // 4. Calculate final structural heights safely
+        let finalHeight = Math.floor(randomHeight * Math.max(0.15, smoothFactor));
+        if (finalHeight < 4) finalHeight = 4; // Safety floor limit
+        
+        bar.style.height = `${finalHeight}px`;
         waveformContainer.appendChild(bar);
     }
 }
