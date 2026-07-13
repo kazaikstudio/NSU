@@ -417,3 +417,19 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🚀 Audio Management Web Interface Server actively parsing on node port:${PORT}`));
+
+
+const path = require('path');
+
+// 1. Your static file middleware (keeps your CSS, JS, and images working)
+app.use(express.static(path.join(__dirname, 'public'))); 
+
+// 2. Any specific API routes you have go here...
+app.get('/api/tracks', (req, res) => { /* ... */ });
+
+// 3. THE FIX: The wildcard route catch-all
+// This catches /music, /favorites, or any refresh and sends back your index.html
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html')); 
+    // Note: Change 'public' to whatever folder your index.html lives in!
+});
