@@ -14,13 +14,12 @@ async function updateDownloadStats() {
     try {
         const response = await fetch(`${BACKEND_BASE}/api/stats/downloads`);
         if (!response.ok) return;
-        const data = await response.json(); // { counts: { id: num } }
-        
-        // Update ONLY per-row stats
+        const data = await response.json();
+
         document.querySelectorAll('.track-dl-count').forEach(el => {
             const trackId = el.id.replace('count-', '');
             const count = data.counts[trackId] || 0;
-            
+
             if (el.innerText !== count.toString()) {
                 el.innerText = count;
                 el.style.color = '#ff551ad9';
