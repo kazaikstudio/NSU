@@ -35,23 +35,21 @@ async function updateDownloadStats() {
 function switchView(event, targetViewId) {
     if (event) event.preventDefault(); // Stop standard native anchor routing
 
-    // List of active main layout container IDs
     const views = ['home-view', 'music-view'];
-    
+
     views.forEach(viewId => {
         const viewElement = document.getElementById(viewId);
         if (viewElement) {
             if (viewId === targetViewId) {
                 viewElement.classList.remove('hidden');
-                viewElement.style.display = 'flex'; // Explicitly forces your flex layout orientation
+                viewElement.style.display = 'flex';
             } else {
                 viewElement.classList.add('hidden');
-                viewElement.style.display = 'none'; // Clear from structural paint tree completely
+                viewElement.style.display = 'none';
             }
         }
     });
 
-    // Auto-scroll framing smoothly to the top of the newly displayed view context
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
