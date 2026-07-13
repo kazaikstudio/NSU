@@ -41,11 +41,11 @@ function switchView(event, targetViewId) {
         const viewElement = document.getElementById(viewId);
         if (viewElement) {
             if (viewId === targetViewId) {
-                viewElement.classList.remove('hidden');
-                viewElement.style.display = 'flex';
+                viewElement.classList.add('active');
+                viewElement.style.setProperty('display', 'block', 'important'); // Force show active
             } else {
-                viewElement.classList.add('hidden');
-                viewElement.style.display = 'none';
+                viewElement.classList.remove('active');
+                viewElement.style.setProperty('display', 'none', 'important');  // Force hide inactive
             }
         }
     });
