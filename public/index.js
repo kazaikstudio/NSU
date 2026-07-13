@@ -33,25 +33,36 @@ async function updateDownloadStats() {
 }
 
 function switchView(event, targetViewId) {
-    if (event) event.preventDefault(); // Stop standard native anchor routing
+    // 1. Instantly kill standard routing behavior 
+    if (event) {
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        event.stopPropagation();
+    }
 
-    const views = ['home-view', 'music-view'];
+    try {
+        const views = ['home-view', 'music-view'];
 
-    views.forEach(viewId => {
-        // Using querySelector instead of getElementById to bypass production DOM rendering glitches
-        const viewElement = document.querySelector(`#${viewId}`);
-        if (viewElement) {
-            if (viewId === targetViewId) {
-                viewElement.classList.add('active');
-                viewElement.style.setProperty('display', 'block', 'important');
-            } else {
-                viewElement.classList.remove('active');
-                viewElement.style.setProperty('display', 'none', 'important');
+        views.forEach(viewId => {
+            const viewElement = document.getElementById(viewId);
+            if (viewElement) {
+                if (viewId === targetViewId) {
+                    viewElement.classList.add('active');
+                    viewElement.style.setProperty('display', 'block', 'important');
+                } else {
+                    viewElement.classList.remove('active');
+                    viewElement.style.setProperty('display', 'none', 'important');
+                }
             }
-        }
-    });
+        });
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+        // Smooth scroll handling
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    } catch (error) {
+        console.error("View switching encountered a production error:", error);
+    }
+
+    return false;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
