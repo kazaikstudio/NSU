@@ -32,23 +32,39 @@ async function updateDownloadStats() {
 }
 
 function switchView(event, targetViewId) {
-    if (event) event.preventDefault(); // Stop standard native anchor routing
+    // 1. Stop native browser anchor routing 
+    if (event) event.preventDefault(); 
 
-    const views = ['home-view', 'music-view'];
+    // 2. Find both view panels using their unique IDs
+    const homeView = document.getElementById('home-view');
+    const musicView = document.getElementById('music-view');
 
-    views.forEach(viewId => {
-        const viewElement = document.getElementById(viewId);
-        if (viewElement) {
-            if (viewId === targetViewId) {
-                viewElement.classList.remove('hidden');
-                viewElement.style.display = 'flex';
-            } else {
-                viewElement.classList.add('hidden');
-                viewElement.style.display = 'none';
-            }
-        }
-    });
+    if (!homeView || !musicView) return;
 
+    // 3. Toggle visibility explicitly without relying on complex array loops
+    if (targetViewId === 'music-view') {
+        // Hide Home
+        homeView.classList.add('hidden');
+        homeView.style.display = 'none';
+        
+        // Show Music
+        musicView.classList.remove('hidden');
+        musicView.style.display = 'flex'; // Tailored for your .player-container layout
+    } else if (targetViewId === 'home-view') {
+        // Hide Music
+        musicView.classList.add('hidden');
+        musicView.style.display = 'none';
+        
+        // Show Home
+        homeView.classList.remove('hidden');
+        homeView.style.display = 'block'; // Adjust if your home dashboard uses 'flex' or 'grid'
+    }
+
+    // 4. Update url route gracefully without forcing a 404 on your server
+    const cleanRoute = targetViewId === 'home-view' ? '/' : '/music';
+    window.history.pushState({ viewId: targetViewId }, '', cleanRoute);
+
+    // 5. Smooth scroll up to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
