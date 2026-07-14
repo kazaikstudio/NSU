@@ -637,43 +637,6 @@ section.sidebar-right {
 }
 
 
-/* ==========================================
-   BOTTOM MASTER PLAYER DECK BAR
-   ========================================== */
-.master-player-bar {
-    position: fixed;
-    bottom: -120px; 
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80vw;
-    height: 90px;
-    padding: 0 20px;
-    box-sizing: border-box;
-    z-index: 3000;
-
-    /* Styling */
-    background-color: var(--player-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-
-    /* Layout Alignment */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    /* --- Clean Slide Up Fixes --- */
-    visibility: hidden;
-    transition: bottom 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), visibility 0.5s step-end;
-    transition-delay: 0s;
-}
-
-.master-player-bar.is-visible {
-    bottom: 10px;
-    visibility: visible;
-    transition: bottom 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), visibility 0s linear;
-    transition-delay: 0.2s;
-}
-
 .now-playing-col {
     display: flex;
     align-items: center;
@@ -1041,10 +1004,12 @@ section.sidebar-right {
     overflow: hidden;
 }
 
+
 .file-row-item.active-row {
     height: 45px;
     background-color: #6494edb8;
     border-left: 4px solid #ff551ad9;
+    gap: 0;
 
 }
 .file-row-item:hover {
@@ -1440,7 +1405,6 @@ section.sidebar-right {
     border-radius: 50%;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
 
-    /* Smooth scale transition animation */
     transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
@@ -1458,6 +1422,19 @@ section.sidebar-right {
 
 .waveform-container .wave-bar.played {
     background-color: #ff551a;
+}
+.waveform-container {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.wave-bar {
+    width: 3px;
+    border-radius: 2px;
+    transition: background-color 0.2s ease, height 0.1s ease;
 }
 .music-workspace-split {
     display: flex;
@@ -1676,26 +1653,12 @@ section.sidebar-right {
 }
 @media (max-width: 435px) {
 
-    /* --- 1. Master Floating Player Bar --- */
-    .master-player-bar {
-        position: fixed;
-        bottom: 16px;
-        left: 5%;
-        width: 90%;
-        max-width: 400px;
-        height: 72px;
-        z-index: 9999;
-        border: 1px solid #ffffff2e;
-        opacity: 1 !important;
-        visibility: visible !important;
-        transform: none !important;
-        border-radius: 50px;
-        padding: 0 15px;
-        box-sizing: border-box;
-
-        display: flex !important;
-        align-items: center;
-        gap: 5px;
+    .download-Container span {
+        display: none !important;
+    }
+    .file-thumb{
+        height: 35px;
+        width: 35px;
     }
 
     footer.master-player-bar .skip-rewind,
@@ -1707,7 +1670,7 @@ section.sidebar-right {
     .playback-progress-container,
     .progress-bar-track,
     .time-stamp {
-        display: none !important; 
+        display: none !important;
     }
 
     .now-playing-col {
@@ -1841,7 +1804,6 @@ section.sidebar-right {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 140px;
         font-size: 13px;
     }
 
@@ -1852,6 +1814,10 @@ section.sidebar-right {
 
     .mobile-popup-panel {
         margin-bottom: 103px;
+    }
+    .row-play-btn {
+        width: 40px;
+        height: 40px;
     }
 }
 
@@ -1921,18 +1887,6 @@ section.sidebar-right {
         padding: 7px;
         margin: 3px;
         gap: 12px;
-    }
-    .file-name {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 140px;
-        font-size: 13px;
-    }
-    .file-thumb {
-        width: 50px;
-        height: 50px;
-
     }
     .download-btn .dl-text {
         display: none !important;
@@ -2012,6 +1966,13 @@ section.sidebar-right {
     }
     .mobile-popup-panel button {
         gap: 7px;
+    }
+     .file-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+        font-size: 13px;
     }
 
 }

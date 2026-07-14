@@ -144,6 +144,64 @@ function filterTracks() {
     });
 }
 
+/**
+ * Helper to calculate the bar count based on target width
+ */
+function getResponsiveBarCount(containerWidth) {
+    const barSpacing = 5; // 3px bar width + 2px gap
+    const width = containerWidth || window.innerWidth;
+    
+    // Dynamically calculate bars and clamp them between 20 and 150
+    let totalBars = Math.floor(width / barSpacing);
+    return Math.max(20, Math.min(totalBars, 150));
+}
+
+/**
+ * Generates the raw HTML string of wave-bars based on a total count
+ */
+function generateWaveBarsHtml(totalBars) {
+    let waveBarsHtml = '';
+    for (let i = 0; i < totalBars; i++) {
+        let baseHeight = Math.floor(Math.random() * 16) + 8;
+        let waveProfile = Math.sin((i / totalBars) * Math.PI);
+
+        let height = Math.floor(baseHeight * (0.3 + 0.7 * waveProfile));
+        if (height < 4) height = 4;
+
+        waveBarsHtml += `<div class="wave-bar" style="height: ${height}px;"></div>`;
+    }
+    return waveBarsHtml;
+}
+
+function renderResponsiveWaveform(container) {
+    const target = typeof container === 'string' ? document.querySelector(container) : container;
+    if (!target) return;
+
+    // Use actual container size or fallback to window width
+    const containerWidth = target.clientWidth;
+    const totalBars = getResponsiveBarCount(containerWidth);
+
+    target.innerHTML = generateWaveBarsHtml(totalBars);
+}
+
+// --- Responsive Resize Handler ---
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        document.querySelectorAll('.waveform-container').forEach(el => {
+            renderResponsiveWaveform(el);
+        });
+    }, 150); 
+});
+
+// Run once on page load to initialize any existing containers
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.waveform-container').forEach(el => {
+        renderResponsiveWaveform(el);
+    });
+});
+
 function createFileItem(id, name, isUploading = false, thumbnail = '', onClickStr = '', showLabel = true) {
     const thumbUrl = getProcessedThumbnail(thumbnail);
     const fallbackImage = 'Pic/noll.jpg';
@@ -155,21 +213,9 @@ function createFileItem(id, name, isUploading = false, thumbnail = '', onClickSt
     const labelHtml = showLabel ? '<span class="dl-text"> Download</span>' : '';
     const escapedNameForInlineJS = name.replace(/'/g, "\\\\\'");
 
-    let waveBarsHtml = '';
-    const totalBars = 200;
-
-    for (let i = 0; i < totalBars; i++) {
-        // Base randomization range
-        let baseHeight = Math.floor(Math.random() * 16) + 8;
-
-        let waveProfile = Math.sin((i / totalBars) * Math.PI);
-
-        // Final layout height calculation
-        let height = Math.floor(baseHeight * (0.3 + 0.7 * waveProfile));
-        if (height < 4) height = 4;
-
-        waveBarsHtml += `<div class="wave-bar" style="height: ${height}px;"></div>`;
-    }
+    const approximateWidth = window.innerWidth * 0.35;
+    const totalBars = getResponsiveBarCount(approximateWidth);
+    const waveBarsHtml = generateWaveBarsHtml(totalBars);
 
     return `
         <div class="file-row-item" id="${id}" onclick="${onClickStr}">
@@ -187,7 +233,7 @@ function createFileItem(id, name, isUploading = false, thumbnail = '', onClickSt
                 </svg>
             </button>
 
-            <!-- Fixed matching structural container target hooks -->
+            <!-- Matches target hooks with responsive structural tag classes -->
             <div class="waveform waveform-container">
                 ${waveBarsHtml}
             </div>
@@ -995,7 +1041,7 @@ function renderFavorites() {
 const waveformContainer = document.getElementById('waveform');
 if (waveformContainer) {
     waveformContainer.innerHTML = ''; // Clear out any old lingering bars first
-    const totalBars = 200;
+    const totalBars = 100;
     
     for (let i = 0; i < totalBars; i++) {
         const bar = document.createElement('div');
