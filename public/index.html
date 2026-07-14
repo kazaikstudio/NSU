@@ -135,7 +135,7 @@
 
     <div class="player-trigger-zone"></div>
 
-    <div class="floating-action-add">
+    <div class="floating-action-add" id="download-container">
         <a href="javascript:void(0);" 
             class="header-btn" 
             onclick="switchView(event, 'music-view'); return false;">
@@ -228,7 +228,6 @@
                     </div>
                 </div>
 
-                <!-- Primary Controls Playback Section -->
                 <div class="main-controls">
                     <button class="ctrl-btn loop-toggle" title="Repeat">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -293,6 +292,7 @@
                             <line x1="9" y1="9" x2="9" y2="21" stroke="currentColor" stroke-width="2"></line>
                         </svg>
                     </button>
+                    <h2 class="favorites-h2 ">My Favorites 💖</h2>
                     <a href="javascript:void(0);" 
                         class="header-btn" 
                         onclick="switchView(event, 'home-view'); return false;">
@@ -303,7 +303,6 @@
                 </div>
 
                 <div id="favorites-section" class="genre-container">
-                    <h2>My Favorites 💖</h2>
                     <div id="media-container-Favorites"></div>
                 </div>
             </section>

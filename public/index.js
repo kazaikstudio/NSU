@@ -160,13 +160,13 @@ function createFileItem(id, name, isUploading = false, thumbnail = '', onClickSt
 
     for (let i = 0; i < totalBars; i++) {
         // Base randomization range
-        let baseHeight = Math.floor(Math.random() * 16) + 8; // 8px to 24px
+        let baseHeight = Math.floor(Math.random() * 16) + 8;
 
-        let waveProfile = Math.sin((i / totalBars) * Math.PI); 
+        let waveProfile = Math.sin((i / totalBars) * Math.PI);
 
         // Final layout height calculation
         let height = Math.floor(baseHeight * (0.3 + 0.7 * waveProfile));
-        if (height < 4) height = 4; // Absolute minimum floor check
+        if (height < 4) height = 4;
 
         waveBarsHtml += `<div class="wave-bar" style="height: ${height}px;"></div>`;
     }
@@ -196,7 +196,7 @@ function createFileItem(id, name, isUploading = false, thumbnail = '', onClickSt
                 <div class="download-Container">
                 <span class="time-stamp elapsed">0:00</span>
                     <button class="download-btn"
-                            onclick="event.stopPropagation(); handleDownload('${id}');" 
+                            onclick="event.stopPropagation(); handleDownload('${id}');"
                             title="Download">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -289,16 +289,12 @@ function togglePlayPause() {
 }
 function handleRowPlayPause(rowElement, trackId, trackTitle) {
     const audio = document.getElementById('global-audio-node');
-    
-    // If the clicked track is ALREADY the active track and audio engine exists,
-    // simply toggle between play and pause states natively!
+
     if (currentTrackId === trackId && audio) {
         togglePlayPause();
         return;
     }
-    
-    // Otherwise, it's a completely new track! 
-    // Set the tracking ID and initialize the structural selection layout engine
+
     currentTrackId = trackId;
     selectRow(rowElement, trackId, trackTitle);
 }
@@ -845,11 +841,10 @@ function playNavigation(direction) {
 function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
     const engineMount = document.getElementById('hidden-audio-engine-mount');
     const playBtns = document.querySelectorAll('.play-master-trigger, #master-play-trigger');
-    
-    // 1. ADDED '#main-artwork-node' TO THE TARGET SELECTOR ARRAY
+
     const thumbContainers = document.querySelectorAll('.player-thumb-node, #player-thumb, #main-artwork-node');
     const footer = document.querySelector('.master-player-bar');
-    const fallbackImage = 'Pic/noll.jpg'; 
+    const fallbackImage = 'Pic/noll.jpg';
 
     const oldAudio = document.getElementById('global-audio-node');
     if (oldAudio) {
@@ -858,8 +853,7 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
     }
 
     const thumbUrl = thumbnail ? getProcessedThumbnail(thumbnail) : fallbackImage;
-    
-    // 2. UPDATED LOGIC: Safely updates both parent wrappers AND direct <img> nodes
+
     thumbContainers.forEach(container => {
         if (container.tagName === 'IMG') {
             container.src = thumbUrl;
@@ -923,40 +917,29 @@ function mountPlayerEngine(filePath, cleanName, trackId, thumbnail = null) {
 
     const audioNode = document.getElementById('global-audio-node');
 
-// Master clean SVG strings matching your custom row setup
-const playSVG = `
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="row-icon-svg">
-        <path d="M8 5v14l11-7z"></path>
-    </svg>`;
-
-const pauseSVG = `
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="row-icon-svg">
-        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path>
-    </svg>`;
-
-// Whenever the browser audio begins playing
-audioNode.addEventListener('play', () => {
-    const activeRow = document.querySelector('.file-row-item.active-row');
-    if (activeRow) {
-        const playButton = activeRow.querySelector('.row-play-btn.play-trigger');
-        if (playButton) {
-            playButton.innerHTML = pauseSVG;
-            playButton.title = "Pause Track";
+    // Whenever the browser audio begins playing
+    audioNode.addEventListener('play', () => {
+        const activeRow = document.querySelector('.file-row-item.active-row');
+        if (activeRow) {
+            const playButton = activeRow.querySelector('.row-play-btn.play-trigger');
+            if (playButton) {
+                playButton.innerHTML = pauseSVG;
+                playButton.title = "Pause Track";
+            }
         }
-    }
-});
+    });
 
-// Whenever the browser audio stalls or pauses
-audioNode.addEventListener('pause', () => {
-    const activeRow = document.querySelector('.file-row-item.active-row');
-    if (activeRow) {
-        const playButton = activeRow.querySelector('.row-play-btn.play-trigger');
-        if (playButton) {
-            playButton.innerHTML = playSVG;
-            playButton.title = "Play Track";
+    // Whenever the browser audio stalls or pauses
+    audioNode.addEventListener('pause', () => {
+        const activeRow = document.querySelector('.file-row-item.active-row');
+        if (activeRow) {
+            const playButton = activeRow.querySelector('.row-play-btn.play-trigger');
+            if (playButton) {
+                playButton.innerHTML = playSVG;
+                playButton.title = "Play Track";
+            }
         }
-    }
-});
+    });
 }
 
 function syncFavoriteButtonsUI(trackId) {

@@ -584,7 +584,7 @@
    RIGHT SIDEBAR PANEL
    ========================================== */
 section.sidebar-right {
-    height: 100vh;
+    min-height: calc(100vh - 57px);
     background-color: #10003c;
     padding: 20px;
     display: flex;
@@ -911,7 +911,7 @@ section.sidebar-right {
 
 .floating-action-add {
     position: fixed;
-    bottom: 130px;
+    bottom: 30px;
     right: 30px;
     width: 56px;
     height: 56px;
@@ -1030,13 +1030,15 @@ section.sidebar-right {
 .file-row-item {
     display: flex;
     align-items: center;
-    padding: 10px;
+    padding: 30px 7px ;
     margin: 3px;
     gap: 15px;
     height: 45px;
     background-color: #012f5c37;
     border: 1px solid #ffffff18;
     border-radius: 10px;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .file-row-item.active-row {
@@ -1136,11 +1138,13 @@ section.sidebar-right {
 }
 
 .toggle-sidebar-right {
-    background: transparent;
+    background: #ffffff44;
+    border-radius: 50%;
     border: none;
     cursor: pointer;
     color: #9e9e9e;
-    padding: 5px;
+    padding: 10px;
+    margin-right: 3%;
     transition: color 0.3s ease, transform 0.1s ease;
 }
 
@@ -1181,26 +1185,53 @@ section.sidebar-right {
 
 /* Styling for the container holding your Favorites trigger/section */
 #favorites-section {
-    margin-top: 10px;
-    padding: 20px;
+    height: 470px;
+    padding: 2px;
     background: rgba(255, 255, 255, 0.03);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
     transition: background 0.3s ease;
+
+    overflow-y: auto;
+
+    overflow-x: hidden;
+
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Optional: Clean, thin modern scrollbar styling */
+#favorites-section::-webkit-scrollbar {
+    width: 6px;
+}
+
+#favorites-section::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#favorites-section::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+}
+
+#favorites-section::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+.favorites-h2 {
+    text-align: center;
+    margin: 0;
+    padding: 0;
+    font-size: 20px;
 }
 
 #favorites-section:hover {
     background: rgba(255, 255, 255, 0.06);
 }
+
 #media-container-Favorites {
-    margin-top: 15px;
     margin: 0;
     width: 440px;
-    flex-grow: 1;
-    padding: 5px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .genre-btn {
@@ -1278,23 +1309,21 @@ section.sidebar-right {
 
 .floating-search-btn {
     position: fixed;
-    bottom: 200px;
+    bottom: 100px;
     right: 30px;
     z-index: 9999;
-    
-    /* Styling */
+
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 60px;
-    height: 60px;
+    width: 50px;
+    height: 50px;
     background-color: #007bff;
     color: #ffffff;
     border-radius: 50%;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     cursor: pointer;
-    
-    /* Smooth transition for hover effects */
+
     transition: transform 0.2s ease, background-color 0.2s ease;
 
 
@@ -1319,16 +1348,6 @@ section.sidebar-right {
     display: none;
 }
 
-#media-container-Favorites {
-    margin-top: 15px;
-    margin: 0;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    padding: 10px 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    box-sizing: border-box;
-}
 
 /* --- Favorites Item Width Engine --- */
 #media-container-Favorites .file-row-item {
@@ -1419,8 +1438,6 @@ section.sidebar-right {
     background-color: var(--player-accent);
     color: #000000 !important;
     border-radius: 50%;
-    font-size: 16px;
-    font-weight: bold;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
 
     /* Smooth scale transition animation */
@@ -2065,28 +2082,45 @@ section.sidebar-right {
 }
 
 
-
-/* Ambient background blur effect */
-.ambient-bg {
-    position: absolute;
-    width: 80vw;
-    height: 80vw;
-    background: linear-gradient(45deg, #ff416c, #8a2387, #e94057);
-    filter: blur(60px);
-    opacity: 0.35;
-    z-index: 1;
-    pointer-events: none;
+#master-play-trigger.control-btn svg {
+    width: 38px !important;
+    height: 38px !important;
+    color: #000000 !important;
+}
+/* 1. Base button styles (Smooth transitions) */
+#master-play-trigger.control-btn {
+    background-color: var(--player-accent);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
 }
 
-/* Glassmorphism Player Container - Full Mobile Screen */
+#master-play-trigger.control-btn svg {
+    width: 38px !important;
+    height: 38px !important;
+    color: #000000 !important;
+}
+
+#master-play-trigger.control-btn:hover {
+    background-color: var(--player-accent);
+    filter: brightness(1.1);
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4),
+                0 0 15px var(--player-accent);
+}
+
+#master-play-trigger.control-btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3),
+                0 0 5px var(--player-accent);
+}
+
 .player-container {
     position: relative;
     z-index: 2;
 
     width: 100%;
     max-width: 100vw;
-    min-height: 100vh;
-    min-height: 100dvh;
+    min-height: calc(100vh - 57px);
     box-sizing: border-box;
 
     background: rgba(255, 255, 255, 0.05);
@@ -2232,7 +2266,7 @@ section.sidebar-right {
 }
 
 .control-btn {
-    background: rgba(255, 255, 255, 0.12);
+    background: transparent;
     border: none;
     color: #fff;
     width: 56px;
@@ -2242,7 +2276,25 @@ section.sidebar-right {
     justify-content: center;
     align-items: center;
     cursor: pointer;
+
+    transition: background-color 0.2s ease, transform 0.1s ease, color 0.2s ease;
 }
+
+.control-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--player-accent);
+}
+
+.control-btn:active {
+    transform: scale(0.92);
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+.control-btn:focus-visible {
+    outline: 2px solid var(--player-accent);
+    outline-offset: 2px;
+}
+
 
 .control-btn.play-pause {
     width: 76px;
