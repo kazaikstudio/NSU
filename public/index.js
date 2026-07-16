@@ -32,6 +32,88 @@ async function updateDownloadStats() {
     }
 }
 
+function loadTrack(track) {
+    if (!track) {
+        console.error("loadTrack error: No track data provided.");
+        return;
+    }
+
+    const playerTitle = document.getElementById('player-title');
+    const playerArtist = document.getElementById('player-artist');
+    const playerGenre = document.getElementById('player-genre');
+    const playerArtwork = document.getElementById('main-artwork-node');
+
+    if (playerTitle) playerTitle.innerText = track.title || 'Unknown Title';
+    if (playerArtist) playerArtist.innerText = track.artist || 'Noll Music';
+    
+    if (playerGenre) {
+        const source = track.source || 'Library';
+        const genre = track.genre || 'All Tracks';
+        playerGenre.innerText = `${source} › ${genre}`;
+    }
+
+    if (playerArtwork && track.artwork) {
+        playerArtwork.src = track.artwork;
+    }
+}
+
+
+async function loadTrack(trackOrUrl) {
+    if (!trackOrUrl) {
+        console.error("loadTrack error: No track data or URL provided.");
+        return;
+    }
+
+    let track = null;
+
+    // 1. DYNAMIC INPUT DETECTION
+    if (typeof trackOrUrl === 'string') {
+        // Input is a URL path -> Fetch the track data first
+        try {
+            const response = await fetch(trackOrUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch track: ${response.status}`);
+            }
+            track = await response.json();
+        } catch (error) {
+            console.error("Error fetching track metadata:", error);
+            return; // Terminate execution if API call fails
+        }
+    } else if (typeof trackOrUrl === 'object') {
+        // Input is already a track data object -> Use it directly
+        track = trackOrUrl;
+    }
+
+    // 2. DOM ELEMENT SELECTORS
+    const playerTitle = document.getElementById('player-title');
+    const playerArtist = document.getElementById('player-artist');
+    const playerGenre = document.getElementById('player-genre');
+    const playerArtwork = document.getElementById('main-artwork-node');
+
+    // 3. SAFELY INJECT METADATA
+    if (playerTitle) {
+        playerTitle.innerText = track.title || 'Unknown Title';
+    }
+
+    if (playerArtist) {
+        playerArtist.innerText = track.artist || 'Noll Music';
+    }
+
+    if (playerGenre) {
+
+        const source = track.source || 'Library';
+        const genre = track.genre || 'All Tracks';
+
+        playerGenre.innerText = `${source} › ${genre}`;
+    }
+
+    if (playerArtwork) {
+        const processedThumb = getProcessedThumbnail(track.artwork || track.thumbnail);
+        playerArtwork.src = processedThumb || 'Pic/noll.jpg';
+    }
+}
+
+
 function switchView(event, targetViewId) {
     if (event) event.preventDefault(); // Stop standard native anchor routing
 
@@ -144,21 +226,14 @@ function filterTracks() {
     });
 }
 
-/**
- * Helper to calculate the bar count based on target width
- */
 function getResponsiveBarCount(containerWidth) {
-    const barSpacing = 5; // 3px bar width + 2px gap
+    const barSpacing = 5;
     const width = containerWidth || window.innerWidth;
-    
-    // Dynamically calculate bars and clamp them between 20 and 150
+
     let totalBars = Math.floor(width / barSpacing);
     return Math.max(20, Math.min(totalBars, 150));
 }
 
-/**
- * Generates the raw HTML string of wave-bars based on a total count
- */
 function generateWaveBarsHtml(totalBars) {
     let waveBarsHtml = '';
     for (let i = 0; i < totalBars; i++) {
@@ -177,14 +252,35 @@ function renderResponsiveWaveform(container) {
     const target = typeof container === 'string' ? document.querySelector(container) : container;
     if (!target) return;
 
-    // Use actual container size or fallback to window width
+    const parentRow = target.closest('.file-row-item');
+    const isActiveRow = parentRow && (parentRow.id === currentTrackId || parentRow.classList.contains('active-row'));
+
+    let progressFraction = 0;
+    if (isActiveRow) {
+        const audioNode = document.getElementById('global-audio-node');
+        if (audioNode && audioNode.duration) {
+            progressFraction = audioNode.currentTime / audioNode.duration;
+        }
+    }
+
     const containerWidth = target.clientWidth;
     const totalBars = getResponsiveBarCount(containerWidth);
-
     target.innerHTML = generateWaveBarsHtml(totalBars);
+
+    if (isActiveRow && progressFraction > 0) {
+        const rowBars = target.querySelectorAll('.wave-bar');
+        const rowCutoff = Math.floor(progressFraction * rowBars.length);
+        rowBars.forEach((bar, idx) => {
+            if (idx < rowCutoff) {
+                bar.classList.add('played');
+            }
+        });
+    }
 }
 
-// --- Responsive Resize Handler ---
+/* ==========================================================================
+   DEBOUNCED RESIZE & INITIAL LOAD LISTENERS
+   ========================================================================== */
 let resizeTimeout;
 window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
@@ -195,12 +291,12 @@ window.addEventListener('resize', () => {
     }, 150); 
 });
 
-// Run once on page load to initialize any existing containers
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.waveform-container').forEach(el => {
         renderResponsiveWaveform(el);
     });
 });
+
 
 function createFileItem(id, name, isUploading = false, thumbnail = '', onClickStr = '', showLabel = true) {
     const thumbUrl = getProcessedThumbnail(thumbnail);
@@ -479,47 +575,233 @@ function switchGenreView(genreName) {
     highlightPlayingTrack();
 }
 
+let isAutoplaying = true;
+let autoplayInterval = null;
+let activeIndex = 0;
+const autoplaySpeed = 2500;
+
+let startX = 0;
+let currentX = 0;
+let isDragging = false;
+const swipeThreshold = 60;
+
 function renderInfiniteSlider() {
     const sliderTrack = document.getElementById('auto-slider-track');
-    if (!sliderTrack) return;
+    const viewport = document.querySelector('.infinite-slider-viewport');
+    if (!sliderTrack || !viewport) return;
 
     const displayPool = tracksCache.slice(0, 5);
-    if (displayPool.length === 0) return;
-
-    const windowWidth = window.innerWidth;
-    let cardWidth = '220px';
-    let cardHeight = '260px';
-
-    if (windowWidth < 480) {
-        cardWidth = '140px';
-        cardHeight = '180px';
-    } else if (windowWidth < 768) {
-        cardWidth = '180px';
-        cardHeight = '220px';
-    }
+    const totalCards = displayPool.length;
+    if (totalCards === 0) return;
 
     const fallbackImage = 'Pic/noll.jpg';
 
-    let htmlContent = displayPool.map(track => {
+    // 1. Generate clean stacked cards
+    let htmlContent = displayPool.map((track, index) => {
         const thumbUrl = getProcessedThumbnail(track.thumbnail);
         const safeTitle = track.title.replace(/'/g, "\\'");
 
         return `
-            <div class="slide-card"
-                 style="width: ${cardWidth}; height: ${cardHeight} !important; flex-shrink: 0; cursor: pointer;"
-                 onclick="selectRow(this, '${track.id}', '${safeTitle}')">
-                <div class="slide-thumb-wrapper" style="width: 100%; aspect-ratio: 1/1;">
-                    <img src="${thumbUrl ? thumbUrl : fallbackImage}"
-                         class="slide-thumb-img"
-                         onerror="this.src='${fallbackImage}';"; 
-                         style="width:100%; height:100%; object-fit:cover;">
-                </div>
-                <div class="slide-file-name">${track.title}</div>
+            <div class="slide-card" 
+                 data-index="${index}"
+                 onclick="handleCardClick(${index}, this, '${track.id}', '${safeTitle}')">
+                <img src="${thumbUrl ? thumbUrl : fallbackImage}"
+                     class="slide-img"
+                     draggable="false"
+                     onerror="this.src='${fallbackImage}';">
             </div>`;
     }).join('');
 
-    sliderTrack.innerHTML = htmlContent + htmlContent;
+    sliderTrack.innerHTML = htmlContent;
+
+    // 2. Initialize Gesture Listeners with Dynamic Rotation
+    initSwipeGestures(viewport, sliderTrack);
+
+    // 3. Initial Stack Layout Paint
+    updateCardStack();
+
+    // 4. Start Autoplay loop by default
+    if (isAutoplaying) {
+        startAutoplay();
+    }
 }
+
+function handleCardClick(index, element, trackId, safeTitle) {
+    if (Math.abs(startX - currentX) > 10) return;
+    setActiveCard(index);
+    selectRow(element, trackId, safeTitle);
+}
+
+function handleCardClick(index, element, trackId, safeTitle) {
+    if (Math.abs(startX - currentX) > 10) return;
+    setActiveCard(index);
+    selectRow(element, trackId, safeTitle);
+}
+
+// 4. Mathematical Symmetrical Stack Position Engine
+function updateCardStack() {
+    const sliderTrack = document.getElementById('auto-slider-track');
+    if (!sliderTrack) return;
+
+    const cards = sliderTrack.querySelectorAll('.slide-card');
+    const totalCards = cards.length;
+    if (totalCards === 0) return;
+
+    cards.forEach((card) => {
+        const cardIndex = parseInt(card.dataset.index);
+
+        let offset = cardIndex - activeIndex;
+
+
+        if (offset > totalCards / 2) {
+            offset -= totalCards;
+        } else if (offset < -totalCards / 2) {
+            offset += totalCards;
+        }
+
+
+        card.style.setProperty('--offset', offset);
+        card.style.setProperty('--abs-offset', Math.abs(offset));
+
+        card.classList.toggle('active', offset === 0);
+    });
+}
+
+function setActiveCard(index) {
+    if (isAutoplaying) {
+        pauseAutoplay();
+    }
+    activeIndex = index;
+    updateCardStack();
+}
+
+// 5. Touch & Mouse Gesture Event Listeners with Dynamic Drag Rotation
+function initSwipeGestures(viewport, sliderTrack) {
+    const handleStart = (clientX) => {
+        isDragging = true;
+        startX = clientX;
+        currentX = clientX;
+        if (isAutoplaying) toggleAutoplay(); // Stop autoplay during manual manipulation
+
+        // Temporarily disable transition on the active card for instant drag response
+        const activeCard = sliderTrack.querySelector('.slide-card.active');
+        if (activeCard) {
+            activeCard.style.transition = 'none';
+        }
+    };
+
+    const handleMove = (clientX) => {
+        if (!isDragging) return;
+        currentX = clientX;
+
+        const diffX = currentX - startX; // Positive = drag right, Negative = drag left
+        const activeCard = sliderTrack.querySelector('.slide-card.active');
+
+        if (activeCard) {
+            // Calculate dynamic rotation angle based on drag distance
+            const dragRotation = diffX * 0.08; // Customize rotation sensitivity here
+            
+            // Apply live drag translations & rotations
+            activeCard.style.transform = `
+                translateX(${diffX}px) 
+                translateY(${Math.abs(diffX) * 0.05}px) 
+                rotate(${dragRotation}deg) 
+                scale(1.02)
+            `;
+        }
+    };
+
+    const handleEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+
+        const diffX = startX - currentX;
+        const totalCards = sliderTrack.querySelectorAll('.slide-card').length;
+        const activeCard = sliderTrack.querySelector('.slide-card.active');
+
+        // Restore transitions before snapping cards
+        if (activeCard) {
+            activeCard.style.transform = '';
+            activeCard.style.transition = '';
+        }
+
+        // Determine if swipe threshold was met to change card positions
+        if (Math.abs(diffX) > swipeThreshold) {
+            if (diffX > 0) {
+                // Swiped Left -> Bring next card forward
+                activeIndex = (activeIndex + 1) % totalCards;
+            } else {
+                // Swiped Right -> Pull previous card back
+                activeIndex = (activeIndex - 1 + totalCards) % totalCards;
+            }
+        }
+
+        updateCardStack();
+        startX = 0;
+        currentX = 0;
+    };
+
+    // --- Mobile Touch Listeners ---
+    viewport.addEventListener('touchstart', (e) => handleStart(e.touches[0].clientX), { passive: true });
+    viewport.addEventListener('touchmove', (e) => handleMove(e.touches[0].clientX), { passive: true });
+    viewport.addEventListener('touchend', handleEnd);
+
+    // --- Desktop Mouse Listeners ---
+    viewport.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        handleStart(e.clientX);
+    });
+    viewport.addEventListener('mousemove', (e) => {
+        if (isDragging) handleMove(e.clientX);
+    });
+    window.addEventListener('mouseup', handleEnd);
+}
+
+function startAutoplay() {
+    isAutoplaying = true;
+    const staticBtn = document.getElementById('static-left-play-btn');
+    if (staticBtn) {
+        const playIcon = staticBtn.querySelector('.play-icon');
+        const pauseIcon = staticBtn.querySelector('.pause-icon');
+        if (playIcon) playIcon.style.display = 'none';
+        if (pauseIcon) pauseIcon.style.display = 'block';
+    }
+
+    clearInterval(autoplayInterval); // Clear any lingering intervals
+    autoplayInterval = setInterval(() => {
+        const sliderTrack = document.getElementById('auto-slider-track');
+        if (!sliderTrack) return;
+
+        const totalCards = sliderTrack.querySelectorAll('.slide-card').length;
+        if (totalCards === 0) return;
+
+        activeIndex = (activeIndex + 1) % totalCards;
+        updateCardStack();
+    }, autoplaySpeed);
+}
+
+function pauseAutoplay() {
+    isAutoplaying = false;
+    clearInterval(autoplayInterval);
+    
+    const staticBtn = document.getElementById('static-left-play-btn');
+    if (staticBtn) {
+        const playIcon = staticBtn.querySelector('.play-icon');
+        const pauseIcon = staticBtn.querySelector('.pause-icon');
+        if (playIcon) playIcon.style.display = 'block';
+        if (pauseIcon) pauseIcon.style.display = 'none';
+    }
+}
+
+// The master click toggle function bound to your HTML play button
+function toggleAutoplay() {
+    if (isAutoplaying) {
+        pauseAutoplay();
+    } else {
+        startAutoplay();
+    }
+}
+
 window.addEventListener('resize', renderInfiniteSlider);
 
 function downloadCurrentTrack() {
@@ -575,7 +857,6 @@ async function selectRow(element, trackId, trackTitle) {
     if (targetRow) {
         targetRow.classList.add('active-row', 'is-playing');
 
-        // FORCE TARGET ROW ICON TO PAUSE SHAPE ON FRESH BOOT
         const rowSvgPath = targetRow.querySelector('.row-icon-svg path');
         if (rowSvgPath) rowSvgPath.setAttribute('d', pausePath);
     }
@@ -598,13 +879,19 @@ async function selectRow(element, trackId, trackTitle) {
         console.error("Error fetching download stats:", err);
     }
 
-    // 5. ENGINE LOADING
     if (playerHideTimer) clearTimeout(playerHideTimer);
+    
     const track = tracksCache.find(t => t.id === trackId);
     if (track) {
+        // Mount player controls and stream engine
         mountPlayerEngine(`${BACKEND_BASE}/api/stream/${trackId}`, trackTitle, trackId, track.thumbnail);
+        
+
+        loadTrack(track); 
+        
         updatePlayerVisibility();
     }
+    
     highlightPlayingTrack();
 }
 
@@ -1038,31 +1325,55 @@ function renderFavorites() {
 }
 
 // --- 6. WAVEFORM STRUCTURAL RENDERING ---
-const waveformContainer = document.getElementById('waveform');
-if (waveformContainer) {
-    waveformContainer.innerHTML = ''; // Clear out any old lingering bars first
-    const totalBars = 100;
+function renderResponsiveMasterWaveform() {
+    const waveformContainer = document.getElementById('waveform');
+    if (!waveformContainer) return;
+
+    // 1. CAPTURE TIMELINE STATE: Get the current progress percentage before clearing
+    const audio = document.getElementById('global-audio-node');
+    const currentProgress = (audio && audio.duration) ? (audio.currentTime / audio.duration) : 0;
+
+    // 2. Clear and rebuild the bars
+    waveformContainer.innerHTML = '';
+    const containerWidth = waveformContainer.clientWidth || window.innerWidth;
+    const barSpacing = 5; 
     
+    let totalBars = Math.floor(containerWidth / barSpacing);
+    totalBars = Math.max(30, Math.min(totalBars, 180));
+
     for (let i = 0; i < totalBars; i++) {
         const bar = document.createElement('div');
         bar.classList.add('wave-bar');
-        
-        // 1. Generate a base random variance (ranges between 10px and 32px)
+
         let randomHeight = Math.floor(Math.random() * 22) + 10;
-        
-        // 2. Use a smooth sine curve profile across the 200 bars.
-        // This naturally forces the ends short and lets the center rise up.
         let waveProfile = Math.sin((i / totalBars) * Math.PI);
-        
-        // 3. Add secondary layered waves to create realistic "peaks and valleys"
         let microDetail = Math.sin((i / totalBars) * Math.PI * 8) * 0.25;
         let smoothFactor = waveProfile + microDetail;
-        
-        // 4. Calculate final structural heights safely
+
         let finalHeight = Math.floor(randomHeight * Math.max(0.15, smoothFactor));
-        if (finalHeight < 4) finalHeight = 4; // Safety floor limit
-        
+        if (finalHeight < 4) finalHeight = 4;
+
         bar.style.height = `${finalHeight}px`;
         waveformContainer.appendChild(bar);
     }
+
+    // 3. RESTORE TIMELINE PROGRESS: Instantly refill the bars up to the active playtime
+    if (typeof updateWavebarsFill === 'function') {
+        updateWavebarsFill(currentProgress);
+    }
 }
+
+/* ==========================================================================
+   DEBOUNCED RESIZE & INITIAL LOAD LISTENERS
+   ========================================================================== */
+let waveResizeDebounceTimer;
+window.addEventListener('resize', () => {
+    clearTimeout(waveResizeDebounceTimer);
+    waveResizeDebounceTimer = setTimeout(() => {
+        renderResponsiveMasterWaveform();
+    }, 150);
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    renderResponsiveMasterWaveform();
+});
