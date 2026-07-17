@@ -1505,16 +1505,23 @@ section.sidebar-right {
 .music-workspace-split {
     display: flex;
     flex-direction: row;
-    gap: 5px;
-    width: 100%;
-    margin: 0 auto;
-    align-items: flex-start;
-}
-.player-container {
-    flex: 1;
-    min-width: 320px;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
+.player-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    min-width: 0;
+}
 
 
 /* ==========================================================
@@ -1614,7 +1621,7 @@ section.sidebar-right {
     section.sidebar-right {
         position: absolute;
         height: 100vh;
-        width: 98%;
+        width: 100%;
         padding: 20px;
     }
 

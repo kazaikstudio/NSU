@@ -133,6 +133,19 @@ function switchView(event, targetViewId) {
         }
     });
 
+    // --- NAVBAR VISIBILITY TOGGLE ---
+    // Change '.navbar' to match your specific HTML navbar class or ID (e.g., '#main-nav')
+    const navbar = document.querySelector('.navbar') || document.querySelector('nav') || document.getElementById('navbar');
+    
+    if (navbar) {
+        if (targetViewId === 'music-view') {
+            navbar.style.setProperty('display', 'none', 'important');
+        } else {
+            // Removes the 'none' override to let your default CSS display style take back control
+            navbar.style.removeProperty('display'); 
+        }
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
