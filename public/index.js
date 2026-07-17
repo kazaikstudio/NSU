@@ -261,6 +261,9 @@ function generateWaveBarsHtml(totalBars) {
     return waveBarsHtml;
 }
 
+
+const barCountCache = new WeakMap();
+
 function renderResponsiveWaveform(container) {
     const target = typeof container === 'string' ? document.querySelector(container) : container;
     if (!target) return;
@@ -278,18 +281,28 @@ function renderResponsiveWaveform(container) {
 
     const containerWidth = target.clientWidth;
     const totalBars = getResponsiveBarCount(containerWidth);
-    target.innerHTML = generateWaveBarsHtml(totalBars);
+    
+    const previousBarCount = barCountCache.get(target);
+    // CHECK BOTH: Bar count match AND ensure the DOM isn't empty
+    const isAlreadyRendered = previousBarCount === totalBars && target.children.length > 0;
 
-    if (isActiveRow && progressFraction > 0) {
-        const rowBars = target.querySelectorAll('.wave-bar');
+    // Only touch innerHTML if it's not rendered yet OR if the bar count changed
+    if (!isAlreadyRendered) {
+        target.innerHTML = generateWaveBarsHtml(totalBars, progressFraction);
+        barCountCache.set(target, totalBars);
+        return; 
+    }
+
+    // Smooth update for existing bars (No blinking!)
+    const rowBars = target.querySelectorAll('.wave-bar');
+    if (rowBars.length > 0) {
         const rowCutoff = Math.floor(progressFraction * rowBars.length);
         rowBars.forEach((bar, idx) => {
-            if (idx < rowCutoff) {
-                bar.classList.add('played');
-            }
+            bar.classList.toggle('played', idx < rowCutoff);
         });
     }
 }
+
 
 /* ==========================================================================
    DEBOUNCED RESIZE & INITIAL LOAD LISTENERS
@@ -455,44 +468,34 @@ function handleRowPlayPause(rowElement, trackId, trackTitle) {
 }
 
 const updateWavebarsFill = (percentage) => {
-    let activeRow = null;
-    if (currentTrackId) {
-        activeRow = document.getElementById(currentTrackId) || 
-                    document.querySelector(`.file-row-item[id="${currentTrackId}"]`);
-    }
+    let activeRow = currentTrackId 
+        ? (document.getElementById(currentTrackId) || document.querySelector(`.file-row-item[id="${currentTrackId}"]`))
+        : null;
     
     if (!activeRow) {
         activeRow = document.querySelector('.file-row-item.active-row');
     }
     
+    // HELPER: Updates the 'played' class across a collection of wave bars
+    const fillBars = (bars) => {
+        if (!bars || bars.length === 0) return;
+        const cutoff = Math.floor(percentage * bars.length);
+        bars.forEach((bar, idx) => {
+            bar.classList.toggle('played', idx < cutoff);
+        });
+    };
+    
+    // 2. UPDATE THE ACTIVE ROW WAVEFORM
     if (activeRow) {
         const rowBars = activeRow.querySelectorAll('.waveform-container .wave-bar, .waveform .wave-bar');
-        if (rowBars.length > 0) {
-            const rowCutoff = Math.floor(percentage * rowBars.length);
-            rowBars.forEach((bar, idx) => {
-                if (idx < rowCutoff) {
-                    bar.classList.add('played');
-                } else {
-                    bar.classList.remove('played');
-                }
-            });
-        }
+        fillBars(rowBars);
     }
     
-    // --- 2. UPDATE THE MASTER PLAYER WAVEFORM (#waveform) ---
+    // 3. UPDATE THE MASTER PLAYER WAVEFORM (#waveform)
     const masterWaveform = document.getElementById('waveform');
     if (masterWaveform) {
         const masterBars = masterWaveform.querySelectorAll('.wave-bar');
-        if (masterBars.length > 0) {
-            const masterCutoff = Math.floor(percentage * masterBars.length);
-            masterBars.forEach((bar, idx) => {
-                if (idx < masterCutoff) {
-                    bar.classList.add('played');
-                } else {
-                    bar.classList.remove('played');
-                }
-            });
-        }
+        fillBars(masterBars);
     }
 };
 
