@@ -268,8 +268,15 @@ function renderResponsiveWaveform(container) {
     const target = typeof container === 'string' ? document.querySelector(container) : container;
     if (!target) return;
 
+    const containerWidth = target.clientWidth;
+    if (containerWidth === 0) return;
+
     const parentRow = target.closest('.file-row-item');
-    const isActiveRow = parentRow && (parentRow.id === currentTrackId || parentRow.classList.contains('active-row'));
+    const isActiveRow = parentRow && (
+        parentRow.id === String(currentTrackId) || 
+        parentRow.dataset.trackId === String(currentTrackId) || 
+        parentRow.classList.contains('active-row')
+    );
 
     let progressFraction = 0;
     if (isActiveRow) {
@@ -279,21 +286,18 @@ function renderResponsiveWaveform(container) {
         }
     }
 
-    const containerWidth = target.clientWidth;
     const totalBars = getResponsiveBarCount(containerWidth);
     
     const previousBarCount = barCountCache.get(target);
-    // CHECK BOTH: Bar count match AND ensure the DOM isn't empty
     const isAlreadyRendered = previousBarCount === totalBars && target.children.length > 0;
 
-    // Only touch innerHTML if it's not rendered yet OR if the bar count changed
+    // Only update innerHTML if bar count changed OR container is empty
     if (!isAlreadyRendered) {
-        target.innerHTML = generateWaveBarsHtml(totalBars, progressFraction);
+        target.innerHTML = generateWaveBarsHtml(totalBars);
         barCountCache.set(target, totalBars);
-        return; 
     }
 
-    // Smooth update for existing bars (No blinking!)
+    // Smooth progress update for existing bars without re-rendering HTML
     const rowBars = target.querySelectorAll('.wave-bar');
     if (rowBars.length > 0) {
         const rowCutoff = Math.floor(progressFraction * rowBars.length);
@@ -468,14 +472,8 @@ function handleRowPlayPause(rowElement, trackId, trackTitle) {
 }
 
 const updateWavebarsFill = (percentage) => {
-    let activeRow = currentTrackId 
-        ? (document.getElementById(currentTrackId) || document.querySelector(`.file-row-item[id="${currentTrackId}"]`))
-        : null;
-    
-    if (!activeRow) {
-        activeRow = document.querySelector('.file-row-item.active-row');
-    }
-    
+    if (!currentTrackId) return;
+
     // HELPER: Updates the 'played' class across a collection of wave bars
     const fillBars = (bars) => {
         if (!bars || bars.length === 0) return;
@@ -484,14 +482,18 @@ const updateWavebarsFill = (percentage) => {
             bar.classList.toggle('played', idx < cutoff);
         });
     };
-    
-    // 2. UPDATE THE ACTIVE ROW WAVEFORM
-    if (activeRow) {
-        const rowBars = activeRow.querySelectorAll('.waveform-container .wave-bar, .waveform .wave-bar');
+
+    // 1. UPDATE ALL ACTIVE TRACK ROWS (Global + Other Genres)
+    const activeRows = document.querySelectorAll(
+        `.file-row-item[id="${currentTrackId}"], .file-row-item[data-track-id="${currentTrackId}"], .file-row-item.active-row`
+    );
+
+    activeRows.forEach(row => {
+        const rowBars = row.querySelectorAll('.waveform-container .wave-bar, .waveform .wave-bar');
         fillBars(rowBars);
-    }
-    
-    // 3. UPDATE THE MASTER PLAYER WAVEFORM (#waveform)
+    });
+
+    // 2. UPDATE THE MASTER PLAYER WAVEFORM
     const masterWaveform = document.getElementById('waveform');
     if (masterWaveform) {
         const masterBars = masterWaveform.querySelectorAll('.wave-bar');
@@ -578,6 +580,11 @@ function switchGenreView(genreName) {
     if (activeCanvas) {
         activeCanvas.style.display = 'block';
         activeCanvas.classList.add('active');
+
+        // RE-RENDER WAVEFORMS NOW THAT THIS GENRE CONTAINER IS VISIBLE
+        activeCanvas.querySelectorAll('.waveform-container').forEach(el => {
+            renderResponsiveWaveform(el);
+        });
     }
 
     const headerTitle = document.querySelector('.media-table-container .col-title');
@@ -590,6 +597,7 @@ function switchGenreView(genreName) {
     updateStats();
     highlightPlayingTrack();
 }
+
 
 let isAutoplaying = true;
 let autoplayInterval = null;
@@ -851,46 +859,48 @@ async function selectRow(element, trackId, trackTitle) {
     const playPath = "M8 5v14l11-7z";
     const pausePath = "M6 19h4V5H6v14zm8-14v14h4V5h-4z";
 
-    // 1. GLOBAL RESET: Clear all active styles and flip all row icons back to PLAY
+    // 1. GLOBAL RESET & MULTI-ROW UPDATE
+    // Iterate through ALL rows across all genres/sections
     document.querySelectorAll('.file-row-item').forEach(row => {
-        row.classList.remove('active-row', 'is-playing');
-        
-        const oldRowTimer = row.querySelector('.time-stamp.elapsed');
-        if (oldRowTimer) oldRowTimer.innerText = "0:00";
+        // Check if this row belongs to the selected track (via data-attribute or ID)
+        const isSelectedTrack = row.dataset.trackId === String(trackId) || row.id === String(trackId);
 
-        const oldPath = row.querySelector('.row-icon-svg path');
-        if (oldPath) oldPath.setAttribute('d', playPath);
+        const rowSvgPath = row.querySelector('.row-icon-svg path');
+        const timerSpan = row.querySelector('.time-stamp.elapsed');
+
+        if (isSelectedTrack) {
+            // Apply active states to ALL instances of this track across all genres
+            row.classList.add('active-row', 'is-playing');
+            if (rowSvgPath) rowSvgPath.setAttribute('d', pausePath);
+        } else {
+            // Reset non-selected rows
+            row.classList.remove('active-row', 'is-playing');
+            if (timerSpan) timerSpan.innerText = "0:00";
+            if (rowSvgPath) rowSvgPath.setAttribute('d', playPath);
+        }
     });
 
-    // 2. TARGET SELECTION: Identify the clicked container
-    let targetRow = null;
-    if (element && element.classList.contains('file-row-item')) {
-        targetRow = element;
-    } else {
-        targetRow = document.getElementById(trackId);
-    }
+    // Target reference for updating counts/UI stats
+    const targetRow = element?.classList.contains('file-row-item') 
+        ? element 
+        : document.querySelector(`[data-track-id="${trackId}"], #${trackId}`);
 
-    if (targetRow) {
-        targetRow.classList.add('active-row', 'is-playing');
-
-        const rowSvgPath = targetRow.querySelector('.row-icon-svg path');
-        if (rowSvgPath) rowSvgPath.setAttribute('d', pausePath);
-    }
-
-    // 3. UI BAR STATES
+    // 2. UI BAR STATES
     const downloadContainer = document.getElementById('download-container');
     if (downloadContainer) downloadContainer.classList.add('is-visible');
 
     syncFavoriteButtonsUI(trackId);
 
-    // 4. STATS SYNCING
+    // 3. STATS SYNCING (Update all matching row counters, not just one)
     try {
         const response = await fetch(`${BACKEND_BASE}/api/stats/downloads`);
         const data = await response.json();
-        if (targetRow) {
-            const countSpan = targetRow.querySelector('.track-dl-count');
-            if (countSpan) countSpan.innerText = data.counts[trackId] || 0;
-        }
+        const dlCount = data.counts[trackId] || 0;
+
+        document.querySelectorAll(`.file-row-item[data-track-id="${trackId}"], #${trackId}`).forEach(row => {
+            const countSpan = row.querySelector('.track-dl-count');
+            if (countSpan) countSpan.innerText = dlCount;
+        });
     } catch (err) {
         console.error("Error fetching download stats:", err);
     }
@@ -901,10 +911,7 @@ async function selectRow(element, trackId, trackTitle) {
     if (track) {
         // Mount player controls and stream engine
         mountPlayerEngine(`${BACKEND_BASE}/api/stream/${trackId}`, trackTitle, trackId, track.thumbnail);
-        
-
         loadTrack(track); 
-        
         updatePlayerVisibility();
     }
     
