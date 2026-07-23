@@ -1,0 +1,271 @@
+/* ==========================================================================
+   1. RESET & GLOBAL VARIABLES
+   ========================================================================== */
+:root {
+    --bg-main: #f8fafc;
+    --bg-card: #ffffff;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --border-color: #e2e8f0;
+    --danger: #ef4444;
+    --radius-sm: 6px;
+    --radius-md: 12px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* ==========================================================================
+   2. REUSABLE BUTTONS
+   ========================================================================== */
+button {
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-sm);
+    width: 100%;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    background-color: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+}
+
+.btn-secondary:hover {
+    background-color: #f1f5f9;
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+/* ==========================================================================
+   3. LOGIN WINDOW STYLES
+   ========================================================================== */
+.auth-box {
+    background-color: var(--bg-card);
+    padding: 2.5rem;
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+}
+
+.auth-box h2 {
+    margin-bottom: 0.5rem;
+    font-size: 1.75rem;
+}
+
+.auth-box p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 2rem;
+}
+
+.input-group {
+    margin-bottom: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+.input-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-main);
+}
+
+.input-group input {
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.input-group input:focus {
+    border-color: var(--primary);
+}
+
+/* ==========================================================================
+   4. DASHBOARD VIEW STYLES
+   ========================================================================== */
+.dashboard-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--bg-main);
+}
+
+/* Sidebar Layout */
+.sidebar {
+    background-color: #0f172a;
+    color: #f8fafc;
+    padding: 2rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.sidebar .logo {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-bottom: 3rem;
+    color: white;
+}
+
+.sidebar nav ul {
+    list-style: none;
+}
+
+.sidebar nav ul li {
+    margin-bottom: 0.5rem;
+}
+
+.sidebar nav ul li a {
+    color: #94a3b8;
+    text-decoration: none;
+    padding: 0.75rem 1rem;
+    display: block;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.sidebar nav ul li a:hover, 
+.sidebar nav ul li a.active {
+    color: white;
+    background-color: #1e293b;
+}
+
+/* Main Workspace Window */
+.main-content {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.top-nav {
+    background-color: var(--bg-card);
+    padding: 1.25rem 2.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.top-nav h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.user-profile {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* Content & Drag/Drop Upload Area */
+.content-area {
+    padding: 2.5rem;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.upload-zone {
+    background-color: var(--bg-card);
+    border: 2px dashed #cbd5e1;
+    border-radius: var(--radius-md);
+    padding: 3.5rem 2rem;
+    text-align: center;
+    transition: all 0.2s ease;
+    margin-bottom: 2.5rem;
+}
+
+.upload-zone:hover, 
+.upload-zone.dragover {
+    border-color: var(--primary);
+    background-color: #f0fdf4; /* Slight green tint on successful drag target */
+}
+
+.upload-zone p {
+    color: var(--text-muted);
+    margin-bottom: 1.25rem;
+    font-size: 1rem;
+}
+
+.btn-upload {
+    background-color: #f1f5f9;
+    color: var(--text-main);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    font-weight: 600;
+}
+
+.btn-upload:hover {
+    background-color: #e2e8f0;
+}
+
+/* File List Display */
+.file-list-container h3 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.file-list {
+    list-style: none;
+}
+
+.file-list li {
+    background-color: var(--bg-card);
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* ==========================================================================
+   5. VIEW SWITCHER LOGIC (Toggled via JavaScript)
+   ========================================================================== */
+.dashboard-hidden {
+    display: none !important;
+}
