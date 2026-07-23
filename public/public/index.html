@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload-Files</title>
+    <link rel="stylesheet" href="App.css">
+    <script src="App.js" defer></script>
+</head>
+<body>
+
+    <!-- 1. LOGIN WINDOW CONTAINER -->
+    <div id="login-container" class="auth-box">
+        <h2>Welcome Back</h2>
+        <p>Please login to access your dashboard</p>
+        
+        <form id="login-form">
+            <div class="input-group">
+                <label for="username">Username or Email</label>
+                <input type="text" id="username" required placeholder="Enter your username">
+            </div>
+            
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required placeholder="Enter your password">
+            </div>
+            
+            <button type="submit" class="btn-primary">Sign In</button>
+        </form>
+    </div>
+
+    <!-- 2. DASHBOARD VIEW CONTAINER (Initially hidden via CSS) -->
+    <div id="dashboard-container" class="dashboard-layout dashboard-hidden">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo"> fileVault </div>
+            <nav>
+                <ul>
+                    <li><a href="#" class="active">My Files</a></li>
+                    <li><a href="#">Shared</a></li>
+                    <li><a href="#">Settings</a></li>
+                </ul>
+            </nav>
+            <button id="logout-btn" class="btn-secondary">Log Out</button>
+        </aside>
+
+        <!-- Main Dashboard Content -->
+        <main class="main-content">
+            <header class="top-nav">
+                <h1>My Files</h1>
+                <div class="user-profile">User Account</div>
+            </header>
+
+            <!-- File Upload and Content Section -->
+            <section class="content-area">
+                <div class="upload-zone" id="drop-zone">
+                    <p>Drag and drop your files here, or click to browse</p>
+                    <input type="file" id="file-input" multiple style="display: none;">
+                    <button class="btn-upload" id="choose-files-btn">Choose Files</button>
+                </div>
+
+                <!-- Placeholder for Uploaded Files List -->
+                <div class="file-list-container">
+                    <h3>Recent Uploads</h3>
+                    <ul id="file-list" class="file-list">
+                        <!-- JavaScript will dynamically inject files here -->
+                    </ul>
+                </div>
+            </section>
+        </main>
+    </div>
+
+</body>
+</html>
