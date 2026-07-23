@@ -57,3 +57,73 @@ async function seedDefaultAdmin() {
 }
 
 seedDefaultAdmin();
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    // DOM Element Selectors
+    const loginForm = document.getElementById('login-form');
+    const loginContainer = document.getElementById('login-container');
+    const dashboardContainer = document.getElementById('dashboard-container');
+    const logoutBtn = document.getElementById('logout-btn');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+
+    // Helper: Toggle Dashboard Visibility
+    function showDashboard() {
+        loginContainer.style.display = 'none';
+        dashboardContainer.classList.remove('dashboard-hidden');
+    }
+
+    // Helper: Toggle Login Visibility
+    function showLogin() {
+        dashboardContainer.classList.add('dashboard-hidden');
+        loginContainer.style.display = 'block';
+    }
+
+    // 1. Handle Login Form Submission
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Store auth token or user state if returned
+                if (data.token) {
+                    localStorage.setItem('authToken', data.token);
+                }
+                showDashboard();
+            } else {
+                alert(data.message || 'Login failed. Please check your credentials.');
+            }
+        } catch (error) {
+            console.error('Error during login:', error);
+            alert('Unable to connect to server.');
+        }
+    });
+
+    // 2. Handle Logout
+    logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('authToken');
+        usernameInput.value = '';
+        passwordInput.value = '';
+        showLogin();
+    });
+
+    // 3. Auto-login check (if token already saved)
+    const token = localStorage.getItem('authToken');
+    if (token) {
+        showDashboard();
+    }
+});
