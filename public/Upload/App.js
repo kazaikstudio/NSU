@@ -1,66 +1,100 @@
+import express from 'express';
 import pkg from 'pg';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
 const { Pool } = pkg;
+const app = express();
 
-// 1. Initialize PostgreSQL Connection Pool
+app.use(express.json());
+app.use(express.static('public')); // Serve your HTML, CSS, App.js from public folder
+
 const db = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
+    ssl: { rejectUnauthorized: false }
+});
+
+// Seed DB on start
+async function seedDefaultAdmin() {
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(255) UNIQUE NOT NULL,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                railway_id VARCHAR(255) UNIQUE,
+                is_admin BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+        `);
+
+        if (!process.env.DEFAULT_ADMIN_USER || !process.env.DEFAULT_ADMIN_PASS) {
+            console.warn('⚠️ DEFAULT_ADMIN_USER or DEFAULT_ADMIN_PASS not set.');
+            return;
+        }
+
+        const result = await db.query(
+            'SELECT COUNT(*) AS count FROM users WHERE username = $1',
+            [process.env.DEFAULT_ADMIN_USER]
+        );
+
+        if (parseInt(result.rows[0].count, 10) === 0) {
+            const hashedPassword = await bcrypt.hash(process.env.DEFAULT_ADMIN_PASS, 10);
+            await db.query(
+                'INSERT INTO users (username, email, password, is_admin) VALUES ($1, $2, $3, $4)',
+                [process.env.DEFAULT_ADMIN_USER, 'admin@noll.local', hashedPassword, true]
+            );
+            console.log('✅ Default admin user successfully seeded.');
+        }
+    } catch (error) {
+        console.error('❌ Database seed error:', error.message);
+    }
+}
+seedDefaultAdmin();
+
+// Login API Route
+app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body;
+
+    try {
+        const result = await db.query(
+            'SELECT * FROM users WHERE username = $1 OR email = $1',
+            [username]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(401).json({ message: 'Invalid username or password' });
+        }
+
+        const user = result.rows[0];
+        const match = await bcrypt.compare(password, user.password);
+
+        if (!match) {
+            return res.status(401).json({ message: 'Invalid username or password' });
+        }
+
+        // Generate JWT Token so client-side localStorage auto-login works
+        const secretKey = process.env.JWT_SECRET || 'fallback_secret_key';
+        const token = jwt.sign(
+            { id: user.id, username: user.username, isAdmin: user.is_admin },
+            secretKey,
+            { expiresIn: '1d' }
+        );
+
+        return res.json({ message: 'Login successful', token });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'Server error during login' });
     }
 });
 
-async function seedDefaultAdmin() {
-  try {
-    // 2. Create table and indexes
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255) UNIQUE NOT NULL,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        railway_id VARCHAR(255) UNIQUE,
-        is_admin BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-      CREATE INDEX IF NOT EXISTS idx_users_railway_id ON users(railway_id);
-    `);
-
-    // 3. Check for existing admin
-    const result = await db.query(
-      'SELECT COUNT(*) AS count FROM users WHERE username = $1',
-      [process.env.DEFAULT_ADMIN_USER]
-    );
-
-    const count = parseInt(result.rows[0].count, 10);
-    if (count === 0) {
-      const hashedPassword = await bcrypt.hash(process.env.DEFAULT_ADMIN_PASS, 10);
-      await db.query(
-        'INSERT INTO users (username, email, password, is_admin) VALUES ($1, $2, $3, $4)',
-        [process.env.DEFAULT_ADMIN_USER, 'admin@noll.local', hashedPassword, true]
-      );
-      console.log('✅ Default admin user successfully seeded.');
-    } else {
-      console.log('ℹ️ Admin user already exists. Skipping seed.');
-    }
-  } catch (error) {
-    console.error('❌ Database error:', error.message);
-    process.exit(1);
-  } finally {
-    await db.end();
-  }
-}
-
-seedDefaultAdmin();
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 
 
 document.addEventListener('DOMContentLoaded', () => {
-    // DOM Element Selectors
     const loginForm = document.getElementById('login-form');
     const loginContainer = document.getElementById('login-container');
     const dashboardContainer = document.getElementById('dashboard-container');
@@ -68,19 +102,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const usernameInput = document.getElementById('username');
     const passwordInput = document.getElementById('password');
 
-    // Helper: Toggle Dashboard Visibility
     function showDashboard() {
         loginContainer.style.display = 'none';
         dashboardContainer.classList.remove('dashboard-hidden');
     }
 
-    // Helper: Toggle Login Visibility
     function showLogin() {
         dashboardContainer.classList.add('dashboard-hidden');
         loginContainer.style.display = 'block';
     }
 
-    // 1. Handle Login Form Submission
+    // 1. Handle Login
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
@@ -90,22 +122,19 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('/api/login', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
             });
 
             const data = await response.json();
 
             if (response.ok) {
-                // Store auth token or user state if returned
                 if (data.token) {
                     localStorage.setItem('authToken', data.token);
                 }
                 showDashboard();
             } else {
-                alert(data.message || 'Login failed. Please check your credentials.');
+                alert(data.message || 'Login failed.');
             }
         } catch (error) {
             console.error('Error during login:', error);
@@ -121,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLogin();
     });
 
-    // 3. Auto-login check (if token already saved)
+    // 3. Auto-login check on page load
     const token = localStorage.getItem('authToken');
     if (token) {
         showDashboard();
