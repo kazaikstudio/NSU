@@ -417,17 +417,3 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🚀 Audio Management Web Interface Server actively parsing on node port:${PORT}`));
-
-import express from 'express';
-import bcrypt from 'bcrypt';
-import pkg from 'pg';
-
-const { Pool } = pkg;
-const app = express();
-app.use(express.json());
-
-const db = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
-
