@@ -431,36 +431,3 @@ const db = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-// Login Endpoint
-app.post('/api/login', async (req, res) => {
-    const { username, password } = req.body;
-
-    try {
-        // Query user by username or email
-        const result = await db.query(
-            'SELECT * FROM users WHERE username = $1 OR email = $1',
-            [username]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(401).json({ message: 'Invalid credentials' });
-        }
-
-        const user = result.rows[0];
-
-        // Compare password against bcrypt hash
-        const match = await bcrypt.compare(password, user.password);
-        if (!match) {
-            return res.status(401).json({ message: 'Invalid credentials' });
-        }
-
-        // Return successful response (and optionally a session/token)
-        return res.json({ 
-            message: 'Login successful',
-            user: { id: user.id, username: user.username, email: user.email, isAdmin: user.is_admin }
-        });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ message: 'Server error' });
-    }
-});
