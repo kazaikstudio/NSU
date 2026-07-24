@@ -252,14 +252,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
-                const response = await fetch('/api/login', {
+                const response = await fetch(`${API_URL}/api/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        username: usernameInput.value.trim(),
-                        password: passwordInput.value
-                    })
-                });
+                    body: JSON.stringify({ username, password })
+                    });
 
                 let data = {};
                 try { data = await response.json(); } catch (jsonErr) {}
