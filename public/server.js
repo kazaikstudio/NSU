@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
-import cors from 'cors';
 import pkg from 'pg';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -10,9 +9,13 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
+// Fix for __dirname in ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
+const API_URL = 'https://nsu-backend-production.up.railway.app';
+// ==========================================================================
+// 1. APPLICATION & UPLOAD DIRECTORY SETUP
+// ==========================================================================
 const app = express();
 
 // Ensure 'uploads' directory exists
@@ -42,20 +45,17 @@ const upload = multer({ storage });
 // ==========================================================================
 // 2. MIDDLEWARE & HELMET CSP CONFIGURATION
 // ==========================================================================
-app.use(cors({
-    origin: process.env.FRONTEND_URL || 'https://nollstudios.org'
-}));
-
 app.use(
     helmet({
         contentSecurityPolicy: {
             directives: {
                 defaultSrc: ["'self'"],
                 scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
-                styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-                fontSrc: ["'self'", "https://fonts.gstatic.com"],
-                imgSrc: ["'self'", "data:", "blob:", "https://placehold.co"],
-                connectSrc: ["'self'", "https://nollstudios.org"],
+                scriptSrcElem: ["'self'", "https://cdn.jsdelivr.net"],
+                styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
+                fontSrc: ["'self'", "https://fonts.gstatic.com", "https://unpkg.com"],
+                imgSrc: ["'self'", "data:", "blob:", "https://placehold.co", "https://via.placeholder.com"],
+                connectSrc: ["'self'", "https://cdn.jsdelivr.net"],
                 mediaSrc: ["'self'", "data:", "blob:"]
             },
         },
@@ -64,8 +64,7 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-const cors = require('cors');
+import cors from 'cors';
 app.use(cors());
 // Serve static files
 app.use(express.static('public'));
