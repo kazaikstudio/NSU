@@ -8,7 +8,14 @@ let touchEndY = 0;
 let isSeeking = false;
 
 // Centralized production backend endpoint setup
-const BACKEND_BASE = "http://localhost:3000";
+// Falls back to the deployed Railway backend URL when not running locally.
+const BACKEND_BASE = (() => {
+    const { hostname } = window.location;
+    const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
+    return isLocal
+        ? "http://localhost:3000"
+        : "https://nsu-backend-production.up.railway.app";
+})();
 
 async function updateDownloadStats() {
     try {
