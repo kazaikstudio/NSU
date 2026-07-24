@@ -9,99 +9,41 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { google } from 'googleapis';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// ==========================================================================
-// 1. STORAGE CONFIGURATION (MULTER MEMORY & GOOGLE DRIVE)
-// ==========================================================================
+// Ensure 'uploads' directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
-// Use Memory Storage for Multer to upload buffers straight to Google Drive
-const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 50 * 1024 * 1024 } // 50MB file size limit
+// Multer Storage Configuration
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+        let prefix = 'file';
+        if (file.fieldname === 'audio_file') prefix = 'track';
+        else if (file.fieldname === 'profile_image') prefix = 'profile';
+        else if (file.fieldname === 'background_image' || file.fieldname === 'cover_banner') prefix = 'banner';
+
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, `${prefix}-${uniqueSuffix}${path.extname(file.originalname)}`);
+    }
 });
 
-// Configure Google Drive API Client
-const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI || 'https://nsu-backend-production.up.railway.app/api/auth/callback'
-);
-
-if (process.env.GOOGLE_REFRESH_TOKEN) {
-    auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
-}
-
-const drive = google.drive({ version: 'v3', auth });
-
-/**
- * Uploads a file buffer directly to Google Drive and returns a public URL.
- */
-async function uploadToDrive(file, folderId = process.env.GOOGLE_DRIVE_FOLDER_ID) {
-    let prefix = 'file';
-    if (file.fieldname === 'audio_file') prefix = 'track';
-    else if (file.fieldname === 'profile_image') prefix = 'profile';
-    else if (file.fieldname === 'background_image' || file.fieldname === 'cover_banner') prefix = 'banner';
-
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const fileName = `${prefix}-${uniqueSuffix}${path.extname(file.originalname)}`;
-
-    const fileMetadata = {
-        name: fileName,
-        ...(folderId && { parents: [folderId] })
-    };
-
-    const media = {
-        mimeType: file.mimetype,
-        body: fs.ReadStream.from(file.buffer)
-    };
-
-    const response = await drive.files.create({
-        requestBody: fileMetadata,
-        media: media,
-        fields: 'id, webViewLink, webContentLink'
-    });
-
-    const fileId = response.data.id;
-
-    // Set file permission to public read
-    await drive.permissions.create({
-        fileId: fileId,
-        requestBody: {
-            role: 'reader',
-            type: 'anyone'
-        }
-    });
-
-    // Directly viewable/downloadable URL format
-    return `https://drive.google.com/uc?export=view&id=${fileId}`;
-}
+const upload = multer({ storage });
 
 // ==========================================================================
 // 2. MIDDLEWARE & HELMET CSP CONFIGURATION
 // ==========================================================================
-
-const allowedOrigins = [
-    'https://nollstudios.org',
-    'https://noll.up.railway.app',
-    'http://localhost:5173',
-    'http://localhost:3000'
-];
-
 app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error('CORS Not Allowed'));
-        }
-    },
-    credentials: true
+    origin: process.env.FRONTEND_URL || 'https://nollstudios.org'
 }));
 
 app.use(
@@ -112,9 +54,9 @@ app.use(
                 scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
                 styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
                 fontSrc: ["'self'", "https://fonts.gstatic.com"],
-                imgSrc: ["'self'", "data:", "blob:", "https://placehold.co", "https://drive.google.com", "https://*.googleusercontent.com"],
-                connectSrc: ["'self'", "https://nollstudios.org", "https://noll.up.railway.app"],
-                mediaSrc: ["'self'", "data:", "blob:", "https://drive.google.com"]
+                imgSrc: ["'self'", "data:", "blob:", "https://placehold.co"],
+                connectSrc: ["'self'", "https://nollstudios.org"],
+                mediaSrc: ["'self'", "data:", "blob:"]
             },
         },
     })
@@ -122,7 +64,12 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+const cors = require('cors');
+app.use(cors());
+// Serve static files
 app.use(express.static('public'));
+app.use('/uploads', express.static(uploadsDir));
 
 // Authentication Middleware
 function authenticateToken(req, res, next) {
@@ -199,6 +146,12 @@ async function initDatabase() {
             );
         `);
 
+        await db.query(`
+            ALTER TABLE artists 
+            ADD COLUMN IF NOT EXISTS profile_image_url VARCHAR(500),
+            ADD COLUMN IF NOT EXISTS background_image_url VARCHAR(500);
+        `);
+
         console.log('✅ Database schema verified.');
 
         if (process.env.DEFAULT_ADMIN_USER && process.env.DEFAULT_ADMIN_PASS) {
@@ -224,7 +177,7 @@ async function initDatabase() {
 initDatabase();
 
 // ==========================================================================
-// 4. AUTHENTICATION & OAUTH ROUTES
+// 4. AUTHENTICATION ROUTES
 // ==========================================================================
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
@@ -264,23 +217,6 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// Callback helper to exchange auth code for tokens when setting up Google Drive
-app.get('/api/auth/callback', async (req, res) => {
-    const { code } = req.query;
-    if (!code) return res.status(400).send('No authorization code provided');
-
-    try {
-        const { tokens } = await auth.getToken(code);
-        return res.json({
-            message: 'Save this refresh_token to your .env file as GOOGLE_REFRESH_TOKEN',
-            refresh_token: tokens.refresh_token
-        });
-    } catch (err) {
-        console.error('OAuth Callback Error:', err);
-        return res.status(500).send('Failed to exchange code for tokens');
-    }
-});
-
 // ==========================================================================
 // 5. NOLL ARTISTS API ROUTES
 // ==========================================================================
@@ -313,6 +249,7 @@ app.post('/api/artists', upload.single('profile_image'), async (req, res) => {
     const { name, email, genre } = req.body;
 
     if (!name || !email || !genre) {
+        if (req.file) fs.unlinkSync(req.file.path);
         return res.status(400).json({ message: 'Name, email, and genre are required.' });
     }
 
@@ -321,7 +258,7 @@ app.post('/api/artists', upload.single('profile_image'), async (req, res) => {
         const nextId = (maxResult.rows[0].max_id || 0) + 1;
         const artistId = `#NOLL-${String(nextId).padStart(3, '0')}`;
 
-        const profileImageUrl = req.file ? await uploadToDrive(req.file) : null;
+        const profileImageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
         const insertQuery = `
             INSERT INTO artists (artist_id, name, email, genre, profile_image_url)
@@ -336,7 +273,20 @@ app.post('/api/artists', upload.single('profile_image'), async (req, res) => {
         });
     } catch (err) {
         console.error('Create artist error:', err);
-        return res.status(500).json({ message: 'Database/Storage error saving artist' });
+
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+
+        if (err.code === '23505') {
+            if (err.constraint === 'artists_email_key' || err.detail?.includes('email')) {
+                return res.status(400).json({ message: 'An artist with this email already exists.' });
+            }
+            if (err.constraint === 'artists_artist_id_key' || err.detail?.includes('artist_id')) {
+                return res.status(400).json({ message: 'Artist ID collision. Please try submitting again.' });
+            }
+        }
+        return res.status(500).json({ message: 'Database error saving artist' });
     }
 });
 
@@ -355,14 +305,12 @@ app.put('/api/artists/:id', upload.fields([
         const params = [name, email, genre];
 
         if (profileFile) {
-            const profileUrl = await uploadToDrive(profileFile);
-            params.push(profileUrl);
+            params.push(`/uploads/${profileFile.filename}`);
             query += `, profile_image_url = $${params.length}`;
         }
 
         if (backgroundFile) {
-            const backgroundUrl = await uploadToDrive(backgroundFile);
-            params.push(backgroundUrl);
+            params.push(`/uploads/${backgroundFile.filename}`);
             query += `, background_image_url = $${params.length}`;
         }
 
@@ -432,14 +380,14 @@ app.post('/api/artists/:id/tracks', upload.fields([
 
     try {
         if (bannerFile) {
-            const bannerUrl = await uploadToDrive(bannerFile);
+            const bannerUrl = `/uploads/${bannerFile.filename}`;
             await db.query(
                 'UPDATE artists SET background_image_url = $1 WHERE id = $2',
                 [bannerUrl, id]
             );
         }
 
-        const fileUrl = await uploadToDrive(audioFile);
+        const fileUrl = `/uploads/${audioFile.filename}`;
         const trackTitle = title || audioFile.originalname;
 
         const insertQuery = `
@@ -487,8 +435,8 @@ app.delete('/api/history', authenticateToken, async (req, res) => {
 // 7. SERVER INITIALIZATION & SHUTDOWN
 // ==========================================================================
 const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server listening on port ${PORT}`);
+const server = app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
 
 process.on('SIGINT', () => {
