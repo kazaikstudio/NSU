@@ -1,22 +1,22 @@
 {
-  "name": "noll-studio-backend",
+  "name": "public",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
+  "description": "",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "bcrypt": "^6.0.0",
-    "buffer": "^6.0.3",
-    "chart.js": "^4.5.1",
-    "dotenv": "^16.6.1",
-    "express": "^4.22.2",
-    "googleapis": "^137.1.0",
-    "helmet": "^8.3.0",
-    "jsonwebtoken": "^9.0.3",
-    "multer": "^1.4.5-lts.1",
-    "node-fetch": "^3.3.2",
-    "pg": "^8.22.0"
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "googleapis": "^173.0.0",
+    "multer": "^2.2.0",
+    "node-fetch": "^3.3.2"
   }
 }
