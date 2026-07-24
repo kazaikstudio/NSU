@@ -95,6 +95,19 @@ async function getFolderId(drive, folderName, parentId = null) {
 }
 
 // --- API ENDPOINTS ---
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body || {};
+
+    if (
+        username === process.env.DEFAULT_ADMIN_USER &&
+        password === process.env.DEFAULT_ADMIN_PASS
+    ) {
+        return res.json({ success: true, token: "admin" });
+    }
+
+    res.status(401).json({ success: false, error: "Invalid credentials" });
+});
+
 app.get('/api/media/drive', async (req, res) => {
     try {
         const drive = google.drive({ version: 'v3', auth: oauth2Client });
