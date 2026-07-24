@@ -252,12 +252,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
-                const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://nsu-backend-production.up.railway.app';
-
-                const response = await fetch(`${API_BASE_URL}/api/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(credentials),
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: usernameInput.value.trim(),
+                        password: passwordInput.value
+                    })
                 });
 
                 let data = {};
