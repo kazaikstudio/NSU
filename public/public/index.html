@@ -3,17 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload-Files</title>
+    <title>Noll Music Ug</title>
+    
+    <!-- Icons & Styling -->
+    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
     <link rel="stylesheet" href="App.css">
+    
+    <!-- Scripts (Loaded in order via CDN/defer) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="App.js" defer></script>
 </head>
 <body>
 
     <!-- 1. LOGIN WINDOW CONTAINER -->
-    <div id="login-container" class="auth-box">
+   <div id="login-container" class="auth-box">
         <h2>Welcome Back</h2>
         <p>Please login to access your dashboard</p>
         
+        <!-- Styled Error Message -->
+        <div id="login-error" class="login-error hidden"></div>
         <form id="login-form">
             <div class="input-group">
                 <label for="username">Username or Email</label>
@@ -29,45 +37,450 @@
         </form>
     </div>
 
-    <!-- 2. DASHBOARD VIEW CONTAINER (Initially hidden via CSS) -->
-    <div id="dashboard-container" class="dashboard-layout dashboard-hidden">
-        <!-- Sidebar Navigation -->
-        <aside class="sidebar">
-            <div class="logo"> fileVault </div>
-            <nav>
-                <ul>
-                    <li><a href="#" class="active">My Files</a></li>
-                    <li><a href="#">Shared</a></li>
-                    <li><a href="#">Settings</a></li>
-                </ul>
-            </nav>
-            <button id="logout-btn" class="btn-secondary">Log Out</button>
-        </aside>
+    <!-- 2. DASHBOARD VIEW CONTAINER -->
+    <div id="dashboard-container" class="dashboard-layout">
+        <!-- SIDEBAR -->
+        <aside class="sidebar" id="sidebar">
+            <header>
+                <div class="image-text">
+                    <span class="image">
+                        <div class="logo-box">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 18V5l12-2v13"></path>
+                                <circle cx="6" cy="18" r="3"></circle>
+                                <circle cx="18" cy="16" r="3"></circle>
+                            </svg>
+                        </div>
+                    </span>
+                    <div class="text logo-text">
+                        <span class="name">Noll Music</span>
+                        <span class="profession">Uganda</span>
+                    </div>
+                </div>
 
-        <!-- Main Dashboard Content -->
-        <main class="main-content">
-            <header class="top-nav">
-                <h1>My Files</h1>
-                <div class="user-profile">User Account</div>
+                <i class='bx bx-chevron-right toggle' id="sidebar-toggle"></i>
             </header>
 
-            <!-- File Upload and Content Section -->
-            <section class="content-area">
-                <div class="upload-zone" id="drop-zone">
-                    <p>Drag and drop your files here, or click to browse</p>
-                    <input type="file" id="file-input" multiple style="display: none;">
-                    <button class="btn-upload" id="choose-files-btn">Choose Files</button>
-                </div>
+            <div class="menu-bar">
+                <div class="menu">
 
-                <!-- Placeholder for Uploaded Files List -->
-                <div class="file-list-container">
-                    <h3>Recent Uploads</h3>
-                    <ul id="file-list" class="file-list">
-                        <!-- JavaScript will dynamically inject files here -->
+                    <li class="search-box">
+                        <i class='bx bx-search icon'></i>
+                        <input type="text" placeholder="Search...">
+                    </li>
+
+                    <ul class="menu-links">
+                        <li class="nav-link">
+                            <a href="#" class="active" data-page="dashboard">
+                                <i class='bx bx-folder icon'></i>
+                                <span class="text nav-text">Dashboard</span>
+                            </a>
+                        </li>
+
+                        <li class="nav-link">
+                            <a href="#" data-page="artists">
+                                <i class='bx bx-share-alt icon'></i>
+                                <span class="text nav-text">Noll Artists</span>
+                            </a>
+                        </li>
+
+                        <li class="nav-link">
+                            <a href="#" data-page="notifications">
+                                <i class='bx bx-bell icon'></i>
+                                <span class="text nav-text">Histories</span>
+                            </a>
+                        </li>
+
+                        <li class="nav-link">
+                            <a href="#" data-page="storage">
+                                <i class='bx bx-pie-chart-alt-2 icon'></i>
+                                <span class="text nav-text">Storage</span>
+                            </a>
+                        </li>
+
+                        <li class="nav-link">
+                            <a href="#" data-page="settings">
+                                <i class='bx bx-cog icon'></i>
+                                <span class="text nav-text">Settings</span>
+                            </a>
+                        </li>
                     </ul>
                 </div>
-            </section>
+
+                <div class="bottom-content">
+                    <li>
+                        <a href="#" id="logout-btn">
+                            <i class='bx bx-log-out icon'></i>
+                            <span class="text nav-text">Logout</span>
+                        </a>
+                    </li>
+
+                    <li class="mode">
+                        <div class="sun-moon">
+                            <i class='bx bx-moon icon moon'></i>
+                            <i class='bx bx-sun icon sun'></i>
+                        </div>
+                        <span class="mode-text text">Dark Mode</span>
+
+                        <div class="toggle-switch" id="theme-toggle">
+                            <span class="switch"></span>
+                        </div>
+                    </li>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- 1. DASHBOARD PAGE -->
+            <div id="page-dashboard" class="page-view">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="card-icon artist-icon">
+                            <i class='bx bx-user-voice'></i>
+                        </div>
+                        <div class="card-details">
+                            <span class="card-title">Total Artists</span>
+                            <h3 class="card-value" id="total-artists-count">00</h3>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="card-icon file-icon">
+                            <i class='bx bx-cloud-upload'></i>
+                        </div>
+                        <div class="card-details">
+                            <span class="card-title">Uploaded Files</span>
+                            <h3 class="card-value" id="total-files-count">00</h3>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="card-icon category-icon">
+                            <i class='bx bx-category-alt'></i>
+                        </div>
+                        <div class="card-details">
+                            <span class="card-title">Music Categories</span>
+                            <h3 class="card-value" id="total-categories-count">00</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <section class="content-area">
+                    <div class="analytics-grid">
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3>Most DownLoaded Music</h3>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="downloadedChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="chart-card">
+                            <div class="chart-header">
+                                <h3>Most Played Music</h3>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="playedChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- 2. NOLL ARTISTS PAGE -->
+            <div id="page-artists" class="page-view hidden-page">
+                <header class="top-bar">
+                    <div class="top-bar-title">
+                        <h1>Noll Artists</h1>
+                        <p>Manage registered musicians, view analytics, and onboard new talent.</p>
+                    </div>
+
+                    <div class="top-bar-actions">
+                        <div class="search-input-wrapper">
+                            <i class='bx bx-search'></i>
+                            <input type="text" id="artist-search" placeholder="Search artists...">
+                        </div>
+
+                        <button class="btn-primary-sm" type="button" id="btn-open-add-artist">
+                            <i class='bx bx-user-plus'></i> Add New Artist
+                        </button>
+                    </div>
+                </header>
+
+                <section class="content-area">
+                    <div class="artist-list-card">
+                        <div class="card-header">
+                            <h3>Registered Noll Artists</h3>
+                            <span class="badge-active" id="artists-count-badge">0 Total</span>
+                        </div>
+
+                        <div class="artist-table-wrapper">
+                            <table class="artist-table">
+                                <thead>
+                                    <tr>
+                                        <th>Profile</th>
+                                        <th>Artist ID</th>
+                                        <th>Name / Stage Name</th>
+                                        <th>Email Address</th>
+                                        <th>Primary Genre</th>
+                                        <th>Joined Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="artists-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ADD ARTIST MODAL FORM -->
+                <div id="add-artist-modal" class="modal-overlay hidden-panel">
+                    <div class="modal-card">
+                        <div class="modal-header">
+                            <h2>Add New Noll Artist</h2>
+                            <button class="close-modal-btn" type="button" id="btn-close-modal-x"><i class='bx bx-x'></i></button>
+                        </div>
+                        <form id="add-artist-form">
+                            <!-- Profile Picture Upload (At the start) -->
+                            <div class="input-group profile-upload-group">
+                                <label>Profile Picture</label>
+                                <div class="avatar-upload-wrapper">
+                                    <div class="avatar-preview">
+                                        <img id="artist-avatar-preview" src="https://via.placeholder.com/100" alt="Artist Avatar Preview">
+                                    </div>
+                                    <div class="avatar-edit-btn">
+                                        <input type="file" id="artist-photo" accept="image/*" class="file-input-hidden">
+                                        <label for="artist-photo" class="btn-upload-label">
+                                            <i class='bx bx-camera'></i> Choose Photo
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Artist Name -->
+                            <div class="input-group">
+                                <label for="artist-name">Stage / Artist Name</label>
+                                <input type="text" id="artist-name" required placeholder="e.g. nsu">
+                            </div>
+
+                            <!-- Email Address -->
+                            <div class="input-group">
+                                <label for="artist-email">Email Address</label>
+                                <input type="email" id="artist-email" required placeholder="e.g. nsu@nollmusic.ug">
+                            </div>
+
+                            <!-- Primary Genre -->
+                            <div class="input-group">
+                                <label for="artist-genre">Primary Genre</label>
+                                <input type="text" id="artist-genre" required placeholder="e.g. Dancehall / Afrobeats">
+                            </div>
+
+                            <!-- Modal Actions -->
+                            <div class="modal-actions">
+                                <button type="button" class="btn-secondary" id="btn-close-modal-cancel">Cancel</button>
+                                <button type="submit" class="btn-primary">Save Artist Account</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. NOTIFICATIONS PAGE -->
+            <div id="page-notifications" class="page-view hidden-page">
+                <header class="top-bar">
+                    <div class="top-bar-title">
+                        <h1>Activity & Change History</h1>
+                        <p>Track all system logs, updates, and artist account changes</p>
+                    </div>
+
+                    <div class="top-bar-actions">
+                        <div class="stat-badge">
+                            <i class='bx bx-history'></i>
+                            <span>Total Logs: <strong id="top-artist-count">0</strong></span>
+                        </div>
+
+                        <!-- Clear History Button -->
+                        <button class="btn-danger-sm" type="button" id="btn-clear-history">
+                            <i class='bx bx-trash'></i> Clear History
+                        </button>
+
+                        <button class="btn-primary-sm" type="button" id="btn-toggle-artist-list">
+                            <i class='bx bx-list-ul'></i> View All Logs
+                        </button>
+                    </div>
+                </header>
+
+                <section class="content-area">
+                    <div id="artist-list-container" class="artist-list-card hidden-panel">
+                        <div class="card-header">
+                            <h3>System Audit & Account Change Logs</h3>
+                            <span class="badge-active">Live Activity</span>
+                        </div>
+
+                        <div class="artist-table-wrapper">
+                            <table class="artist-table">
+                                <thead>
+                                    <tr>
+                                        <th>Artist ID</th>
+                                        <th>Artist Name</th>
+                                        <th>Action / Change Details</th>
+                                        <th>Date & Time</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="artist-accounts-tbody">
+                                    <!-- History rows injected dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <!-- Artist Detail & Upload Page -->
+            <div id="page-artist-detail" class="page-view hidden-page">
+                <div class="page-header">
+                    <button id="btn-back-to-artists" class="action-btn" type="button">
+                        <i class='bx bx-left-arrow-alt'></i> Back to Artists
+                    </button>
+                    <h2 id="edit-artist-title">Artist Management</h2>
+                </div>
+
+                <!-- Profile Header & Edit Form -->
+                <div class="card profile-edit-card">
+                    <h3>Edit Profile</h3>
+                    <form id="edit-artist-form" enctype="multipart/form-data">
+                        <input type="hidden" id="edit-artist-id">
+
+                        <!-- 1. Background / Cover Banner Upload Zone -->
+                        <div class="header-upload-card">
+                            <!-- Banner Section -->
+                            <div class="banner-upload-wrapper">
+                               <img id="edit-banner-preview" src="https://placehold.co/800x250?text=Upload+Cover+Banner" alt="Banner Preview">
+                                <label for="edit-artist-banner" class="banner-upload-btn" title="Change Banner">
+                                    <i class='bx bx-camera'></i> Change Banner
+                                </label>
+                                <input type="file" id="edit-artist-banner" name="background_image" accept="image/*" hidden>
+                            </div>
+
+                            <!-- Overlapping Profile Avatar Section -->
+                            <div class="avatar-overlap-wrapper">
+                                <div class="avatar-container">
+                                    <img id="edit-avatar-preview" src="https://via.placeholder.com/100" class="large-avatar" alt="Avatar">
+                                    <label for="edit-artist-photo" class="avatar-upload-badge" title="Change Profile Picture">
+                                        <i class='bx bx-camera'></i>
+                                    </label>
+                                    <input type="file" id="edit-artist-photo" name="profile_image" accept="image/*" hidden>
+                                </div>
+
+                                <div class="header-upload-wrapper">
+                                    <!-- Left side: Artist Details -->
+                                    <div class="header-upload-info">
+                                        <h4 class="upload-title">Artist Name</h4>
+                                        <p class="file-hint">artist@Gmail.com</p>
+                                    </div>
+
+                                    <!-- Right side: File Count Badge -->
+                                    <div id="file-count-container" class="file-counter-card">
+                                        Total files: <span id="file-count" class="count-badge">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Fields -->
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Artist Name</label>
+                                <input type="text" id="edit-artist-name" name="name" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" id="edit-artist-email" name="email" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Genre</label>
+                                <input type="text" id="edit-artist-genre" name="genre" required>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="primary-btn">Save Profile Changes</button>
+                    </form>
+                </div>
+
+                <!-- Music Upload Section -->
+                <div class="card music-upload-card">
+                    <h3>Upload New Track / Release</h3>
+                    <form id="upload-track-form" enctype="multipart/form-data">
+                        <!-- Track Title Input -->
+                        <div class="form-group">
+                            <label for="track-title">Track Title</label>
+                            <input type="text" id="track-title" name="title" placeholder="Enter track title" required />
+                        </div>
+
+                        <!-- Track File Input -->
+                        <div class="form-group">
+                            <label for="track-file">Audio File</label>
+                            <div class="file-upload-wrapper">
+                            <input type="file" id="track-file" name="audio_file" accept="audio/*" required />
+                            <label for="track-file" class="file-upload-label">
+                                <i class='bx bx-music file-icon'></i>
+                                <span class="file-text">Choose audio file or drag & drop</span>
+                                <span class="file-subtext">MP3, WAV, AAC Up to GB</span>
+                            </label>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" id="btn-upload-track" class="primary-btn">
+                            <i class='bx bx-cloud-upload'></i> Upload Track
+                        </button>
+
+                        <!-- Upload Progress Bar Container (Hidden by default) -->
+                        <div id="upload-progress-container" class="progress-wrapper hidden">
+                            <div class="progress-info">
+                            <span id="progress-status-text">Uploading...</span>
+                            <span id="progress-percentage">0%</span>
+                            </div>
+                            <div class="progress-bar-track">
+                            <div id="upload-progress-bar" class="progress-bar-fill" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Artist Uploaded Music List -->
+                <div class="card tracks-list-card">
+                    <h3>Uploaded Tracks</h3>
+                    <ul id="artist-tracks-list" class="tracks-list">
+                        <!-- Dynamically populated -->
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 4. STORAGE PAGE -->
+            <div id="page-storage" class="page-view hidden-page">
+                <header class="top-nav">
+                    <h1>Storage Details</h1>
+                </header>
+                <section class="content-area">
+                    <p>Storage breakdown and uploaded media usage stats.</p>
+                </section>
+            </div>
+
+            <!-- 5. SETTINGS PAGE -->
+            <div id="page-settings" class="page-view hidden-page">
+                <header class="top-nav">
+                    <h1>Account & App Settings</h1>
+                </header>
+                <section class="content-area">
+                    <p>Configure user preferences and application defaults.</p>
+                </section>
+            </div>
         </main>
+        <div id="toast-container" class="toast-container"></div>
     </div>
 
 </body>

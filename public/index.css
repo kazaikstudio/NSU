@@ -516,6 +516,10 @@
     gap: 7px;
     flex-wrap: wrap;
     justify-content: flex-start;
+    background-color: #00000010;
+    padding: 10px;
+    border-radius: 50px;
+    border: 1px solid #ffffff1a;
 }
 
 .genre-btn {
@@ -526,7 +530,7 @@
     font-size: 14px;
     font-weight: 600;
     letter-spacing: 0.5px;
-    border-radius: 7px;
+    border-radius: 50px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     backdrop-filter: blur(4px);
@@ -1352,12 +1356,7 @@ section.sidebar-right {
 /* ==========================================================================
    AUTO-SCALING FAVORITES ITEM CONTAINER
    ========================================================================== */
-#media-container-Favorites .waveform-container,
-#media-container-Favorites .waveform,
-#media-container-Favorites .row-play-btn,
-#media-container-Favorites .dcn {
-    display: none !important;
-}
+
 
 #media-container-Favorites {
     width: 100%;

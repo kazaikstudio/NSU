@@ -5,17 +5,16 @@ let currentTrackId = null;
 let isLooping = false;
 let touchStartY = 0;
 let touchEndY = 0;
-let isSeeking = false; // Track seeking state to prevent layout flickering
+let isSeeking = false;
 
 // Centralized production backend endpoint setup
-const BACKEND_BASE = "https://nsu-backend-production.up.railway.app";
+const BACKEND_BASE = "http://localhost:3000";
 
 async function updateDownloadStats() {
     try {
         const response = await fetch(`${BACKEND_BASE}/api/stats/downloads`);
         if (!response.ok) return;
         const data = await response.json(); // { counts: { id: num } }
-
 
         document.querySelectorAll('.track-dl-count').forEach(el => {
             const trackId = el.id.replace('count-', '');
@@ -32,10 +31,27 @@ async function updateDownloadStats() {
     }
 }
 
-function loadTrack(track) {
-    if (!track) {
-        console.error("loadTrack error: No track data provided.");
+async function loadTrack(trackOrUrl) {
+    if (!trackOrUrl) {
+        console.error("loadTrack error: No track data or URL provided.");
         return;
+    }
+
+    let track = null;
+
+    if (typeof trackOrUrl === 'string') {
+        try {
+            const response = await fetch(trackOrUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch track: ${response.status}`);
+            }
+            track = await response.json();
+        } catch (error) {
+            console.error("Error fetching track metadata:", error);
+            return;
+        }
+    } else if (typeof trackOrUrl === 'object') {
+        track = trackOrUrl;
     }
 
     const playerTitle = document.getElementById('player-title');
@@ -45,65 +61,10 @@ function loadTrack(track) {
 
     if (playerTitle) playerTitle.innerText = track.title || 'Unknown Title';
     if (playerArtist) playerArtist.innerText = track.artist || 'Noll Music';
-    
+
     if (playerGenre) {
         const source = track.source || 'Library';
         const genre = track.genre || 'All Tracks';
-        playerGenre.innerText = `${source} › ${genre}`;
-    }
-
-    if (playerArtwork && track.artwork) {
-        playerArtwork.src = track.artwork;
-    }
-}
-
-
-async function loadTrack(trackOrUrl) {
-    if (!trackOrUrl) {
-        console.error("loadTrack error: No track data or URL provided.");
-        return;
-    }
-
-    let track = null;
-
-    // 1. DYNAMIC INPUT DETECTION
-    if (typeof trackOrUrl === 'string') {
-        // Input is a URL path -> Fetch the track data first
-        try {
-            const response = await fetch(trackOrUrl);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch track: ${response.status}`);
-            }
-            track = await response.json();
-        } catch (error) {
-            console.error("Error fetching track metadata:", error);
-            return; // Terminate execution if API call fails
-        }
-    } else if (typeof trackOrUrl === 'object') {
-        // Input is already a track data object -> Use it directly
-        track = trackOrUrl;
-    }
-
-    // 2. DOM ELEMENT SELECTORS
-    const playerTitle = document.getElementById('player-title');
-    const playerArtist = document.getElementById('player-artist');
-    const playerGenre = document.getElementById('player-genre');
-    const playerArtwork = document.getElementById('main-artwork-node');
-
-    // 3. SAFELY INJECT METADATA
-    if (playerTitle) {
-        playerTitle.innerText = track.title || 'Unknown Title';
-    }
-
-    if (playerArtist) {
-        playerArtist.innerText = track.artist || 'Noll Music';
-    }
-
-    if (playerGenre) {
-
-        const source = track.source || 'Library';
-        const genre = track.genre || 'All Tracks';
-
         playerGenre.innerText = `${source} › ${genre}`;
     }
 
@@ -113,14 +74,12 @@ async function loadTrack(trackOrUrl) {
     }
 }
 
-
 function switchView(event, targetViewId) {
-    if (event) event.preventDefault(); // Stop standard native anchor routing
+    if (event) event.preventDefault();
 
     const views = ['home-view', 'music-view'];
 
     views.forEach(viewId => {
-        // Using querySelector instead of getElementById to bypass production DOM rendering glitches
         const viewElement = document.querySelector(`#${viewId}`);
         if (viewElement) {
             if (viewId === targetViewId) {
@@ -133,15 +92,12 @@ function switchView(event, targetViewId) {
         }
     });
 
-    // --- NAVBAR VISIBILITY TOGGLE ---
-    // Change '.navbar' to match your specific HTML navbar class or ID (e.g., '#main-nav')
     const navbar = document.querySelector('.navbar') || document.querySelector('nav') || document.getElementById('navbar');
     
     if (navbar) {
         if (targetViewId === 'music-view') {
             navbar.style.setProperty('display', 'none', 'important');
         } else {
-            // Removes the 'none' override to let your default CSS display style take back control
             navbar.style.removeProperty('display'); 
         }
     }
@@ -181,7 +137,7 @@ function scrollToSearch(event) {
 }
 
 function togglePopupMenu(event) {
-    event.stopPropagation(); // Stops click from triggering window listener instantly
+    event.stopPropagation();
     const mobileMenu = document.getElementById("myMobileMenu");
     if (mobileMenu) {
         mobileMenu.classList.toggle("active");
@@ -261,13 +217,13 @@ function generateWaveBarsHtml(totalBars) {
     return waveBarsHtml;
 }
 
-
 const barCountCache = new WeakMap();
 
 function renderResponsiveWaveform(container) {
     const target = typeof container === 'string' ? document.querySelector(container) : container;
     if (!target) return;
 
+    // Skip re-rendering if container is hidden in DOM (width 0) to avoid blinking
     const containerWidth = target.clientWidth;
     if (containerWidth === 0) return;
 
@@ -287,17 +243,14 @@ function renderResponsiveWaveform(container) {
     }
 
     const totalBars = getResponsiveBarCount(containerWidth);
-    
     const previousBarCount = barCountCache.get(target);
     const isAlreadyRendered = previousBarCount === totalBars && target.children.length > 0;
 
-    // Only update innerHTML if bar count changed OR container is empty
     if (!isAlreadyRendered) {
         target.innerHTML = generateWaveBarsHtml(totalBars);
         barCountCache.set(target, totalBars);
     }
 
-    // Smooth progress update for existing bars without re-rendering HTML
     const rowBars = target.querySelectorAll('.wave-bar');
     if (rowBars.length > 0) {
         const rowCutoff = Math.floor(progressFraction * rowBars.length);
@@ -307,10 +260,6 @@ function renderResponsiveWaveform(container) {
     }
 }
 
-
-/* ==========================================================================
-   DEBOUNCED RESIZE & INITIAL LOAD LISTENERS
-   ========================================================================== */
 let resizeTimeout;
 window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
@@ -327,24 +276,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-
 function createFileItem(id, name, isUploading = false, thumbnail = '', onClickStr = '', showLabel = true) {
     const thumbUrl = getProcessedThumbnail(thumbnail);
     const fallbackImage = 'Pic/noll.jpg';
 
     const thumbContent = thumbUrl
-        ? `<img src="${thumbUrl}" onerror="this.src='${fallbackImage}';"; class="thumb-img">`
+        ? `<img src="${thumbUrl}" onerror="this.src='${fallbackImage}';" class="thumb-img">`
         : `<img src="${fallbackImage}" class="thumb-img">`;
 
     const labelHtml = showLabel ? '<span class="dl-text"> Download</span>' : '';
-    const escapedNameForInlineJS = name.replace(/'/g, "\\\\\'");
+    const escapedNameForInlineJS = name.replace(/'/g, "\\'");
 
     const approximateWidth = window.innerWidth * 0.35;
     const totalBars = getResponsiveBarCount(approximateWidth);
     const waveBarsHtml = generateWaveBarsHtml(totalBars);
 
     return `
-        <div class="file-row-item" id="${id}" onclick="${onClickStr}">
+        <div class="file-row-item" id="${id}" data-track-id="${id}" onclick="${onClickStr}">
             <div class="file-thumb">${thumbContent}</div>
 
             <div class="file-info-progress">
@@ -359,14 +307,13 @@ function createFileItem(id, name, isUploading = false, thumbnail = '', onClickSt
                 </svg>
             </button>
 
-            <!-- Matches target hooks with responsive structural tag classes -->
             <div class="waveform waveform-container">
                 ${waveBarsHtml}
             </div>
 
             <div class="dcn">
                 <div class="download-Container">
-                <span class="time-stamp elapsed">0:00</span>
+                    <span class="time-stamp elapsed">0:00</span>
                     <button class="download-btn"
                             onclick="event.stopPropagation(); handleDownload('${id}');"
                             title="Download">
@@ -387,31 +334,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const audioNode = document.getElementById('global-audio-node');
     
     if (audioNode) {
-        // Fires continuously as the audio plays
         audioNode.addEventListener('timeupdate', () => {
-            if (!audioNode.duration) return;
+            if (!audioNode.duration || !currentTrackId) return;
             
-            // 1. Calculate the current playback fraction (a decimal between 0 and 1)
             const progressFraction = audioNode.currentTime / audioNode.duration;
-            
-            // 2. Update the visual wave bars for the active track row
             updateWavebarsFill(progressFraction);
-            
-            // 3. Update the matching timestamp string inside the active track's row
-            let activeRow = document.getElementById(currentTrackId);
-            if (!activeRow && currentTrackId) {
-                activeRow = document.querySelector(`.file-row-item[id="${currentTrackId}"]`);
-            }
-            if (!activeRow) {
-                activeRow = document.querySelector('.file-row-item.active-row');
-            }
-            
-            if (activeRow) {
-                const timeLabel = activeRow.querySelector('.time-stamp.elapsed');
-                if (timeLabel) {
+
+            const activeRows = document.querySelectorAll(`.file-row-item[data-track-id="${currentTrackId}"], .file-row-item[id="${currentTrackId}"]`);
+            activeRows.forEach(row => {
+                const timeLabel = row.querySelector('.time-stamp.elapsed');
+                if (timeLabel && typeof formatTimeLayout === 'function') {
                     timeLabel.innerText = formatTimeLayout(audioNode.currentTime);
                 }
-            }
+            });
         });
     }
 });
@@ -421,60 +356,53 @@ function togglePlayPause() {
     const playBtns = document.querySelectorAll('.play-master-trigger, #master-play-trigger');
     if (!audio) return;
 
-    // SVG Paths
     const playPath = "M8 5v14l11-7z";
     const pausePath = "M6 19h4V5H6v14zm8-14v14h4V5h-4z";
 
-    // Find the active row using ID or the active class fallback
-    let activeRow = document.getElementById(currentTrackId);
-    if (!activeRow) {
-        activeRow = document.querySelector('.file-row-item.active-row');
-    }
+    const activeRows = document.querySelectorAll(
+        `.file-row-item[id="${currentTrackId}"], .file-row-item[data-track-id="${currentTrackId}"], .file-row-item.active-row`
+    );
 
     if (audio.paused) { 
         audio.play(); 
         
-        // Update master player controls
         if (typeof pauseSVG !== 'undefined') {
             playBtns.forEach(btn => { btn.innerHTML = pauseSVG; btn.title = "Pause"; });
         }
         
-        // Update the active track row icon to PAUSE shape
-        if (activeRow) {
-            const rowSvgPath = activeRow.querySelector('.row-icon-svg path');
+        activeRows.forEach(row => {
+            const rowSvgPath = row.querySelector('.row-icon-svg path');
             if (rowSvgPath) rowSvgPath.setAttribute('d', pausePath);
-        }
+        });
     } else { 
         audio.pause(); 
         
-        // Update master player controls
         if (typeof playSVG !== 'undefined') {
             playBtns.forEach(btn => { btn.innerHTML = playSVG; btn.title = "Play"; });
         }
         
-        // Update the active track row icon back to PLAY shape
-        if (activeRow) {
-            const rowSvgPath = activeRow.querySelector('.row-icon-svg path');
+        activeRows.forEach(row => {
+            const rowSvgPath = row.querySelector('.row-icon-svg path');
             if (rowSvgPath) rowSvgPath.setAttribute('d', playPath);
-        }
+        });
     }
 }
+
 function handleRowPlayPause(rowElement, trackId, trackTitle) {
     const audio = document.getElementById('global-audio-node');
 
-    if (currentTrackId === trackId && audio) {
+    if (String(currentTrackId) === String(trackId) && audio) {
         togglePlayPause();
         return;
     }
 
-    currentTrackId = trackId;
+    currentTrackId = String(trackId);
     selectRow(rowElement, trackId, trackTitle);
 }
 
 const updateWavebarsFill = (percentage) => {
     if (!currentTrackId) return;
 
-    // HELPER: Updates the 'played' class across a collection of wave bars
     const fillBars = (bars) => {
         if (!bars || bars.length === 0) return;
         const cutoff = Math.floor(percentage * bars.length);
@@ -483,7 +411,6 @@ const updateWavebarsFill = (percentage) => {
         });
     };
 
-    // 1. UPDATE ALL ACTIVE TRACK ROWS (Global + Other Genres)
     const activeRows = document.querySelectorAll(
         `.file-row-item[id="${currentTrackId}"], .file-row-item[data-track-id="${currentTrackId}"], .file-row-item.active-row`
     );
@@ -493,7 +420,6 @@ const updateWavebarsFill = (percentage) => {
         fillBars(rowBars);
     });
 
-    // 2. UPDATE THE MASTER PLAYER WAVEFORM
     const masterWaveform = document.getElementById('waveform');
     if (masterWaveform) {
         const masterBars = masterWaveform.querySelectorAll('.wave-bar');
@@ -543,7 +469,7 @@ async function fetchAndRenderMusic() {
             }
         });
 
-        renderFavorites();
+        if (typeof renderFavorites === 'function') renderFavorites();
         switchGenreView('Global');
     } catch (e) { 
         console.error("Failed to parse or render music payload:", e); 
@@ -552,10 +478,12 @@ async function fetchAndRenderMusic() {
 
 function highlightPlayingTrack() {
     document.querySelectorAll('.file-row-item').forEach(row => row.classList.remove('active-row'));
-    const activeRow = document.getElementById(currentTrackId);
-    if (activeRow) {
-        activeRow.classList.add('active-row');
-    }
+    if (!currentTrackId) return;
+
+    const activeRows = document.querySelectorAll(
+        `.file-row-item[id="${currentTrackId}"], .file-row-item[data-track-id="${currentTrackId}"]`
+    );
+    activeRows.forEach(row => row.classList.add('active-row'));
 }
 
 function switchGenreView(genreName) {
@@ -581,7 +509,6 @@ function switchGenreView(genreName) {
         activeCanvas.style.display = 'block';
         activeCanvas.classList.add('active');
 
-        // RE-RENDER WAVEFORMS NOW THAT THIS GENRE CONTAINER IS VISIBLE
         activeCanvas.querySelectorAll('.waveform-container').forEach(el => {
             renderResponsiveWaveform(el);
         });
@@ -597,7 +524,6 @@ function switchGenreView(genreName) {
     updateStats();
     highlightPlayingTrack();
 }
-
 
 let isAutoplaying = true;
 let autoplayInterval = null;
@@ -620,7 +546,6 @@ function renderInfiniteSlider() {
 
     const fallbackImage = 'Pic/noll.jpg';
 
-    // 1. Generate clean stacked cards
     let htmlContent = displayPool.map((track, index) => {
         const thumbUrl = getProcessedThumbnail(track.thumbnail);
         const safeTitle = track.title.replace(/'/g, "\\'");
@@ -638,13 +563,9 @@ function renderInfiniteSlider() {
 
     sliderTrack.innerHTML = htmlContent;
 
-    // 2. Initialize Gesture Listeners with Dynamic Rotation
     initSwipeGestures(viewport, sliderTrack);
-
-    // 3. Initial Stack Layout Paint
     updateCardStack();
 
-    // 4. Start Autoplay loop by default
     if (isAutoplaying) {
         startAutoplay();
     }
@@ -656,13 +577,6 @@ function handleCardClick(index, element, trackId, safeTitle) {
     selectRow(element, trackId, safeTitle);
 }
 
-function handleCardClick(index, element, trackId, safeTitle) {
-    if (Math.abs(startX - currentX) > 10) return;
-    setActiveCard(index);
-    selectRow(element, trackId, safeTitle);
-}
-
-// 4. Mathematical Symmetrical Stack Position Engine
 function updateCardStack() {
     const sliderTrack = document.getElementById('auto-slider-track');
     if (!sliderTrack) return;
@@ -673,9 +587,7 @@ function updateCardStack() {
 
     cards.forEach((card) => {
         const cardIndex = parseInt(card.dataset.index);
-
         let offset = cardIndex - activeIndex;
-
 
         if (offset > totalCards / 2) {
             offset -= totalCards;
@@ -683,10 +595,8 @@ function updateCardStack() {
             offset += totalCards;
         }
 
-
         card.style.setProperty('--offset', offset);
         card.style.setProperty('--abs-offset', Math.abs(offset));
-
         card.classList.toggle('active', offset === 0);
     });
 }
@@ -699,15 +609,13 @@ function setActiveCard(index) {
     updateCardStack();
 }
 
-// 5. Touch & Mouse Gesture Event Listeners with Dynamic Drag Rotation
 function initSwipeGestures(viewport, sliderTrack) {
     const handleStart = (clientX) => {
         isDragging = true;
         startX = clientX;
         currentX = clientX;
-        if (isAutoplaying) toggleAutoplay(); // Stop autoplay during manual manipulation
+        if (isAutoplaying) toggleAutoplay();
 
-        // Temporarily disable transition on the active card for instant drag response
         const activeCard = sliderTrack.querySelector('.slide-card.active');
         if (activeCard) {
             activeCard.style.transition = 'none';
@@ -718,14 +626,11 @@ function initSwipeGestures(viewport, sliderTrack) {
         if (!isDragging) return;
         currentX = clientX;
 
-        const diffX = currentX - startX; // Positive = drag right, Negative = drag left
+        const diffX = currentX - startX;
         const activeCard = sliderTrack.querySelector('.slide-card.active');
 
         if (activeCard) {
-            // Calculate dynamic rotation angle based on drag distance
-            const dragRotation = diffX * 0.08; // Customize rotation sensitivity here
-            
-            // Apply live drag translations & rotations
+            const dragRotation = diffX * 0.08;
             activeCard.style.transform = `
                 translateX(${diffX}px) 
                 translateY(${Math.abs(diffX) * 0.05}px) 
@@ -743,19 +648,15 @@ function initSwipeGestures(viewport, sliderTrack) {
         const totalCards = sliderTrack.querySelectorAll('.slide-card').length;
         const activeCard = sliderTrack.querySelector('.slide-card.active');
 
-        // Restore transitions before snapping cards
         if (activeCard) {
             activeCard.style.transform = '';
             activeCard.style.transition = '';
         }
 
-        // Determine if swipe threshold was met to change card positions
         if (Math.abs(diffX) > swipeThreshold) {
             if (diffX > 0) {
-                // Swiped Left -> Bring next card forward
                 activeIndex = (activeIndex + 1) % totalCards;
             } else {
-                // Swiped Right -> Pull previous card back
                 activeIndex = (activeIndex - 1 + totalCards) % totalCards;
             }
         }
@@ -765,12 +666,10 @@ function initSwipeGestures(viewport, sliderTrack) {
         currentX = 0;
     };
 
-    // --- Mobile Touch Listeners ---
     viewport.addEventListener('touchstart', (e) => handleStart(e.touches[0].clientX), { passive: true });
     viewport.addEventListener('touchmove', (e) => handleMove(e.touches[0].clientX), { passive: true });
     viewport.addEventListener('touchend', handleEnd);
 
-    // --- Desktop Mouse Listeners ---
     viewport.addEventListener('mousedown', (e) => {
         e.preventDefault();
         handleStart(e.clientX);
@@ -791,7 +690,7 @@ function startAutoplay() {
         if (pauseIcon) pauseIcon.style.display = 'block';
     }
 
-    clearInterval(autoplayInterval); // Clear any lingering intervals
+    clearInterval(autoplayInterval);
     autoplayInterval = setInterval(() => {
         const sliderTrack = document.getElementById('auto-slider-track');
         if (!sliderTrack) return;
@@ -817,7 +716,6 @@ function pauseAutoplay() {
     }
 }
 
-// The master click toggle function bound to your HTML play button
 function toggleAutoplay() {
     if (isAutoplaying) {
         pauseAutoplay();
@@ -835,10 +733,7 @@ function downloadCurrentTrack() {
     }
     
     const link = document.createElement('a');
-    // 1. Appended ?download=true to force content-disposition attachment headers
     link.href = `${BACKEND_BASE}/api/stream/${currentTrackId}?download=true`;
-    
-    // 2. Standardize cross-origin parameters
     link.setAttribute('download', '');
     link.target = '_blank'; 
     link.style.display = 'none';
@@ -847,75 +742,74 @@ function downloadCurrentTrack() {
     link.click();
     document.body.removeChild(link);
     
-    // 3. Optional: Sync download statistics counter animations right after
     setTimeout(updateDownloadStats, 1000);
 }
 
 // --- 5. PLAYER & INTERACTIONS ---
 async function selectRow(element, trackId, trackTitle) {
-    currentTrackId = trackId;
+    currentTrackId = String(trackId);
 
-    // SVG shapes
     const playPath = "M8 5v14l11-7z";
     const pausePath = "M6 19h4V5H6v14zm8-14v14h4V5h-4z";
 
-    // 1. GLOBAL RESET & MULTI-ROW UPDATE
-    // Iterate through ALL rows across all genres/sections
+    // 1. GLOBAL RESET & CROSS-GENRE SYNC
     document.querySelectorAll('.file-row-item').forEach(row => {
-        // Check if this row belongs to the selected track (via data-attribute or ID)
-        const isSelectedTrack = row.dataset.trackId === String(trackId) || row.id === String(trackId);
-
+        const isSelectedTrack = row.dataset.trackId === currentTrackId || row.id === currentTrackId;
         const rowSvgPath = row.querySelector('.row-icon-svg path');
         const timerSpan = row.querySelector('.time-stamp.elapsed');
+        const waveform = row.querySelector('.waveform-container');
 
         if (isSelectedTrack) {
-            // Apply active states to ALL instances of this track across all genres
             row.classList.add('active-row', 'is-playing');
             if (rowSvgPath) rowSvgPath.setAttribute('d', pausePath);
+
+            if (waveform) renderResponsiveWaveform(waveform);
         } else {
-            // Reset non-selected rows
             row.classList.remove('active-row', 'is-playing');
             if (timerSpan) timerSpan.innerText = "0:00";
             if (rowSvgPath) rowSvgPath.setAttribute('d', playPath);
+
+            if (waveform) {
+                waveform.querySelectorAll('.wave-bar').forEach(bar => bar.classList.remove('played'));
+            }
         }
     });
 
-    // Target reference for updating counts/UI stats
-    const targetRow = element?.classList.contains('file-row-item') 
-        ? element 
-        : document.querySelector(`[data-track-id="${trackId}"], #${trackId}`);
-
-    // 2. UI BAR STATES
+    // 2. UI BAR & FAV ENGINE
     const downloadContainer = document.getElementById('download-container');
     if (downloadContainer) downloadContainer.classList.add('is-visible');
 
-    syncFavoriteButtonsUI(trackId);
+    if (typeof syncFavoriteButtonsUI === 'function') {
+        syncFavoriteButtonsUI(trackId);
+    }
 
-    // 3. STATS SYNCING (Update all matching row counters, not just one)
+    // 3. STATS SYNC ACROSS ALL INSTANCES
     try {
         const response = await fetch(`${BACKEND_BASE}/api/stats/downloads`);
-        const data = await response.json();
-        const dlCount = data.counts[trackId] || 0;
+        if (response.ok) {
+            const data = await response.json();
+            const dlCount = data.counts[trackId] || 0;
 
-        document.querySelectorAll(`.file-row-item[data-track-id="${trackId}"], #${trackId}`).forEach(row => {
-            const countSpan = row.querySelector('.track-dl-count');
-            if (countSpan) countSpan.innerText = dlCount;
-        });
+            document.querySelectorAll(`.file-row-item[data-track-id="${trackId}"], .file-row-item[id="${trackId}"]`).forEach(row => {
+                const countSpan = row.querySelector('.track-dl-count');
+                if (countSpan) countSpan.innerText = dlCount;
+            });
+        }
     } catch (err) {
         console.error("Error fetching download stats:", err);
     }
 
     if (playerHideTimer) clearTimeout(playerHideTimer);
-    
-    const track = tracksCache.find(t => t.id === trackId);
+
+    // 4. PLAYER ENGINE MOUNTING
+    const track = tracksCache.find(t => String(t.id) === currentTrackId);
     if (track) {
-        // Mount player controls and stream engine
-        mountPlayerEngine(`${BACKEND_BASE}/api/stream/${trackId}`, trackTitle, trackId, track.thumbnail);
-        loadTrack(track); 
+        if (typeof mountPlayerEngine === 'function') {
+            mountPlayerEngine(`${BACKEND_BASE}/api/stream/${trackId}`, trackTitle, trackId, track.thumbnail);
+        }
+        loadTrack(track);
         updatePlayerVisibility();
     }
-    
-    highlightPlayingTrack();
 }
 
 async function handleDownload(trackId) {
@@ -933,115 +827,71 @@ function linkEngineEvents() {
     const progressFills = document.querySelectorAll('.progress-fill');
     const elapsedEls = document.querySelectorAll('.time-stamp.elapsed');
     const totalEls = document.querySelectorAll('.time-stamp.total');
-    
     const progressTracks = document.querySelectorAll('.progress-bar-track, #waveform');
-    if (!audio || progressTracks.length === 0) return;
 
-    const calculatePercentage = (clientX, track) => {
-        const rect = track.getBoundingClientRect();
-        let percentage = (clientX - rect.left) / rect.width;
-        if (percentage < 0) percentage = 0;
-        if (percentage > 1) percentage = 1;
-        return percentage;
-    };
+    if (!audio) return;
 
-    const seekToPosition = (clientX, track) => {
-        const percentage = calculatePercentage(clientX, track);
-        progressFills.forEach(fill => fill.style.width = `${percentage * 100}%`);
-        updateWavebarsFill(percentage); // Now uses global version!
-        audio.currentTime = percentage * audio.duration;
-    };
-
-    const updateSliderUI = (clientX, track) => {
-        const percentage = calculatePercentage(clientX, track);
-        progressFills.forEach(fill => fill.style.width = `${percentage * 100}%`);
-        updateWavebarsFill(percentage); // Now uses global version!
-        if (audio.duration) {
-            const currentAudioTime = percentage * audio.duration;
-            const m = Math.floor(currentAudioTime / 60);
-            const s = Math.floor(currentAudioTime % 60);
-            elapsedEls.forEach(el => el.innerText = `${m}:${s.toString().padStart(2, '0')}`);
-        }
-    };
-
-    // Bind event listeners to tracking timelines layout systems
-    progressTracks.forEach(track => {
-        track.addEventListener('click', (e) => seekToPosition(e.clientX, track));
-
-        track.addEventListener('mousedown', (e) => {
-            isSeeking = true;
-            updateSliderUI(e.clientX, track);
-            
-            const onMouseMove = (moveEvent) => {
-                if (isSeeking) updateSliderUI(moveEvent.clientX, track);
-            };
-            
-            const onMouseUp = (upEvent) => {
-                if (isSeeking) {
-                    seekToPosition(upEvent.clientX, track);
-                    isSeeking = false;
-                }
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-            };
-            
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
-
-        track.addEventListener('touchstart', (e) => {
-            isSeeking = true;
-            resetPlayerAutohideTimer();
-            updateSliderUI(e.touches[0].clientX, track);
-        }, { passive: false });
-
-        track.addEventListener('touchmove', (e) => {
-            if (isSeeking) {
-                e.preventDefault();
-                resetPlayerAutohideTimer();
-                updateSliderUI(e.touches[0].clientX, track);
-            }
-        }, { passive: false });
-
-        track.addEventListener('touchend', (e) => {
-            if (isSeeking) {
-                if (e.changedTouches && e.changedTouches.length > 0) {
-                    seekToPosition(e.changedTouches[0].clientX, track);
-                }
-                isSeeking = false;
-            }
-            resetPlayerAutohideTimer();
-        });
+    // Direct event listeners keep UI synchronized regardless of how media play state changes
+    audio.addEventListener('play', () => {
+        updatePlayPauseUI(true);
+        if (typeof resetPlayerAutohideTimer === 'function') resetPlayerAutohideTimer();
     });
 
+    audio.addEventListener('pause', () => {
+        updatePlayPauseUI(false);
+        if (typeof playerHideTimer !== 'undefined' && playerHideTimer) { 
+            clearTimeout(playerHideTimer); 
+            playerHideTimer = null; 
+        }
+    });
+
+    audio.addEventListener('ended', () => {
+        if (isLooping) {
+            audio.currentTime = 0;
+            audio.play();
+        } else if (typeof playNavigation === 'function') {
+            playNavigation('next');
+        } else {
+            updatePlayPauseUI(false);
+        }
+    });
+
+    // --- TIMELINE & SEEKING LISTENERS ---
+    if (progressTracks.length > 0) {
+        progressTracks.forEach(track => {
+            track.addEventListener('click', (e) => {
+                const rect = track.getBoundingClientRect();
+                let percentage = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                progressFills.forEach(fill => fill.style.width = `${percentage * 100}%`);
+                if (typeof updateWavebarsFill === 'function') updateWavebarsFill(percentage);
+                if (audio.duration) audio.currentTime = percentage * audio.duration;
+            });
+        });
+    }
+
+    // --- TIME UPDATES ---
     audio.addEventListener('timeupdate', () => {
         if (!audio.duration || isSeeking) return;
-        const percentage = (audio.currentTime / audio.duration);
-        
+        const percentage = audio.currentTime / audio.duration;
         progressFills.forEach(fill => fill.style.width = `${percentage * 100}%`);
-        updateWavebarsFill(percentage); // Now uses global version!
+        
+        if (typeof updateWavebarsFill === 'function') updateWavebarsFill(percentage);
 
-        elapsedEls.forEach(el => {
+        if (typeof formatTimeLayout === 'function') {
+            elapsedEls.forEach(el => el.innerText = formatTimeLayout(audio.currentTime));
+        } else {
             const m = Math.floor(audio.currentTime / 60);
             const s = Math.floor(audio.currentTime % 60);
-            el.innerText = `${m}:${s.toString().padStart(2, '0')}`;
-        });
+            elapsedEls.forEach(el => el.innerText = `${m}:${s.toString().padStart(2, '0')}`);
+        }
     });
 
     audio.addEventListener('loadedmetadata', () => {
-        totalEls.forEach(el => {
-            const m = Math.floor(audio.duration / 60);
-            const s = Math.floor(audio.duration % 60);
-            el.innerText = `${m}:${s.toString().padStart(2, '0')}`;
-        });
+        if (!audio.duration) return;
+        const m = Math.floor(audio.duration / 60);
+        const s = Math.floor(audio.duration % 60);
+        totalEls.forEach(el => el.innerText = `${m}:${s.toString().padStart(2, '0')}`);
     });
-    
-    audio.addEventListener('ended', () => playNavigation('next'));
-    audio.addEventListener('play', () => resetPlayerAutohideTimer());
-    audio.addEventListener('pause', () => {
-        if (playerHideTimer) { clearTimeout(playerHideTimer); playerHideTimer = null; }
-    });
-    updateWavebarsFill(audio.currentTime / audio.duration);
 }
 
 function toggleMute() {
