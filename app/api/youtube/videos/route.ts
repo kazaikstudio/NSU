@@ -2,6 +2,18 @@ import { NextResponse } from "next/server";
 
 const API_KEY = process.env.YOUTUBE_API_KEY ?? process.env.NEXT_PUBLIC_YOUTUBE_API_KEY ?? process.env.VITE_YOUTUBE_API_KEY ?? "";
 const DEFAULT_CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
+const ALLOWED_ORIGINS = ["https://nollstudios.org", "https://www.nollstudios.org", "http://localhost:3000", "http://127.0.0.1:3000"];
+
+function withCors(response: NextResponse, request: Request) {
+  const origin = request.headers.get("origin");
+  const allowOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+
+  response.headers.set("Access-Control-Allow-Origin", allowOrigin);
+  response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  response.headers.set("Access-Control-Allow-Credentials", "true");
+  return response;
+}
 
 type Cached = {
   expires: number;
@@ -59,9 +71,13 @@ async function fetchAllVideos(channelId: string) {
   return videos;
 }
 
+export async function OPTIONS(req: Request) {
+  return withCors(new NextResponse(null, { status: 204 }), req);
+}
+
 export async function GET(req: Request) {
   if (!API_KEY) {
-    return NextResponse.json({ error: "Server not configured with YouTube API key" }, { status: 500 });
+    return withCors(NextResponse.json({ error: "Server not configured with YouTube API key" }, { status: 500 }), req);
   }
 
   const url = new URL(req.url);
@@ -70,14 +86,14 @@ export async function GET(req: Request) {
   const cached = cache.get(channelId);
   const now = Date.now();
   if (cached && cached.expires > now) {
-    return NextResponse.json({ videos: cached.data });
+    return withCors(NextResponse.json({ videos: cached.data }), req);
   }
 
   try {
     const videos = await fetchAllVideos(channelId);
     cache.set(channelId, { expires: now + CACHE_TTL, data: videos });
-    return NextResponse.json({ videos });
+    return withCors(NextResponse.json({ videos }), req);
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? "Unknown error" }, { status: 502 });
+    return withCors(NextResponse.json({ error: err?.message ?? "Unknown error" }, { status: 502 }), req);
   }
 }
