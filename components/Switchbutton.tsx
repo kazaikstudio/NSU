@@ -2,9 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import type { Dispatch, SetStateAction } from 'react'
 
 interface SwitchbuttonProps {
   onScrollToSearch?: () => void
+  showSearch?: boolean
+  searchQuery?: string
+  setSearchQuery?: Dispatch<SetStateAction<string>>
 }
 
 const Switchbutton = ({ onScrollToSearch }: SwitchbuttonProps) => {

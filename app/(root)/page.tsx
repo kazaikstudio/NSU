@@ -15,6 +15,17 @@ type YouTubeVideo = {
 };
 
 const CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
+const BACKEND_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://nsu-backend-smwi-production.up.railway.app").replace(/\/$/, "");
+
+const buildApiUrl = (path: string, params?: Record<string, string>) => {
+  const url = new URL(path, BACKEND_BASE_URL);
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+  }
+  return url.toString();
+};
 
 const Home = () => {
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
@@ -65,7 +76,7 @@ const Home = () => {
         setLoading(true);
         setError("");
 
-        const res = await fetch(`/api/youtube/videos?channelId=${CHANNEL_ID}`);
+        const res = await fetch(buildApiUrl("/api/youtube/videos", { channelId: CHANNEL_ID }));
         const payload = (await res.json().catch(() => null)) as
           | { videos?: YouTubeVideo[]; error?: string }
           | null;
@@ -105,7 +116,7 @@ const Home = () => {
   const openDownloadModal = async (videoId: string) => {
     setDownloadModal({ open: true, videoId, streams: [], message: "Loading download links..." });
     try {
-      const res = await fetch(`/api/youtube/download?videoId=${encodeURIComponent(videoId)}`);
+      const res = await fetch(buildApiUrl("/api/youtube/download", { videoId }));
       const payload = await res.json().catch(() => null);
 
       if (!res.ok) {
