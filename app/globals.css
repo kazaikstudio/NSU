@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+    --bg-base: #121212c2;
+    --bg-surface: #1f1f27e8;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #000322;
+  color: white;
+}
+
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track:hover {
+  animation-play-state: paused !important;
+}
+
+.marquee-track > * {
+  transition: transform 0.3s ease-in-out;
+  cursor: pointer;
+}
+
+.marquee-track > *:hover {
+  transform: scale(1.05);
+}
+
+.marquee-track > *:active {
+  transform: scale(0.95);
 }
