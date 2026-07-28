@@ -12,12 +12,6 @@ const ALLOWED_ORIGINS = [
   "http://127.0.0.1:3000",
 ];
 
-// Setup Cookie Agent if provided in Environment Variables
-const cookies = process.env.YOUTUBE_COOKIES 
-  ? JSON.parse(process.env.YOUTUBE_COOKIES) 
-  : undefined;
-const agent = cookies ? ytdl.createAgent(cookies) : undefined;
-
 function withCors(response: NextResponse | Response, request: Request) {
   const origin = request.headers.get("origin");
   const allowOrigin =
@@ -57,13 +51,11 @@ export async function GET(req: Request) {
       );
     }
 
-    const info = await ytdl.getInfo(videoUrl, { agent });
+    const info = await ytdl.getInfo(videoUrl);
 
     const cleanTitle = (info.videoDetails.title || "video").replace(/[^a-zA-Z0-9_ -]/g, "");
 
-    const downloadOptions: ytdl.downloadOptions = {
-      agent,
-    };
+    const downloadOptions: ytdl.downloadOptions = {};
 
     let contentType = "video/mp4";
     let fileExtension = "mp4";
