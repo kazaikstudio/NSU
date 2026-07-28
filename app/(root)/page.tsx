@@ -21,10 +21,13 @@ const CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
 
 const Home = () => {
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
+  
+  // Modal State includes position tracking for row/card anchoring
   const [downloadModal, setDownloadModal] = useState<{
     open: boolean;
-    videoId?: string | null;
-  }>({ open: false });
+    videoId: string | null;
+    position: { x: number; y: number } | null;
+  }>({ open: false, videoId: null, position: null });
 
   const [searchQuery, setSearchQuery] = useState("");
   // Category state toggles strictly between "official" and "short"
@@ -35,12 +38,21 @@ const Home = () => {
 
   const router = useRouter();
   const mainSearchRef = useRef<HTMLDivElement>(null);
+  const gridSectionRef = useRef<HTMLDivElement>(null);
 
   const scrollToMainSearch = () => {
     if (mainSearchRef.current) {
       mainSearchRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
       const input = mainSearchRef.current.querySelector("input");
       if (input) input.focus();
+    }
+  };
+
+  // Handler for category tabs that toggles genre and smoothly scrolls to grid
+  const handleCategoryChange = (category: "official" | "short") => {
+    setSelectedCategory(category);
+    if (gridSectionRef.current) {
+      gridSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
@@ -85,14 +97,13 @@ const Home = () => {
     void fetchVideos();
   }, []);
 
-  // Keep the current category separate and only show videos for that category.
+  // Filter logic
   const categoryVideos = videos.filter((video) => video.type === selectedCategory);
   const officialVideos = videos.filter((video) => video.type === "official");
 
-  const filteredVideos = categoryVideos.filter((video) => {
-    const matchesSearch = video.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  const filteredVideos = categoryVideos.filter((video) =>
+    video.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const marqueeItems = officialVideos.slice(0, 5);
   const marqueeRepeat = marqueeItems.length ? 2 : 1;
@@ -101,18 +112,30 @@ const Home = () => {
     router.push(`/video/${encodeURIComponent(videoId)}`);
   };
 
-  const openDownloadModal = (videoId: string) => {
-    setDownloadModal({ open: true, videoId });
+  // Handler captures button click event to anchor modal position
+  const openDownloadModal = (e: React.MouseEvent<HTMLButtonElement>, videoId: string) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+
+    setDownloadModal({
+      open: true,
+      videoId,
+      position: {
+        x: rect.left + rect.width / 2, // Horizontally centered on clicked button
+        y: rect.bottom + 8,            // 8px below the button
+      },
+    });
   };
 
-  const closeDownloadModal = () => setDownloadModal({ open: false, videoId: null });
+  const closeDownloadModal = () =>
+    setDownloadModal({ open: false, videoId: null, position: null });
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 pb-28">
       <Switchbutton onScrollToSearch={scrollToMainSearch} />
 
       <div className="p-4 text-start">
-        <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-slate-900 via-slate-800 to-rose-950/40 p-6 shadow-xl border border-slate-700/50 backdrop-blur-md my-6">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-rose-950/40 p-6 shadow-xl border border-slate-700/50 backdrop-blur-md my-6">
           <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-rose-500/20 blur-2xl pointer-events-none" />
 
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-center sm:text-left">
@@ -148,7 +171,7 @@ const Home = () => {
                         gradient: "from-pink-500 to-purple-600",
                       }}
                       onPlay={() => openPlayer(v.id)}
-                      onDownload={() => openDownloadModal(v.id)}
+                      onDownload={(e: React.MouseEvent<HTMLButtonElement>) => openDownloadModal(e, v.id)}
                     />
                   ))
                 : [1, 2, 3, 4, 5].map((_, idx) => (
@@ -168,7 +191,7 @@ const Home = () => {
 
         {/* Header & Search */}
         <div className="mt-8 text-start">
-          <div className="my-6 rounded-xl bg-linear-to-r from-rose-600 to-amber-600 p-0.5 shadow-lg shadow-rose-900/20">
+          <div className="my-6 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 p-0.5 shadow-lg shadow-rose-900/20">
             <div className="rounded-[10px] bg-slate-950 p-5 sm:p-6 flex items-center gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-2xl border border-rose-500/20">
                 🎬
@@ -203,12 +226,13 @@ const Home = () => {
         </div>
 
         {/* Seamless Combined Container (Filters + Video Grid) */}
-        <div className="mt-2 w-full rounded-3xl border border-slate-800 bg-slate-900/60 shadow-xl overflow-hidden">
+        <div ref={gridSectionRef} className="mt-2 w-full rounded-3xl border border-slate-800 bg-slate-900/60 shadow-xl overflow-hidden">
           {/* Top Filter Bar Header */}
           <div className="grid grid-cols-2 w-full bg-slate-950/80 border-b border-slate-800/80">
             <button
-              onClick={() => setSelectedCategory("official")}
-              className={`w-full justify-center px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 ${
+              type="button"
+              onClick={() => handleCategoryChange("official")}
+              className={`w-full justify-center px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
                 selectedCategory === "official"
                   ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/50"
@@ -218,8 +242,9 @@ const Home = () => {
               {videos.filter((v) => v.type === "official").length})
             </button>
             <button
-              onClick={() => setSelectedCategory("short")}
-              className={`w-full justify-center px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 ${
+              type="button"
+              onClick={() => handleCategoryChange("short")}
+              className={`w-full justify-center px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
                 selectedCategory === "short"
                   ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
                   : "text-slate-400 hover:text-white hover:bg-slate-800/50"
@@ -229,7 +254,6 @@ const Home = () => {
               {videos.filter((v) => v.type === "short").length})
             </button>
           </div>
-          <hr></hr>
 
           {/* Main Grid Section Inside the Box */}
           <div className="p-4 sm:p-6">
@@ -285,8 +309,9 @@ const Home = () => {
                         <p className="mt-1 text-xs text-slate-400">{video.date}</p>
                       </div>
                       <button
-                        onClick={() => openDownloadModal(video.id)}
-                        className="rounded-xl bg-blue-600 hover:bg-blue-500 text-white p-2.5 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 shrink-0"
+                        type="button"
+                        onClick={(e) => openDownloadModal(e, video.id)}
+                        className="rounded-xl bg-blue-600 hover:bg-blue-500 text-white p-2.5 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 shrink-0 cursor-pointer"
                         title="Download options"
                       >
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -301,7 +326,13 @@ const Home = () => {
           </div>
         </div>
 
-        <DownloadModal open={downloadModal.open} videoId={downloadModal.videoId ?? null} onClose={closeDownloadModal} />
+        {/* Modal dynamically anchored to click position */}
+        <DownloadModal
+          open={downloadModal.open}
+          videoId={downloadModal.videoId}
+          position={downloadModal.position}
+          onClose={closeDownloadModal}
+        />
       </div>
     </main>
   );

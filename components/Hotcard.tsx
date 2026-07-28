@@ -8,7 +8,8 @@ interface CardProps {
     gradient: string;
   };
   onPlay?: () => void;
-  onDownload?: () => void;
+  // Kept MouseEvent parameter so click position can be forwarded
+  onDownload?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 export const Card = ({ card, onPlay, onDownload }: CardProps) => {
@@ -26,7 +27,8 @@ export const Card = ({ card, onPlay, onDownload }: CardProps) => {
           }}
         />
       </div>
-      <div className={`absolute bottom-0 left-0 right-0 top-[60%] z-0 rounded-none p-8 flex flex-col justify-between bg-linear-to-br ${card.gradient}`}>
+
+      <div className={`absolute bottom-0 left-0 right-0 top-[60%] z-10 rounded-none p-8 flex flex-col justify-between bg-gradient-to-br ${card.gradient}`}>
         <div className="h-8 w-full" />
         <div>
           <h3 className="text-white font-extrabold text-xl tracking-tight leading-tight truncate">
@@ -36,7 +38,13 @@ export const Card = ({ card, onPlay, onDownload }: CardProps) => {
 
         <div className="flex justify-between items-end mt-4">
           <span className="text-white/70 text-sm font-mono">{card.date}</span>
-          <button onClick={(e) => { e.stopPropagation(); if (onDownload) onDownload(); }} className="flex items-center gap-2.5 px-6 py-3 rounded-full bg-white text-slate-950 font-bold hover:bg-slate-200 transition-colors">
+          <button 
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              if (onDownload) onDownload(e); 
+            }} 
+            className="flex items-center gap-2.5 px-6 py-3 rounded-full bg-white text-slate-950 font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+          >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
