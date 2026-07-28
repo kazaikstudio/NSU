@@ -43,7 +43,7 @@ export default async function VideoDetailPage({ params }: VideoDetailPageProps) 
           <div className="flex flex-wrap items-center gap-3">
             {/* Download MP3 Audio */}
             <a
-              href={`/api/download?id=${decodedId}&format=mp3`}
+              href={`/api/youtube/download?id=${decodedId}&format=mp3`}
               download
               className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition shadow-lg shadow-emerald-950/30"
             >
@@ -55,7 +55,7 @@ export default async function VideoDetailPage({ params }: VideoDetailPageProps) 
 
             {/* Download 720p Video */}
             <a
-              href={`/api/download?id=${decodedId}&format=720p`}
+              href={`/api/youtube/download?id=${decodedId}&format=720p`}
               download
               className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white transition shadow-lg shadow-indigo-950/30"
             >
@@ -67,7 +67,7 @@ export default async function VideoDetailPage({ params }: VideoDetailPageProps) 
 
             {/* Download 1080p Video */}
             <a
-              href={`/api/download?id=${decodedId}&format=1080p`}
+              href={`/api/youtube/download?id=${decodedId}&format=1080p`}
               download
               className="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition shadow-lg shadow-blue-950/30"
             >
