@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import ytdl from "@distube/ytdl-core";
+import ytdl from "ytdl-core";
 
 const ALLOWED_ORIGINS = [
   "https://nollstudios.org",
