@@ -139,7 +139,16 @@ export async function OPTIONS(req: Request) {
 export async function GET(req: Request) {
   const apiKey = getYoutubeApiKey();
   if (!apiKey) {
-    return withCors(NextResponse.json({ error: "Server not configured with YouTube API key" }, { status: 500 }), req);
+    return withCors(
+      NextResponse.json(
+        {
+          error:
+            "Server not configured with YouTube API key. Set YOUTUBE_API_KEY in Railway environment variables.",
+        },
+        { status: 500 }
+      ),
+      req
+    );
   }
 
   const url = new URL(req.url);
