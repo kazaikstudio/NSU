@@ -17,6 +17,9 @@ type YouTubeVideo = {
   type?: "official" | "short";
 };
 
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 const CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
 
 const Home = () => {
