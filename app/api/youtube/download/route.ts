@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import ytdl from "@distube/ytdl-core";
 import { Readable } from "stream";
 
-export const maxDuration = 60; // Allow long-running stream execution
+export const maxDuration = 60; // Extend serverless limit
 export const dynamic = "force-dynamic";
 
 const ALLOWED_ORIGINS = [
@@ -12,20 +12,12 @@ const ALLOWED_ORIGINS = [
   "http://127.0.0.1:3000",
 ];
 
-// Read YouTube Cookies from Railway Environment Variables
-const cookiesEnv = process.env.YOUTUBE_COOKIES;
-let agent: ReturnType<typeof ytdl.createAgent> | undefined = undefined;
+// Setup Cookie Agent if provided in Environment Variables
+const cookies = process.env.YOUTUBE_COOKIES 
+  ? JSON.parse(process.env.YOUTUBE_COOKIES) 
+  : undefined;
+const agent = cookies ? ytdl.createAgent(cookies) : undefined;
 
-if (cookiesEnv) {
-  try {
-    const parsedCookies = JSON.parse(cookiesEnv);
-    agent = ytdl.createAgent(parsedCookies);
-  } catch (err) {
-    console.error("Failed to parse YOUTUBE_COOKIES environment variable:", err);
-  }
-}
-
-// Helper to attach CORS headers
 function withCors(response: NextResponse | Response, request: Request) {
   const origin = request.headers.get("origin");
   const allowOrigin =
@@ -65,11 +57,13 @@ export async function GET(req: Request) {
       );
     }
 
-    // Fetch video information using the Cookie Agent
     const info = await ytdl.getInfo(videoUrl, { agent });
+
     const cleanTitle = (info.videoDetails.title || "video").replace(/[^a-zA-Z0-9_ -]/g, "");
 
-    const downloadOptions: ytdl.downloadOptions = { agent };
+    const downloadOptions: ytdl.downloadOptions = {
+      agent,
+    };
 
     let contentType = "video/mp4";
     let fileExtension = "mp4";
@@ -102,14 +96,14 @@ export async function GET(req: Request) {
       }
     }
 
-    // 1. Get Node.js Readable Stream
+    // 1. Get Node stream
     const nodeStream = ytdl(videoUrl, downloadOptions);
     const filename = `${cleanTitle}.${fileExtension}`;
 
-    // 2. Safely convert Node Stream to Web ReadableStream
-    const webStream = Readable.toWeb(nodeStream) as unknown as ReadableStream<Uint8Array>;
+    // 2. Convert Node stream to Web ReadableStream
+    const webStream = Readable.toWeb(nodeStream as any) as ReadableStream;
 
-    // 3. Construct Web Response
+    // 3. Return Web Response with converted stream
     const response = new Response(webStream, {
       status: 200,
       headers: {
@@ -120,13 +114,13 @@ export async function GET(req: Request) {
     });
 
     return withCors(response, req);
-  } catch (error: unknown) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Failed to process download stream";
+  } catch (error: any) {
     console.error("Download route error:", error);
-
     return withCors(
-      NextResponse.json({ error: errorMessage }, { status: 500 }),
+      NextResponse.json(
+        { error: error?.message ?? "Failed to process download stream" },
+        { status: 500 }
+      ),
       req
     );
   }
