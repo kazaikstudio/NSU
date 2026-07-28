@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import Switchbutton from "../../components/Switchbutton";
 import { Card } from "../../components/Hotcard";
-import Player from "../../components/Player";
+import DownloadModal from "../../components/DownloadModal";
 
 type YouTubeVideo = {
   id: string;
@@ -12,63 +14,35 @@ type YouTubeVideo = {
   thumbnail: string;
   date: string;
   url: string;
+  type?: "official" | "short";
 };
 
 const CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
-const BACKEND_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "https://nsu-backend-smwi-production.up.railway.app").replace(/\/$/, "");
-
-const buildApiUrl = (path: string, params?: Record<string, string>) => {
-  const url = new URL(path, BACKEND_BASE_URL);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.set(key, value);
-    });
-  }
-  return url.toString();
-};
 
 const Home = () => {
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
-  const [playingId, setPlayingId] = useState<string | null>(null);
   const [downloadModal, setDownloadModal] = useState<{
     open: boolean;
     videoId?: string | null;
-    streams?: Array<{ label: string; size?: string; url: string }>;
-    message?: string;
   }>({ open: false });
+
   const [searchQuery, setSearchQuery] = useState("");
+  // Category state toggles strictly between "official" and "short"
+  const [selectedCategory, setSelectedCategory] = useState<"official" | "short">("official");
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Observer State & Ref for Floating Search Toggle
-  const [isSearchInView, setIsSearchInView] = useState(true);
+  const router = useRouter();
   const mainSearchRef = useRef<HTMLDivElement>(null);
 
-  // Scroll back to main search bar and focus the input field
   const scrollToMainSearch = () => {
     if (mainSearchRef.current) {
       mainSearchRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
       const input = mainSearchRef.current.querySelector("input");
-      if (input) {
-        input.focus();
-      }
+      if (input) input.focus();
     }
   };
-
-  useEffect(() => {
-    const target = mainSearchRef.current;
-    if (!target) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsSearchInView(entry.isIntersecting);
-      },
-      { threshold: 0 }
-    );
-
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     const fetchVideos = async () => {
@@ -76,7 +50,7 @@ const Home = () => {
         setLoading(true);
         setError("");
 
-        const res = await fetch(buildApiUrl("/api/youtube/videos", { channelId: CHANNEL_ID }));
+        const res = await fetch(`/api/youtube/videos?channelId=${CHANNEL_ID}`);
         const payload = (await res.json().catch(() => null)) as
           | { videos?: YouTubeVideo[]; error?: string }
           | null;
@@ -86,10 +60,18 @@ const Home = () => {
         }
 
         const items = payload?.videos ?? [];
-        const formatted = items.map((v) => ({
-          ...v,
-          date: v.date ? new Date(v.date).toLocaleDateString("en-GB") : "",
-        } as YouTubeVideo));
+        const formatted = items.map((v) => {
+          const fallbackIsShort =
+            v.title.toLowerCase().includes("#shorts") ||
+            v.title.toLowerCase().includes("#short") ||
+            v.title.toLowerCase().includes("short");
+
+          return {
+            ...v,
+            date: v.date ? new Date(v.date).toLocaleDateString("en-GB") : "",
+            type: v.type ?? (fallbackIsShort ? "short" : "official"),
+          } as YouTubeVideo;
+        });
 
         setVideos(formatted);
       } catch (err) {
@@ -103,59 +85,34 @@ const Home = () => {
     void fetchVideos();
   }, []);
 
-  const filteredVideos = videos.filter((video) =>
-    video.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Keep the current category separate and only show videos for that category.
+  const categoryVideos = videos.filter((video) => video.type === selectedCategory);
+  const officialVideos = videos.filter((video) => video.type === "official");
 
-  const marqueeItems = videos.slice(0, 5);
+  const filteredVideos = categoryVideos.filter((video) => {
+    const matchesSearch = video.title.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
+
+  const marqueeItems = officialVideos.slice(0, 5);
   const marqueeRepeat = marqueeItems.length ? 2 : 1;
 
-  const openPlayer = (videoId: string) => setPlayingId(videoId);
-  const closePlayer = () => setPlayingId(null);
-
-  const openDownloadModal = async (videoId: string) => {
-    setDownloadModal({ open: true, videoId, streams: [], message: "Loading download links..." });
-    try {
-      const res = await fetch(buildApiUrl("/api/youtube/download", { videoId }));
-      const payload = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        setDownloadModal({
-          open: true,
-          videoId,
-          streams: [],
-          message: payload?.message ?? payload?.error ?? "Downloader currently unavailable.",
-        });
-        return;
-      }
-
-      const streams = payload?.streams ?? [];
-      setDownloadModal({
-        open: true,
-        videoId,
-        streams,
-        message: streams.length === 0 ? (payload?.message ?? "No download streams found.") : undefined,
-      });
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error";
-      setDownloadModal({ open: true, videoId, streams: [], message: errorMessage });
-    }
+  const openPlayer = (videoId: string) => {
+    router.push(`/video/${encodeURIComponent(videoId)}`);
   };
 
-  const closeDownloadModal = () => setDownloadModal({ open: false });
+  const openDownloadModal = (videoId: string) => {
+    setDownloadModal({ open: true, videoId });
+  };
+
+  const closeDownloadModal = () => setDownloadModal({ open: false, videoId: null });
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 pb-28">
-      {/* Floating Bottom Switchbutton with Scroll-to-Top trigger */}
-      <Switchbutton
-        showSearch={!isSearchInView}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        onScrollToSearch={scrollToMainSearch}
-      />
+      <Switchbutton onScrollToSearch={scrollToMainSearch} />
 
       <div className="p-4 text-start">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-rose-950/40 p-6 shadow-xl border border-slate-700/50 backdrop-blur-md my-6">
+        <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-slate-900 via-slate-800 to-rose-950/40 p-6 shadow-xl border border-slate-700/50 backdrop-blur-md my-6">
           <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-rose-500/20 blur-2xl pointer-events-none" />
 
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-center sm:text-left">
@@ -209,9 +166,9 @@ const Home = () => {
           </div>
         </div>
 
-        {/* Header & Main Inline Search Bar */}
+        {/* Header & Search */}
         <div className="mt-8 text-start">
-          <div className="my-6 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 p-0.5 shadow-lg shadow-rose-900/20">
+          <div className="my-6 rounded-xl bg-linear-to-r from-rose-600 to-amber-600 p-0.5 shadow-lg shadow-rose-900/20">
             <div className="rounded-[10px] bg-slate-950 p-5 sm:p-6 flex items-center gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-2xl border border-rose-500/20">
                 🎬
@@ -227,7 +184,7 @@ const Home = () => {
             </div>
           </div>
 
-          {/* Ref attached to observe scroll position and target jump target */}
+          {/* Search Input */}
           <div
             ref={mainSearchRef}
             className="mt-2 flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3 shadow-lg focus-within:border-slate-600 transition-colors"
@@ -245,104 +202,106 @@ const Home = () => {
           </div>
         </div>
 
-        {/* Main Grid Section */}
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 pb-12">
-          {loading ? (
-            <p className="text-slate-400 col-span-full py-8 text-center">Loading videos from YouTube...</p>
-          ) : error ? (
-            <p className="text-red-400 col-span-full py-8 text-center">Error loading videos: {error}</p>
-          ) : filteredVideos.length === 0 ? (
-            <p className="text-slate-400 col-span-full py-8 text-center">No videos match your search.</p>
-          ) : (
-            filteredVideos.map((video) => (
-              <div
-                key={video.id}
-                className="w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 shadow-xl transition-all duration-300 hover:border-slate-700 hover:shadow-2xl group flex flex-col justify-between"
-              >
-                <div
-                  className="h-44 bg-black relative overflow-hidden cursor-pointer"
-                  onClick={() => openPlayer(video.id)}
-                >
-                  <img
-                    src={video.thumbnail}
-                    alt={video.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <div className="p-3 rounded-full bg-white/20 backdrop-blur-md text-white">
-                      <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
+        {/* Seamless Combined Container (Filters + Video Grid) */}
+        <div className="mt-2 w-full rounded-3xl border border-slate-800 bg-slate-900/60 shadow-xl overflow-hidden">
+          {/* Top Filter Bar Header */}
+          <div className="grid grid-cols-2 w-full bg-slate-950/80 border-b border-slate-800/80">
+            <button
+              onClick={() => setSelectedCategory("official")}
+              className={`w-full justify-center px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 ${
+                selectedCategory === "official"
+                  ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+              }`}
+            >
+              <span>🎥</span> Official Videos (
+              {videos.filter((v) => v.type === "official").length})
+            </button>
+            <button
+              onClick={() => setSelectedCategory("short")}
+              className={`w-full justify-center px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all duration-200 flex items-center gap-1.5 ${
+                selectedCategory === "short"
+                  ? "bg-rose-600 text-white shadow-md shadow-rose-950/40"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+              }`}
+            >
+              <span>⚡</span> Shorts (
+              {videos.filter((v) => v.type === "short").length})
+            </button>
+          </div>
+          <hr></hr>
 
-                <div className="flex justify-between items-center p-4 gap-3">
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-sm font-semibold text-white truncate" title={video.title}>
-                      {video.title}
-                    </h4>
-                    <p className="mt-1 text-xs text-slate-400">{video.date}</p>
-                  </div>
-                  <button
-                    onClick={() => openDownloadModal(video.id)}
-                    className="rounded-xl bg-blue-600 hover:bg-blue-500 text-white p-2.5 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 shrink-0"
-                    title="Download options"
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9H13V5.5h-2V11H8.5l3.5 3.5 3.5-3.5z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Video Player Overlay */}
-        {playingId && <Player videoId={playingId} onClose={closePlayer} />}
-
-        {/* Download Modal */}
-        {downloadModal.open && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
-              <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-800">
-                <h3 className="text-base font-bold text-white">Download Options</h3>
-                <button
-                  onClick={closeDownloadModal}
-                  className="text-slate-400 hover:text-white text-sm font-medium transition-colors"
-                >
-                  ✕ Close
-                </button>
-              </div>
-
-              {downloadModal.streams && downloadModal.streams.length > 0 ? (
-                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                  {downloadModal.streams.map((s, i) => (
-                    <div key={i} className="flex justify-between items-center p-3 bg-slate-800/60 rounded-xl border border-slate-700/50">
-                      <div>
-                        <div className="font-semibold text-sm text-white">{s.label}</div>
-                        {s.size && <div className="text-xs text-slate-400">{s.size}</div>}
-                      </div>
-                      <a
-                        href={s.url}
-                        className="bg-blue-600 hover:bg-blue-500 text-xs font-semibold px-4 py-2 rounded-lg text-white transition-colors"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Download
-                      </a>
-                    </div>
-                  ))}
-                </div>
+          {/* Main Grid Section Inside the Box */}
+          <div className="p-4 sm:p-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
+              {loading ? (
+                <p className="text-slate-400 col-span-full py-12 text-center">Loading videos from YouTube...</p>
+              ) : error ? (
+                <p className="text-red-400 col-span-full py-12 text-center">Error loading videos: {error}</p>
+              ) : filteredVideos.length === 0 ? (
+                <p className="text-slate-400 col-span-full py-12 text-center">No content matches your selection.</p>
               ) : (
-                <p className="text-sm text-slate-300 text-center py-4">
-                  {downloadModal.message ?? "No download streams available."}
-                </p>
+                filteredVideos.map((video) => (
+                  <div
+                    key={video.id}
+                    className="w-full overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/60 shadow-lg transition-all duration-300 hover:border-slate-700 hover:shadow-2xl group flex flex-col justify-between"
+                  >
+                    {/* Thumbnail Container */}
+                    <div
+                      className={`bg-black relative overflow-hidden cursor-pointer ${
+                        video.type === "short" ? "aspect-9/16 max-h-80" : "h-44"
+                      }`}
+                      onClick={() => openPlayer(video.id)}
+                    >
+                      <Image
+                        src={video.thumbnail}
+                        alt={video.title}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+
+                      {/* Badge Label */}
+                      <div className="absolute top-3 left-3">
+                        <span className="rounded-md bg-black/60 backdrop-blur-md px-2 py-1 text-[10px] font-bold text-white border border-white/10 uppercase tracking-wider">
+                          {video.type === "short" ? "⚡ Short" : "🎬 Official"}
+                        </span>
+                      </div>
+
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <div className="p-3 rounded-full bg-white/20 backdrop-blur-md text-white">
+                          <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Bottom Meta & Download Action */}
+                    <div className="flex justify-between items-center p-4 gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-semibold text-white truncate" title={video.title}>
+                          {video.title}
+                        </h4>
+                        <p className="mt-1 text-xs text-slate-400">{video.date}</p>
+                      </div>
+                      <button
+                        onClick={() => openDownloadModal(video.id)}
+                        className="rounded-xl bg-blue-600 hover:bg-blue-500 text-white p-2.5 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 shrink-0"
+                        title="Download options"
+                      >
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9H13V5.5h-2V11H8.5l3.5 3.5 3.5-3.5z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
-        )}
+        </div>
+
+        <DownloadModal open={downloadModal.open} videoId={downloadModal.videoId ?? null} onClose={closeDownloadModal} />
       </div>
     </main>
   );

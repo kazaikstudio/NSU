@@ -23,6 +23,48 @@ type Cached = {
 const cache = new Map<string, Cached>();
 const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 
+function parseISODuration(duration: string) {
+  const matches = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/i);
+  if (!matches) return 0;
+  const hours = Number(matches[1] ?? "0");
+  const minutes = Number(matches[2] ?? "0");
+  const seconds = Number(matches[3] ?? "0");
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+async function fetchVideoDurations(videoIds: string[]) {
+  const durations: Record<string, number> = {};
+  const uniqueIds = Array.from(new Set(videoIds.filter(Boolean)));
+
+  for (let i = 0; i < uniqueIds.length; i += 50) {
+    const batchIds = uniqueIds.slice(i, i + 50).join(",");
+    const params = new URLSearchParams({
+      key: API_KEY,
+      id: batchIds,
+      part: "contentDetails",
+      maxResults: "50",
+    });
+
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params.toString()}`);
+    const payload = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const msg = payload?.error?.message ?? "YouTube API error fetching video durations";
+      throw new Error(msg);
+    }
+
+    const items = payload?.items ?? [];
+    for (const item of items) {
+      const id = item?.id;
+      const duration = item?.contentDetails?.duration;
+      if (!id || !duration) continue;
+      durations[id] = parseISODuration(duration);
+    }
+  }
+
+  return durations;
+}
+
 async function fetchAllVideos(channelId: string) {
   const videos: any[] = [];
   let nextPageToken: string | undefined = undefined;
@@ -68,7 +110,19 @@ async function fetchAllVideos(channelId: string) {
     nextPageToken = payload?.nextPageToken;
   } while (nextPageToken);
 
-  return videos;
+  const durationMap = await fetchVideoDurations(videos.map((video) => video.id));
+  const shortTitlePattern = /(?:#shorts?\b|\bshorts?\b)/i;
+
+  return videos.map((video) => {
+    const durationSeconds = durationMap[video.id] ?? 0;
+    const isShort = durationSeconds > 0 ? durationSeconds <= 60 : shortTitlePattern.test(video.title);
+
+    return {
+      ...video,
+      type: isShort ? "short" : "official",
+      durationSeconds,
+    };
+  });
 }
 
 export async function OPTIONS(req: Request) {
