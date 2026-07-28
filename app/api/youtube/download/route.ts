@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-import ytdl from "@distube/ytdl-core";
-import { Readable } from "stream";
-
-export const maxDuration = 60; // Extend serverless limit
-export const dynamic = "force-dynamic";
+import ytdl from "@distube/ytdl-core"; // Using active maintained fork
 
 const ALLOWED_ORIGINS = [
   "https://nollstudios.org",
@@ -12,12 +8,7 @@ const ALLOWED_ORIGINS = [
   "http://127.0.0.1:3000",
 ];
 
-// Setup Cookie Agent if provided in Environment Variables
-const cookies = process.env.YOUTUBE_COOKIES 
-  ? JSON.parse(process.env.YOUTUBE_COOKIES) 
-  : undefined;
-const agent = cookies ? ytdl.createAgent(cookies) : undefined;
-
+// Helper to attach CORS headers
 function withCors(response: NextResponse | Response, request: Request) {
   const origin = request.headers.get("origin");
   const allowOrigin =
@@ -57,12 +48,24 @@ export async function GET(req: Request) {
       );
     }
 
-    const info = await ytdl.getInfo(videoUrl, { agent });
+    const info = await ytdl.getInfo(videoUrl, {
+      requestOptions: {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        },
+      },
+    });
 
     const cleanTitle = (info.videoDetails.title || "video").replace(/[^a-zA-Z0-9_ -]/g, "");
 
     const downloadOptions: ytdl.downloadOptions = {
-      agent,
+      requestOptions: {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        },
+      },
     };
 
     let contentType = "video/mp4";
@@ -96,15 +99,12 @@ export async function GET(req: Request) {
       }
     }
 
-    // 1. Get Node stream
-    const nodeStream = ytdl(videoUrl, downloadOptions);
+    // Direct Node stream instance
+    const stream = ytdl(videoUrl, downloadOptions);
     const filename = `${cleanTitle}.${fileExtension}`;
 
-    // 2. Convert Node stream to Web ReadableStream
-    const webStream = Readable.toWeb(nodeStream as any) as ReadableStream;
-
-    // 3. Return Web Response with converted stream
-    const response = new Response(webStream, {
+    // Pass Node stream straight to Web Response
+    const response = new Response(stream as any, {
       status: 200,
       headers: {
         "Content-Type": contentType,
