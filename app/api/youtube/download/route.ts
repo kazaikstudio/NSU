@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import ytdl from "@distube/ytdl-core"; // Using active maintained fork
+import ytdl from "@distube/ytdl-core";
+import { Readable } from "stream";
+
+export const maxDuration = 60; // Allow long-running stream execution
+export const dynamic = "force-dynamic";
 
 const ALLOWED_ORIGINS = [
   "https://nollstudios.org",
@@ -7,6 +11,19 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
 ];
+
+// Read YouTube Cookies from Railway Environment Variables
+const cookiesEnv = process.env.YOUTUBE_COOKIES;
+let agent: ReturnType<typeof ytdl.createAgent> | undefined = undefined;
+
+if (cookiesEnv) {
+  try {
+    const parsedCookies = JSON.parse(cookiesEnv);
+    agent = ytdl.createAgent(parsedCookies);
+  } catch (err) {
+    console.error("Failed to parse YOUTUBE_COOKIES environment variable:", err);
+  }
+}
 
 // Helper to attach CORS headers
 function withCors(response: NextResponse | Response, request: Request) {
@@ -48,25 +65,11 @@ export async function GET(req: Request) {
       );
     }
 
-    const info = await ytdl.getInfo(videoUrl, {
-      requestOptions: {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        },
-      },
-    });
-
+    // Fetch video information using the Cookie Agent
+    const info = await ytdl.getInfo(videoUrl, { agent });
     const cleanTitle = (info.videoDetails.title || "video").replace(/[^a-zA-Z0-9_ -]/g, "");
 
-    const downloadOptions: ytdl.downloadOptions = {
-      requestOptions: {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        },
-      },
-    };
+    const downloadOptions: ytdl.downloadOptions = { agent };
 
     let contentType = "video/mp4";
     let fileExtension = "mp4";
@@ -99,12 +102,15 @@ export async function GET(req: Request) {
       }
     }
 
-    // Direct Node stream instance
-    const stream = ytdl(videoUrl, downloadOptions);
+    // 1. Get Node.js Readable Stream
+    const nodeStream = ytdl(videoUrl, downloadOptions);
     const filename = `${cleanTitle}.${fileExtension}`;
 
-    // Pass Node stream straight to Web Response
-    const response = new Response(stream as any, {
+    // 2. Safely convert Node Stream to Web ReadableStream
+    const webStream = Readable.toWeb(nodeStream) as unknown as ReadableStream<Uint8Array>;
+
+    // 3. Construct Web Response
+    const response = new Response(webStream, {
       status: 200,
       headers: {
         "Content-Type": contentType,
@@ -114,13 +120,13 @@ export async function GET(req: Request) {
     });
 
     return withCors(response, req);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to process download stream";
     console.error("Download route error:", error);
+
     return withCors(
-      NextResponse.json(
-        { error: error?.message ?? "Failed to process download stream" },
-        { status: 500 }
-      ),
+      NextResponse.json({ error: errorMessage }, { status: 500 }),
       req
     );
   }
