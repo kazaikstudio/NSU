@@ -18,6 +18,18 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Environment variables
+
+This app requires a YouTube Data API key for the `/api/youtube/videos` route.
+
+Add the following environment variable in Railway (and locally if needed):
+
+```bash
+YOUTUBE_API_KEY=your_api_key_here
+```
+
+If you must, `NEXT_PUBLIC_YOUTUBE_API_KEY` or `VITE_YOUTUBE_API_KEY` may also be used, but `YOUTUBE_API_KEY` is recommended for the server-side route.
+
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Learn More

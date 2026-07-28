@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 
-const API_KEY = process.env.YOUTUBE_API_KEY ?? process.env.NEXT_PUBLIC_YOUTUBE_API_KEY ?? process.env.VITE_YOUTUBE_API_KEY ?? "";
+export const runtime = "nodejs";
+
 const DEFAULT_CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
 const ALLOWED_ORIGINS = ["https://nollstudios.org", "https://www.nollstudios.org", "http://localhost:3000", "http://127.0.0.1:3000"];
+
+function getYoutubeApiKey() {
+  return process.env.YOUTUBE_API_KEY ?? process.env.NEXT_PUBLIC_YOUTUBE_API_KEY ?? process.env.VITE_YOUTUBE_API_KEY ?? "";
+}
 
 function withCors(response: NextResponse, request: Request) {
   const origin = request.headers.get("origin");
@@ -34,12 +39,13 @@ function parseISODuration(duration: string) {
 
 async function fetchVideoDurations(videoIds: string[]) {
   const durations: Record<string, number> = {};
+  const apiKey = getYoutubeApiKey();
   const uniqueIds = Array.from(new Set(videoIds.filter(Boolean)));
 
   for (let i = 0; i < uniqueIds.length; i += 50) {
     const batchIds = uniqueIds.slice(i, i + 50).join(",");
     const params = new URLSearchParams({
-      key: API_KEY,
+      key: apiKey,
       id: batchIds,
       part: "contentDetails",
       maxResults: "50",
@@ -66,12 +72,13 @@ async function fetchVideoDurations(videoIds: string[]) {
 }
 
 async function fetchAllVideos(channelId: string) {
+  const apiKey = getYoutubeApiKey();
   const videos: any[] = [];
   let nextPageToken: string | undefined = undefined;
 
   do {
     const params = new URLSearchParams({
-      key: API_KEY,
+      key: apiKey,
       channelId,
       part: "snippet,id",
       order: "date",
@@ -130,7 +137,8 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function GET(req: Request) {
-  if (!API_KEY) {
+  const apiKey = getYoutubeApiKey();
+  if (!apiKey) {
     return withCors(NextResponse.json({ error: "Server not configured with YouTube API key" }, { status: 500 }), req);
   }
 
