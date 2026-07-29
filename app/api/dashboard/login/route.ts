@@ -8,12 +8,24 @@ type DashboardUser = {
   role: string;
 };
 
+function resolveEnvTemplate(value?: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  return value.replace(/\$\{\{([^}]+)\}\}|\$\{([A-Za-z0-9_]+)\}/g, (_, bracketValue, plainValue) => {
+    const key = bracketValue || plainValue;
+    return process.env[key] ?? '';
+  });
+}
+
 function getClient() {
-  const connectionString =
+  const connectionString = resolveEnvTemplate(
     process.env.DATABASE_PUBLIC_URL ||
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    process.env.POSTGRES_PRISMA_URL;
+      process.env.DATABASE_URL ||
+      process.env.POSTGRES_URL ||
+      process.env.POSTGRES_PRISMA_URL
+  );
 
   if (connectionString) {
     return new Client({
@@ -60,6 +72,17 @@ export async function POST(request: NextRequest) {
         )
       `);
 
+      const defaultEmail = process.env.DASHBOARD_EMAIL || process.env.email || 'nollstudio@gmail.com';
+      const defaultPassword = process.env.DASHBOARD_PASSWORD || process.env.password || '12345';
+      const defaultName = process.env.DASHBOARD_NAME || 'Admin User';
+
+      await client.query(
+        `INSERT INTO dashboard_users (email, password, full_name, role)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (email) DO NOTHING`,
+        [defaultEmail, defaultPassword, defaultName, 'admin']
+      );
+
       const existingUser = await client.query<DashboardUser>(
         `SELECT id, email, full_name, role
          FROM dashboard_users
@@ -87,6 +110,7 @@ export async function POST(request: NextRequest) {
       {
         error:
           'Unable to connect to PostgreSQL. Set DATABASE_PUBLIC_URL or DATABASE_URL, or provide PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE in your environment.',
+        detail: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );
