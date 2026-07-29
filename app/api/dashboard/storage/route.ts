@@ -18,7 +18,7 @@ function getClient() {
   );
 
   if (connectionString) {
-    return new Client({ connectionString, ssl: { rejectUnauthorized: false } });
+    return new Client({ connectionString, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 2000 });
   }
 
   return new Client({
@@ -28,6 +28,7 @@ function getClient() {
     user: process.env.PGUSER || 'postgres',
     password: process.env.PGPASSWORD || '',
     ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 2000,
   });
 }
 
