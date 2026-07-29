@@ -1,24 +1,37 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import DashboardLogin from '@/components/DashboardLogin';
 import DashboardApp from '@/components/DashboardApp';
 
+type DashboardUser = { email: string; full_name: string; role: string };
+
 export default function Page() {
-  // Read localStorage synchronously on first render (client-side only)
-  const [user, setUser] = useState<{ email: string; full_name: string; role: string } | null>(() => {
-    if (typeof window === "undefined") return null;
+  const [user, setUser] = useState<DashboardUser | null>(null);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
     try {
       const raw = window.localStorage.getItem("nsu_user");
-      return raw ? JSON.parse(raw) : null;
+      setUser(raw ? JSON.parse(raw) : null);
     } catch {
-      return null;
+      setUser(null);
+    } finally {
+      setIsReady(true);
     }
-  });
+  }, []);
 
-  const handleLogin = (u: { email: string; full_name: string; role: string }) => {
+  const handleLogin = (u: DashboardUser) => {
     setUser(u);
   };
+
+  if (!isReady) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
+        <p className="text-sm text-slate-400">Loading dashboard…</p>
+      </main>
+    );
+  }
 
   if (!user) {
     return <DashboardLogin onLogin={handleLogin} />;

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, Users, History, HardDrive } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { LayoutDashboard, Users, History, HardDrive, LogOut } from 'lucide-react';
 
 type NavPage = 'dashboard' | 'artists' | 'histories' | 'storage';
 
@@ -29,14 +30,14 @@ interface StorageItem {
 }
 
 export default function DashboardApp({ user }: { user?: User | null }) {
+  const router = useRouter();
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const [artists, setArtists] = useState<Artist[]>([
-    { id: '1', name: 'Jose Chameleone', genre: 'Afro-ragga', tracksCount: 12, status: 'Active' },
-    { id: '2', name: 'Azawi', genre: 'Afrobeats', tracksCount: 8, status: 'Active' },
-  ]);
+  // Initialized with an empty list
+  const [artists, setArtists] = useState<Artist[]>([]);
+  
   const [newArtistName, setNewArtistName] = useState('');
   const [newArtistGenre, setNewArtistGenre] = useState('');
 
@@ -46,6 +47,8 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
+  const [artistMessage, setArtistMessage] = useState('');
+  const [loadingArtists, setLoadingArtists] = useState(true);
 
   const navItems = useMemo(
     () => [
@@ -57,22 +60,52 @@ export default function DashboardApp({ user }: { user?: User | null }) {
     []
   );
 
-  const handleAddArtist = useCallback((e: React.FormEvent) => {
+  useEffect(() => {
+    const loadArtists = async () => {
+      try {
+        const response = await fetch('/api/dashboard/artists');
+        const data = await response.json();
+        if (response.ok && Array.isArray(data.artists)) {
+          setArtists(data.artists);
+        }
+      } catch (error) {
+        console.error('Failed to load artists', error);
+      } finally {
+        setLoadingArtists(false);
+      }
+    };
+
+    void loadArtists();
+  }, []);
+
+  const handleAddArtist = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newArtistName || !newArtistGenre) return;
 
-    const newArtist: Artist = {
-      id: Date.now().toString(),
-      name: newArtistName,
-      genre: newArtistGenre,
-      tracksCount: 0,
-      status: 'Active',
-    };
+    setArtistMessage('');
 
-    setArtists((prev) => [...prev, newArtist]);
-    setNewArtistName('');
-    setNewArtistGenre('');
-    setIsModalOpen(false);
+    try {
+      const response = await fetch('/api/dashboard/artists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newArtistName, genre: newArtistGenre }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save artist');
+      }
+
+      const newArtist: Artist = data.artist;
+      setArtists((prev) => [newArtist, ...prev]);
+      setNewArtistName('');
+      setNewArtistGenre('');
+      setIsModalOpen(false);
+      setArtistMessage('Artist saved to PostgreSQL.');
+    } catch (error) {
+      setArtistMessage(error instanceof Error ? error.message : 'Unable to save artist.');
+    }
   }, [newArtistName, newArtistGenre]);
 
   const handleDeleteArtist = useCallback((id: string) => {
@@ -105,6 +138,14 @@ export default function DashboardApp({ user }: { user?: User | null }) {
       setUploadMessage('Uploaded successfully!');
     }, 800);
   }, [uploadTitle, uploadFile, uploadType]);
+
+  const handleLogout = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('nsu_user');
+      window.location.href = '/dashboard';
+    }
+    router.push('/dashboard');
+  }, [router]);
 
   return (
     <div
@@ -149,7 +190,19 @@ export default function DashboardApp({ user }: { user?: User | null }) {
           </nav>
         </div>
 
-        <div className="space-y-3 border-t border-slate-700/50 pt-4">
+
+        <div className="space-y-2 border-t border-slate-700/50 pt-4">
+          <button
+              onClick={handleLogout}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+                isDarkMode
+                  ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300'
+                  : 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
+              }`}
+            >
+              <LogOut className="h-5 w-5" />
+              <span>Log Out</span>
+            </button>
           <div
             className={`flex items-center justify-between rounded-xl border p-3 ${
               isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-200 bg-slate-100'
@@ -171,7 +224,10 @@ export default function DashboardApp({ user }: { user?: User | null }) {
             <button onClick={() => setIsDarkMode(!isDarkMode)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
+
           </div>
+
+
         </div>
       </aside>
 
@@ -216,6 +272,8 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                 </button>
               </div>
 
+              {artistMessage ? <p className="text-sm text-emerald-400">{artistMessage}</p> : null}
+
               <div className={`overflow-hidden rounded-xl border ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
@@ -229,12 +287,18 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                       </tr>
                     </thead>
                     <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
-                      {artists.length === 0 ? (
+                      {loadingArtists ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                            <p className="text-sm font-medium text-slate-400">Loading artists…</p>
+                          </td>
+                        </tr>
+                      ) : artists.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
                             <div className="flex flex-col items-center justify-center gap-2">
                               <p className="text-sm font-medium text-slate-400">No artists found</p>
-                              <p className="text-xs text-slate-600">Click "Add New Artist" above to add your first artist profile.</p>
+                              <p className="text-xs text-slate-600">Click &quot;Add New Artist&quot; above to add your first artist profile.</p>
                             </div>
                           </td>
                         </tr>
@@ -350,3 +414,4 @@ export default function DashboardApp({ user }: { user?: User | null }) {
     </div>
   );
 }
+
