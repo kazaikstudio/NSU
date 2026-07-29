@@ -10,7 +10,7 @@
     "lint": "eslint"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.9.0"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
