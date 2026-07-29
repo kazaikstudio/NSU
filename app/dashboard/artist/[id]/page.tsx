@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { artistsSeed } from '@/lib/artists';
+import { getArtistById } from '@/lib/artists';
 
 
 interface Track {
@@ -16,7 +16,7 @@ interface Track {
 
 export default function ArtistDetailPage() {
   const params = useParams<{ id: string }>();
-  const artist = useMemo(() => artistsSeed.find((item) => item.id === params.id), [params.id]);
+  const artist = useMemo(() => getArtistById(params.id), [params.id]);
 
   // Image State Management
   const [bannerUrl, setBannerUrl] = useState<string | null>(artist?.bannerUrl || null);

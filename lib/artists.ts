@@ -8,6 +8,8 @@ export interface Artist {
   followers: number;
   featuredTrack: string;
   monthlyListeners: number;
+  bannerUrl?: string;
+  profileUrl?: string;
 }
 
 export const artistsSeed: Artist[] = [
@@ -45,3 +47,42 @@ export const artistsSeed: Artist[] = [
     monthlyListeners: 210000,
   },
 ];
+
+export const nollArtistsStorageKey = 'noll-artists';
+
+export function persistArtists(artists: Artist[]) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(nollArtistsStorageKey, JSON.stringify(artists));
+}
+
+export function getArtistById(id: string | null | undefined) {
+  if (!id) {
+    return undefined;
+  }
+
+  if (typeof window === 'undefined') {
+    return artistsSeed.find((artist) => artist.id === id);
+  }
+
+  try {
+    const storedArtists = window.localStorage.getItem(nollArtistsStorageKey);
+    if (storedArtists) {
+      const parsedArtists = JSON.parse(storedArtists) as Artist[];
+      if (Array.isArray(parsedArtists)) {
+        const mergedArtists = [
+          ...artistsSeed,
+          ...parsedArtists.filter((artist) => !artistsSeed.some((seedArtist) => seedArtist.id === artist.id)),
+        ];
+
+        return mergedArtists.find((artist) => artist.id === id);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to read saved artists', error);
+  }
+
+  return artistsSeed.find((artist) => artist.id === id);
+}

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { type Artist } from '@/lib/artists';
+import { type Artist, artistsSeed, persistArtists } from '@/lib/artists';
 
 type NavPage = 'dashboard' | 'artists' | 'histories' | 'storage';
 
@@ -25,8 +25,8 @@ export default function DashboardPage() {
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
-  // Artist Management State (Initialized empty)
-  const [artists, setArtists] = useState<Artist[]>([]);
+  // Artist Management State
+  const [artists, setArtists] = useState<Artist[]>(artistsSeed);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newArtistName, setNewArtistName] = useState('');
   const [newArtistGenre, setNewArtistGenre] = useState('');
@@ -87,15 +87,47 @@ export default function DashboardPage() {
       monthlyListeners: 0,
     };
 
-    setArtists([newEntry, ...artists]);
+    setArtists((prevArtists) => {
+      const updatedArtists = [newEntry, ...prevArtists];
+      persistArtists(updatedArtists);
+      return updatedArtists;
+    });
     setNewArtistName('');
     setNewArtistGenre('');
     setIsModalOpen(false);
   };
 
   const handleDeleteArtist = (id: string) => {
-    setArtists(artists.filter((a) => a.id !== id));
+    setArtists((prevArtists) => {
+      const updatedArtists = prevArtists.filter((artist) => artist.id !== id);
+      persistArtists(updatedArtists);
+      return updatedArtists;
+    });
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const storedArtists = window.localStorage.getItem('noll-artists');
+      if (storedArtists) {
+        const parsedArtists = JSON.parse(storedArtists) as Artist[];
+        if (Array.isArray(parsedArtists)) {
+          setArtists(parsedArtists);
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load artists from storage', error);
+    }
+
+    setArtists(artistsSeed);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    persistArtists(artists);
+  }, [artists]);
 
   useEffect(() => {
     if (!isLoggedIn) return;
