@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { artistsSeed, type Artist } from '@/lib/artists';
+import { type Artist } from '@/lib/artists';
 
 type NavPage = 'dashboard' | 'artists' | 'histories' | 'storage';
 
@@ -25,11 +25,17 @@ export default function DashboardPage() {
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
-  // Artist Management State (Placed at component top level)
-  const [artists, setArtists] = useState<Artist[]>(artistsSeed);
+  // Artist Management State (Initialized empty)
+  const [artists, setArtists] = useState<Artist[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newArtistName, setNewArtistName] = useState('');
   const [newArtistGenre, setNewArtistGenre] = useState('');
+  const [storageItems, setStorageItems] = useState<Array<{ id: number; title: string; type: string; file_url: string; created_at: string }>>([]);
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadType, setUploadType] = useState('music');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState('');
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -89,6 +95,64 @@ export default function DashboardPage() {
 
   const handleDeleteArtist = (id: string) => {
     setArtists(artists.filter((a) => a.id !== id));
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const loadStorage = async () => {
+      try {
+        const response = await fetch('/api/dashboard/storage');
+        const data = await response.json();
+        if (response.ok) {
+          setStorageItems(data.media || []);
+        }
+      } catch (error) {
+        console.error('Failed to load storage items', error);
+      }
+    };
+
+    loadStorage();
+  }, [isLoggedIn]);
+
+  const handleUpload = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!uploadTitle || !uploadFile) {
+      setUploadMessage('Please enter a title and choose a file.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadMessage('');
+
+    const formData = new FormData();
+    formData.append('title', uploadTitle);
+    formData.append('type', uploadType);
+    formData.append('file', uploadFile);
+
+    try {
+      const response = await fetch('/api/dashboard/storage', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      setUploadTitle('');
+      setUploadType('music');
+      setUploadFile(null);
+      setUploadMessage('Upload saved to PostgreSQL successfully.');
+      const refreshed = await fetch('/api/dashboard/storage');
+      const refreshData = await refreshed.json();
+      setStorageItems(refreshData.media || []);
+    } catch (error) {
+      setUploadMessage(error instanceof Error ? error.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const navItems = [
@@ -343,9 +407,14 @@ export default function DashboardPage() {
                     <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
                       {artists.length === 0 ? (
                        <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                          No artists found. Click &quot;Add New Artist&quot; to get started.
-                          Modo
+                        <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <svg className="h-8 w-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            <p className="text-sm font-medium text-slate-400">No artists found</p>
+                            <p className="text-xs text-slate-600">Click &quot;Add New Artist&quot; above to add your first artist profile.</p>
+                          </div>
                         </td>
                       </tr>
                       ) : (
@@ -402,11 +471,84 @@ export default function DashboardPage() {
           )}
 
           {activePage === 'storage' && (
-            <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-              <h2 className="mb-2 text-xl font-semibold">Storage Overview</h2>
-              <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
-                Track media asset usage and available storage capacity.
-              </p>
+            <div className="space-y-6">
+              <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                <h2 className="mb-2 text-xl font-semibold">Storage Overview</h2>
+                <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                  Upload music and images and save their metadata in PostgreSQL.
+                </p>
+              </div>
+
+              <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                <h3 className="mb-4 text-lg font-semibold">Upload Media</h3>
+                <form onSubmit={handleUpload} className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm">Title</label>
+                    <input
+                      type="text"
+                      value={uploadTitle}
+                      onChange={(event) => setUploadTitle(event.target.value)}
+                      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}
+                      placeholder="Song or image title"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm">Type</label>
+                    <select
+                      value={uploadType}
+                      onChange={(event) => setUploadType(event.target.value)}
+                      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}
+                    >
+                      <option value="music">Music</option>
+                      <option value="image">Image</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm">File</label>
+                    <input
+                      type="file"
+                      accept="audio/*,image/*"
+                      onChange={(event) => setUploadFile(event.target.files?.[0] || null)}
+                      className={`w-full rounded-lg border px-3 py-2 text-sm ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}
+                    />
+                  </div>
+
+                  {uploadMessage ? <p className="text-sm text-indigo-400">{uploadMessage}</p> : null}
+
+                  <button
+                    type="submit"
+                    disabled={uploading}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {uploading ? 'Uploading...' : 'Save to PostgreSQL'}
+                  </button>
+                </form>
+              </div>
+
+              <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                <h3 className="mb-4 text-lg font-semibold">Stored Media</h3>
+                {storageItems.length === 0 ? (
+                  <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>No uploads yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {storageItems.map((item) => (
+                      <div key={item.id} className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-800 bg-slate-950/60' : 'border-slate-200 bg-slate-50'}`}>
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="font-medium">{item.title}</p>
+                            <p className="text-sm text-slate-400">{item.type} • {new Date(item.created_at).toLocaleString()}</p>
+                          </div>
+                          <a href={item.file_url} className="text-sm text-indigo-400 hover:text-indigo-300" target="_blank" rel="noreferrer">
+                            View file
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
