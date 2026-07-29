@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
+import { readFallbackMedia, shouldUseFallbackDb, writeFallbackMedia } from '@/lib/dashboard-store';
 
 function resolveEnvTemplate(value?: string) {
   if (!value) return undefined;
@@ -56,6 +57,10 @@ export async function GET() {
 
     return NextResponse.json({ media: result.rows });
   } catch (error) {
+    if (shouldUseFallbackDb(error)) {
+      return NextResponse.json({ media: readFallbackMedia() });
+    }
+
     console.error('Storage fetch error:', error);
     return NextResponse.json({ error: 'Failed to load media' }, { status: 500 });
   } finally {
@@ -64,11 +69,18 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  let title = '';
+  let type = '';
+  let file: File | null = null;
+  let fileName = '';
+  let fileUrl = '';
+
   try {
     const formData = await request.formData();
-    const title = String(formData.get('title') || '').trim();
-    const type = String(formData.get('type') || '').trim();
-    const file = formData.get('file');
+    title = String(formData.get('title') || '').trim();
+    type = String(formData.get('type') || '').trim();
+    const fileEntry = formData.get('file');
+    file = fileEntry instanceof File ? fileEntry : null;
 
     if (!title || !type || !file || typeof file === 'string') {
       return NextResponse.json({ error: 'Title, type and file are required.' }, { status: 400 });
@@ -76,8 +88,8 @@ export async function POST(request: NextRequest) {
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const fileName = `${Date.now()}-${(file as File).name.replace(/\s+/g, '-')}`;
-    const fileUrl = `data:${(file as File).type};base64,${buffer.toString('base64')}`;
+    fileName = `${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
+    fileUrl = `data:${file.type};base64,${buffer.toString('base64')}`;
 
     const client = getClient();
 
@@ -105,6 +117,19 @@ export async function POST(request: NextRequest) {
       await client.end().catch(() => undefined);
     }
   } catch (error) {
+    if (shouldUseFallbackDb(error)) {
+      const existing = readFallbackMedia();
+      const fallbackItem = {
+        id: Date.now(),
+        title,
+        type,
+        file_url: fileUrl,
+        created_at: new Date().toISOString(),
+      };
+      writeFallbackMedia([fallbackItem, ...existing]);
+      return NextResponse.json({ success: true, fileName, fileUrl: fallbackItem.file_url });
+    }
+
     console.error('Storage upload error:', error);
     return NextResponse.json({ error: 'Failed to upload media' }, { status: 500 });
   }

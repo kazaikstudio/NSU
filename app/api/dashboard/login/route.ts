@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
+import { shouldUseFallbackDb } from '@/lib/dashboard-store';
 
 type DashboardUser = {
   id: string;
@@ -47,10 +48,13 @@ function getClient() {
 }
 
 export async function POST(request: NextRequest) {
+  let email = '';
+  let password = '';
+
   try {
     const body = await request.json();
-    const email = typeof body?.email === 'string' ? body.email.trim() : '';
-    const password = typeof body?.password === 'string' ? body.password : '';
+    email = typeof body?.email === 'string' ? body.email.trim() : '';
+    password = typeof body?.password === 'string' ? body.password : '';
 
     if (!email || !password) {
       return NextResponse.json(
@@ -107,6 +111,23 @@ export async function POST(request: NextRequest) {
       await client.end().catch(() => undefined);
     }
   } catch (error) {
+    if (shouldUseFallbackDb(error)) {
+      const fallbackEmail = process.env.DASHBOARD_EMAIL || process.env.email || 'nollstudio@gmail.com';
+      const fallbackPassword = process.env.DASHBOARD_PASSWORD || process.env.password || '12345';
+      if (email === fallbackEmail && password === fallbackPassword) {
+        return NextResponse.json({
+          user: {
+            id: 'fallback-admin',
+            email: fallbackEmail,
+            full_name: 'Admin User',
+            role: 'admin',
+          },
+        });
+      }
+
+      return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
+    }
+
     console.error('Dashboard login error:', error);
     return NextResponse.json(
       {
