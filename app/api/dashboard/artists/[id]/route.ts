@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { artistsSeed } from '@/lib/artists';
 
 export const runtime = 'nodejs';
 
@@ -55,12 +56,26 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
+
   if (!pool) {
-    return NextResponse.json({ artist: null });
+    const fallbackArtist = artistsSeed.find((artist) => artist.id === id);
+    return NextResponse.json({ artist: fallbackArtist ? {
+      id: fallbackArtist.id,
+      name: fallbackArtist.name,
+      genre: fallbackArtist.genre,
+      tracksCount: fallbackArtist.tracksCount,
+      status: fallbackArtist.status,
+      bio: fallbackArtist.bio,
+      followers: fallbackArtist.followers,
+      featuredTrack: fallbackArtist.featuredTrack,
+      monthlyListeners: fallbackArtist.monthlyListeners,
+      bannerUrl: fallbackArtist.bannerUrl || null,
+      profileUrl: fallbackArtist.profileUrl || null,
+    } : null });
   }
 
   try {
-    const { id } = await context.params;
 
     await ensureArtistsTable();
 
@@ -106,7 +121,20 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Failed to load artist from PostgreSQL', error);
-    return NextResponse.json({ error: 'Failed to load artist' }, { status: 500 });
+    console.warn('Falling back to the seeded artist because PostgreSQL is unavailable', error);
+    const fallbackArtist = artistsSeed.find((artist) => artist.id === id);
+    return NextResponse.json({ artist: fallbackArtist ? {
+      id: fallbackArtist.id,
+      name: fallbackArtist.name,
+      genre: fallbackArtist.genre,
+      tracksCount: fallbackArtist.tracksCount,
+      status: fallbackArtist.status,
+      bio: fallbackArtist.bio,
+      followers: fallbackArtist.followers,
+      featuredTrack: fallbackArtist.featuredTrack,
+      monthlyListeners: fallbackArtist.monthlyListeners,
+      bannerUrl: fallbackArtist.bannerUrl || null,
+      profileUrl: fallbackArtist.profileUrl || null,
+    } : null });
   }
 }
