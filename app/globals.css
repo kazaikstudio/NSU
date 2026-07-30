@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 :root {
     --bg-base: #121212c2;
     --bg-surface: #1f1f27e8;
@@ -20,19 +18,6 @@ body.dark, .dark body {
                     radial-gradient(circle at 100% 100%, rgba(249, 115, 22, 0.1), transparent 40%);
   background-attachment: fixed;
   color: white;
-}
-
-@keyframes marquee {
-  0% {
-    transform: translateX(0%);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-.marquee-track:hover {
-  animation-play-state: paused !important;
 }
 
 .marquee-track > * {

@@ -24,7 +24,8 @@ const CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
 
 const Home = () => {
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
-  
+  const [currentIndex, setCurrentIndex] = useState(0);
+
   // Modal State includes position tracking for row/card anchoring
   const [downloadModal, setDownloadModal] = useState<{
     open: boolean;
@@ -109,7 +110,6 @@ const Home = () => {
   );
 
   const marqueeItems = officialVideos.slice(0, 5);
-  const marqueeRepeat = marqueeItems.length ? 2 : 1;
 
   const openPlayer = (videoId: string) => {
     router.push(`/video/${encodeURIComponent(videoId)}`);
@@ -124,8 +124,8 @@ const Home = () => {
       open: true,
       videoId,
       position: {
-        x: rect.left + rect.width / 2, // Horizontally centered on clicked button
-        y: rect.bottom + 8,            // 8px below the button
+        x: rect.left + rect.width / 2,
+        y: rect.bottom + 8,
       },
     });
   };
@@ -138,7 +138,7 @@ const Home = () => {
       <Switchbutton onScrollToSearch={scrollToMainSearch} />
 
       <div className="p-4 text-start">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-rose-950/40 p-6 shadow-xl border border-slate-700/50 backdrop-blur-md my-6">
+        <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-slate-900 via-slate-800 to-rose-950/40 p-6 shadow-xl border border-slate-700/50 backdrop-blur-md my-6">
           <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-rose-500/20 blur-2xl pointer-events-none" />
 
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-center sm:text-left">
@@ -161,12 +161,19 @@ const Home = () => {
       <div className="px-4">
         {/* Animated Marquee Banner */}
         <div className="overflow-hidden w-full py-2">
-          <div className="marquee-track flex w-max animate-[marquee_20s_linear_infinite] gap-4">
-            {[...Array(marqueeRepeat)].flatMap((_, repeatIdx) =>
-              marqueeItems.length
-                ? marqueeItems.map((v, idx) => (
+          <div
+            className="flex sm:grid overflow-x-auto sm:overflow-visible snap-x sm:snap-none snap-mandatory scrollbar-none sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full px-[7.5vw] sm:px-0 pb-4 sm:pb-0"
+            onScroll={(e) => {
+              const scrollLeft = e.currentTarget.scrollLeft;
+              const cardWidth = e.currentTarget.firstElementChild?.clientWidth || e.currentTarget.clientWidth;
+              const newIndex = Math.round(scrollLeft / cardWidth);
+              setCurrentIndex(newIndex);
+            }}
+          >
+            {marqueeItems.length
+              ? marqueeItems.map((v, idx) => (
+                  <div key={`${v.id}-${idx}`} className="w-[85vw] sm:w-full shrink-0 snap-center">
                     <Card
-                      key={`${v.id}-${repeatIdx}-${idx}`}
                       card={{
                         title: v.title,
                         date: v.date,
@@ -176,10 +183,11 @@ const Home = () => {
                       onPlay={() => openPlayer(v.id)}
                       onDownload={(e: React.MouseEvent<HTMLButtonElement>) => openDownloadModal(e, v.id)}
                     />
-                  ))
-                : [1, 2, 3, 4, 5].map((_, idx) => (
+                  </div>
+                ))
+              : [1, 2, 3, 4, 5].map((_, idx) => (
+                  <div key={`placeholder-${idx}`} className="w-[85vw] sm:w-full shrink-0 snap-center">
                     <Card
-                      key={`placeholder-${repeatIdx}-${idx}`}
                       card={{
                         title: loading ? "Loading..." : "No video",
                         date: "",
@@ -187,14 +195,26 @@ const Home = () => {
                         gradient: "from-pink-500 to-purple-600",
                       }}
                     />
-                  ))
-            )}
+                  </div>
+                ))}
+          </div>
+
+          {/* Mobile Swipe Dots Indicator */}
+          <div className="flex justify-center items-center gap-2 mt-2 mb-2 sm:hidden">
+            {marqueeItems.map((_, index) => (
+              <span
+                key={index}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  currentIndex === index ? 'w-6 bg-amber-500' : 'w-2 bg-zinc-700'
+                }`}
+              />
+            ))}
           </div>
         </div>
 
         {/* Header & Search */}
         <div className="mt-8 text-start">
-          <div className="my-6 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 p-0.5 shadow-lg shadow-rose-900/20">
+          <div className="my-6 rounded-xl bg-linear-to-r from-rose-600 to-amber-600 p-0.5 shadow-lg shadow-rose-900/20">
             <div className="rounded-[10px] bg-slate-950 p-5 sm:p-6 flex items-center gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-2xl border border-rose-500/20">
                 🎬
