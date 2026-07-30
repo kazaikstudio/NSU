@@ -51,62 +51,44 @@ async function ensureArtistsTable() {
   }
 }
 
-export async function GET() {
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   if (!pool) {
-    return NextResponse.json({ artists: [] });
+    return NextResponse.json({ artist: null });
   }
 
   try {
-    await ensureArtistsTable();
-
-    const { rows } = await pool.query(`
-      SELECT id, name, genre, tracks_count AS "tracksCount", status
-      FROM artists
-      ORDER BY created_at DESC, name ASC
-    `);
-
-    return NextResponse.json({
-      artists: rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        genre: row.genre,
-        tracksCount: Number(row.tracksCount || 0),
-        status: row.status || 'Active',
-      })),
-    });
-  } catch (error) {
-    console.error('Failed to load artists from PostgreSQL', error);
-    return NextResponse.json({ artists: [] }, { status: 500 });
-  }
-}
-
-export async function POST(request: Request) {
-  if (!pool) {
-    return NextResponse.json({ error: 'Database connection is not configured' }, { status: 500 });
-  }
-
-  try {
-    const body = await request.json();
-    const name = typeof body?.name === 'string' ? body.name.trim() : '';
-    const genre = typeof body?.genre === 'string' ? body.genre.trim() : '';
-
-    if (!name || !genre) {
-      return NextResponse.json({ error: 'Artist name and genre are required' }, { status: 400 });
-    }
+    const { id } = await context.params;
 
     await ensureArtistsTable();
 
-    const id = `artist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const result = await pool.query(
+    const { rows } = await pool.query(
       `
-        INSERT INTO artists (id, name, genre, tracks_count, status)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, name, genre, tracks_count AS "tracksCount", status
+        SELECT
+          id,
+          name,
+          genre,
+          tracks_count AS "tracksCount",
+          status,
+          bio,
+          followers,
+          featured_track AS "featuredTrack",
+          monthly_listeners AS "monthlyListeners",
+          banner_url AS "bannerUrl",
+          profile_url AS "profileUrl"
+        FROM artists
+        WHERE id = $1
       `,
-      [id, name, genre, 0, 'Active']
+      [id]
     );
 
-    const artist = result.rows[0];
+    if (rows.length === 0) {
+      return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
+    }
+
+    const artist = rows[0];
 
     return NextResponse.json({
       artist: {
@@ -115,10 +97,16 @@ export async function POST(request: Request) {
         genre: artist.genre,
         tracksCount: Number(artist.tracksCount || 0),
         status: artist.status || 'Active',
+        bio: artist.bio || '',
+        followers: Number(artist.followers || 0),
+        featuredTrack: artist.featuredTrack || '',
+        monthlyListeners: Number(artist.monthlyListeners || 0),
+        bannerUrl: artist.bannerUrl || null,
+        profileUrl: artist.profileUrl || null,
       },
     });
   } catch (error) {
-    console.error('Failed to save artist to PostgreSQL', error);
-    return NextResponse.json({ error: 'Failed to save artist' }, { status: 500 });
+    console.error('Failed to load artist from PostgreSQL', error);
+    return NextResponse.json({ error: 'Failed to load artist' }, { status: 500 });
   }
 }

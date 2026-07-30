@@ -1,10 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { getArtistById } from '@/lib/artists';
 
+interface Artist {
+  id: string;
+  name: string;
+  genre: string;
+  tracksCount: number;
+  status: string;
+  bio: string;
+  followers: number;
+  featuredTrack: string;
+  monthlyListeners: number;
+  bannerUrl?: string | null;
+  profileUrl?: string | null;
+}
 
 interface Track {
   id: string;
@@ -16,11 +29,12 @@ interface Track {
 
 export default function ArtistDetailPage() {
   const params = useParams<{ id: string }>();
-  const artist = useMemo(() => getArtistById(params.id), [params.id]);
+  const [artist, setArtist] = useState<Artist | null>(null);
+  const [loadingArtist, setLoadingArtist] = useState(true);
 
   // Image State Management
-  const [bannerUrl, setBannerUrl] = useState<string | null>(artist?.bannerUrl || null);
-  const [profileUrl, setProfileUrl] = useState<string | null>(artist?.profileUrl || null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [profileUrl, setProfileUrl] = useState<string | null>(null);
 
   // File Input Refs for Images
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -41,6 +55,68 @@ export default function ArtistDetailPage() {
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadArtist = async () => {
+      if (!params.id) {
+        setArtist(null);
+        setLoadingArtist(false);
+        return;
+      }
+
+      setLoadingArtist(true);
+
+      try {
+        const response = await fetch(`/api/dashboard/artists/${params.id}`);
+        const data = await response.json();
+
+        if (!ignore) {
+          if (response.ok && data.artist) {
+            const fetchedArtist = data.artist as Artist;
+            setArtist(fetchedArtist);
+            setBannerUrl(fetchedArtist.bannerUrl || null);
+            setProfileUrl(fetchedArtist.profileUrl || null);
+          } else {
+            const fallbackArtist = getArtistById(params.id);
+            setArtist(fallbackArtist as Artist | null);
+            setBannerUrl((fallbackArtist?.bannerUrl as string | null) || null);
+            setProfileUrl((fallbackArtist?.profileUrl as string | null) || null);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load artist details', error);
+        if (!ignore) {
+          const fallbackArtist = getArtistById(params.id);
+          setArtist(fallbackArtist as Artist | null);
+          setBannerUrl((fallbackArtist?.bannerUrl as string | null) || null);
+          setProfileUrl((fallbackArtist?.profileUrl as string | null) || null);
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingArtist(false);
+        }
+      }
+    };
+
+    void loadArtist();
+
+    return () => {
+      ignore = true;
+    };
+  }, [params.id]);
+
+  if (loadingArtist) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-8 text-center">
+          <h1 className="text-2xl font-semibold">Loading artist profile…</h1>
+          <p className="mt-2 text-sm text-slate-400">Fetching the latest details from the dashboard API.</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!artist) {
     return (
@@ -124,7 +200,7 @@ export default function ArtistDetailPage() {
         uploadedAt: new Date().toISOString().split('T')[0],
       };
 
-      setTracks([newTrack, ...tracks]);
+      setTracks((prevTracks) => [newTrack, ...prevTracks]);
       setSelectedFile(null);
       setTrackTitle('');
       setAlbumName('');
@@ -136,7 +212,7 @@ export default function ArtistDetailPage() {
   };
 
   const handleDeleteTrack = (id: string) => {
-    setTracks(tracks.filter((track) => track.id !== id));
+    setTracks((prevTracks) => prevTracks.filter((track) => track.id !== id));
     setIsDirty(true);
     setSaveSuccess(false);
   };

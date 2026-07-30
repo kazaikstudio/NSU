@@ -34,6 +34,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMegaUploadOpen, setIsMegaUploadOpen] = useState(false);
 
   // Initialized with an empty list
   const [artists, setArtists] = useState<Artist[]>([]);
@@ -49,6 +50,8 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   const [uploadMessage, setUploadMessage] = useState('');
   const [artistMessage, setArtistMessage] = useState('');
   const [loadingArtists, setLoadingArtists] = useState(true);
+
+  const megaUploadUrl = 'https://mega.nz/filerequest#!N3MQs2f_ucY!d!en';
 
   const navItems = useMemo(
     () => [
@@ -122,22 +125,34 @@ export default function DashboardApp({ user }: { user?: User | null }) {
     setUploading(true);
     setUploadMessage('');
 
-    setTimeout(() => {
-      const newItem: StorageItem = {
-        id: Date.now().toString(),
-        title: uploadTitle,
-        type: uploadType,
-        file_url: '#',
-        created_at: new Date().toISOString(),
-      };
+    try {
+      const response = await fetch('/api/dashboard/storage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: uploadTitle,
+          type: uploadType,
+          fileUrl: megaUploadUrl,
+        }),
+      });
 
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to save upload');
+      }
+
+      const newItem: StorageItem = data.item;
       setStorageItems((prev) => [newItem, ...prev]);
-      setUploading(false);
       setUploadTitle('');
       setUploadFile(null);
-      setUploadMessage('Uploaded successfully!');
-    }, 800);
-  }, [uploadTitle, uploadFile, uploadType]);
+      setUploadMessage('Saved to storage and linked to Mega.');
+    } catch (error) {
+      setUploadMessage(error instanceof Error ? error.message : 'Unable to save upload.');
+    } finally {
+      setUploading(false);
+    }
+  }, [megaUploadUrl, uploadTitle, uploadFile, uploadType]);
 
   const handleLogout = useCallback(() => {
     if (typeof window !== 'undefined') {
@@ -333,7 +348,15 @@ export default function DashboardApp({ user }: { user?: User | null }) {
               </div>
 
               <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <h3 className="mb-4 text-lg font-semibold">Upload Media</h3>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold">Upload Media</h3>
+                    <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Files are registered in PostgreSQL and linked through Mega&apos;s upload request.</p>
+                  </div>
+                  <button type="button" onClick={() => setIsMegaUploadOpen(true)} className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-400 transition hover:bg-indigo-500/20">
+                    Open Mega Upload
+                  </button>
+                </div>
                 <form onSubmit={handleUpload} className="space-y-4">
                   <div>
                     <label className="mb-1.5 block text-sm">Title</label>
@@ -383,6 +406,21 @@ export default function DashboardApp({ user }: { user?: User | null }) {
           )}
         </div>
       </main>
+
+      {isMegaUploadOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className={`w-full max-w-5xl rounded-2xl border p-4 shadow-2xl ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">Mega Upload</h3>
+                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Use this panel to upload files directly to Mega and keep the dashboard in sync.</p>
+              </div>
+              <button onClick={() => setIsMegaUploadOpen(false)} className="text-sm text-slate-400 hover:text-white">✕</button>
+            </div>
+            <iframe src={megaUploadUrl} title="Mega Upload" className="h-[70vh] w-full rounded-xl border-0" />
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
