@@ -37,7 +37,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
 
   // Initialized with an empty list
   const [artists, setArtists] = useState<Artist[]>([]);
-  
+
   const [newArtistName, setNewArtistName] = useState('');
   const [newArtistGenre, setNewArtistGenre] = useState('');
 
@@ -414,4 +414,3 @@ export default function DashboardApp({ user }: { user?: User | null }) {
     </div>
   );
 }
-
