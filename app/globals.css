@@ -1,17 +1,26 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
     --bg-base: #121212c2;
     --bg-surface: #1f1f27e8;
-
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body {
-  background-color: #000322;
-  color: white;
+    background-color: #000322;
+
 }
 
+/* Target body when .dark is present on it or an ancestor */
+body.dark, .dark body {
+  background-color: #000322;
+  background-image: radial-gradient(circle at 50% 0%, rgba(245, 158, 11, 0.15), transparent 50%),
+                    radial-gradient(circle at 100% 100%, rgba(249, 115, 22, 0.1), transparent 40%);
+  background-attachment: fixed;
+  color: white;
+}
 
 @keyframes marquee {
   0% {

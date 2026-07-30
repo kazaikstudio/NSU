@@ -2,11 +2,16 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
-import { useClickOutside } from "./useClickOutside"; // adjust import path if needed
+import { useClickOutside } from "./useClickOutside";
+import { usePathname } from 'next/navigation';
+import { useTheme } from 'next-themes';
+import { Sun, Moon } from 'lucide-react';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const navRef = useRef<HTMLHeadingElement>(null);
+  const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
 
   useClickOutside(navRef, () => {
     if (isOpen) setIsOpen(false);
@@ -15,12 +20,16 @@ const Navbar = () => {
   return (
     <header
       ref={navRef}
-      className="sticky top-0 z-50 w-full bg-gray-800 text-white border-b border-gray-700 shadow-lg"
+      className="sticky top-0 z-50 w-full border-b border-zinc-800/80 bg-zinc-950/70 text-white backdrop-blur-xl shadow-2xl shadow-zinc-950/50"
     >
       <nav className="flex items-center justify-between px-4 py-2 sm:px-6 max-w-7xl mx-auto">
         {/* Logo & Brand Name */}
         <Link
-          href="/"
+          href="#"
+          onClick={(e) => {
+              e.preventDefault();
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
           className="flex items-center gap-2 text-base sm:text-lg font-bold min-w-0 hover:text-gray-300 transition-colors"
         >
           {/* Your Original SVG Logo */}
@@ -66,8 +75,24 @@ const Navbar = () => {
         <ul className="hidden md:flex items-center gap-6 text-sm font-medium">
           <li>
             <Link
+              href="/"
+              className={`transition-colors py-2 relative ${
+                pathname === '/'
+                  ? 'text-amber-400 font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-400'
+                  : 'text-zinc-300 hover:text-white'
+              }`}
+            >
+              Home
+            </Link>
+          </li>
+          <li>
+            <Link
               href="/feature"
-              className="hover:text-gray-300 transition-colors py-2"
+              className={`transition-colors py-2 relative ${
+                pathname === '/feature'
+                  ? 'text-amber-400 font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-400'
+                  : 'text-zinc-300 hover:text-white'
+              }`}
             >
               Features
             </Link>
@@ -75,64 +100,109 @@ const Navbar = () => {
           <li>
             <Link
               href="/about"
-              className="hover:text-gray-300 transition-colors py-2"
+              className={`transition-colors py-2 relative ${
+                pathname === '/about'
+                  ? 'text-amber-400 font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-400'
+                  : 'text-zinc-300 hover:text-white'
+              }`}
             >
               About NSU
             </Link>
           </li>
+          <li>
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/60 text-zinc-300 backdrop-blur-sm transition-all duration-300 hover:border-amber-500/50 hover:bg-zinc-900 hover:text-amber-400 hover:shadow-lg hover:shadow-amber-500/10"
+              aria-label="Toggle theme"
+            >
+              <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            </button>
+          </li>
         </ul>
 
-        {/* Mobile Hamburger Button */}
-        <button
-          onClick={() => setIsOpen((prev) => !prev)}
-          type="button"
-          className="md:hidden shrink-0 p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg focus:outline-none"
-          aria-controls="mobile-menu"
-          aria-expanded={isOpen}
-          aria-label="Toggle navigation menu"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        {/* Mobile Right Container (Theme Toggle + Hamburger) */}
+        <div className="flex items-center gap-2 md:hidden">
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/60 text-zinc-300 backdrop-blur-sm transition-all duration-300 hover:border-amber-500/50 hover:bg-zinc-900 hover:text-amber-400"
+            aria-label="Toggle theme"
           >
-            {isOpen ? (
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            ) : (
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            )}
-          </svg>
-        </button>
+            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          </button>
+
+          <button
+            onClick={() => setIsOpen((prev) => !prev)}
+            type="button"
+            className="shrink-0 p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg focus:outline-none"
+            aria-controls="mobile-menu"
+            aria-expanded={isOpen}
+            aria-label="Toggle navigation menu"
+            >
+            <svg
+              className="w-6 h-6 transform transition-transform duration-300"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              {isOpen ? (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              ) : (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              )}
+            </svg>
+          </button>
+
+        </div>
       </nav>
 
       {/* Mobile Dropdown Menu */}
       {isOpen && (
         <div
           id="mobile-menu"
-          className="md:hidden bg-gray-800 border-t border-gray-700 px-4 pt-2 pb-4 space-y-1"
+          className="absolute top-full left-4 right-4 mt-2 rounded-2xl border border-zinc-800 bg-zinc-900/95 p-3 shadow-2xl backdrop-blur-xl md:hidden space-y-1 z-50"
         >
+          <Link
+            href="/"
+            onClick={() => setIsOpen(false)}
+            className={`block px-4 py-3 rounded-xl text-base font-medium transition-colors ${
+              pathname === '/'
+                ? 'text-amber-400 bg-amber-500/10 font-semibold'
+                : 'text-zinc-200 hover:text-amber-400 hover:bg-zinc-800/80'
+            }`}
+          >
+            Home
+          </Link>
           <Link
             href="/feature"
             onClick={() => setIsOpen(false)}
-            className="block px-3 py-2.5 rounded-md text-base font-medium text-gray-200 hover:text-white hover:bg-gray-700"
+            className={`block px-4 py-3 rounded-xl text-base font-medium transition-colors ${
+              pathname === '/feature'
+                ? 'text-amber-400 bg-amber-500/10 font-semibold'
+                : 'text-zinc-200 hover:text-amber-400 hover:bg-zinc-800/80'
+            }`}
           >
             Features
           </Link>
           <Link
             href="/about"
             onClick={() => setIsOpen(false)}
-            className="block px-3 py-2.5 rounded-md text-base font-medium text-gray-200 hover:text-white hover:bg-gray-700"
+            className={`block px-4 py-3 rounded-xl text-base font-medium transition-colors ${
+              pathname === '/about'
+                ? 'text-amber-400 bg-amber-500/10 font-semibold'
+                : 'text-zinc-200 hover:text-amber-400 hover:bg-zinc-800/80'
+            }`}
           >
             About NSU
           </Link>

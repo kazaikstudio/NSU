@@ -191,7 +191,7 @@ export default function About() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
+    <div className="flex min-h-screen flex-col text-zinc-100">
       {/* Main Container Content */}
       <main className="relative flex-1 overflow-hidden py-12 sm:py-20 lg:py-32">
         {/* Background Glow Accents */}
