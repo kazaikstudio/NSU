@@ -178,6 +178,8 @@ const TESTIMONIALS: Testimonial[] = [
 ];
 
 export default function About() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<TabType>('spark');
   const [activeTestimonialTab, setActiveTestimonialTab] = useState<string>('tpl-business');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -201,7 +203,7 @@ export default function About() {
           <header className="grid grid-cols-1 items-center gap-8 lg:grid-cols-12 lg:gap-16">
             {/* Hero Visual Container */}
             <div className="relative group lg:col-span-6">
-              <div className="absolute -inset-1 rounded-3xl bg-gradient-to-r from-amber-500 to-orange-600 opacity-30 blur transition duration-500 group-hover:opacity-60" />
+              <div className="absolute -inset-1 rounded-3xl bg-linear-to-r from-amber-500 to-orange-600 opacity-30 blur transition duration-500 group-hover:opacity-60" />
 
               <div className="relative aspect-square overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-900 shadow-2xl">
                 <Image
@@ -212,7 +214,7 @@ export default function About() {
                   priority
                   className="object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/60 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-linear-to-t from-zinc-950/60 via-transparent to-transparent" />
               </div>
             </div>
 
@@ -228,7 +230,7 @@ export default function About() {
 
                 <h1 className="text-center text-3xl font-extrabold tracking-tight text-white sm:text-left sm:text-5xl lg:text-6xl">
                   OUR CREATIVE{' '}
-                  <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
+                  <span className="bg-linear-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
                     STORY
                   </span>
                 </h1>
@@ -408,7 +410,7 @@ export default function About() {
             <div className="space-y-4 text-center">
 
               <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
-                YOUR IDEAS ARE <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">SAFELY STORED</span>
+                YOUR IDEAS ARE <span className="bg-linear-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">SAFELY STORED</span>
               </h2>
 
               <p className="mx-auto max-w-2xl text-base leading-relaxed text-zinc-400 sm:text-lg">
@@ -446,7 +448,7 @@ export default function About() {
           <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-12">
             <div className="space-y-4 text-center">
               <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
-                MEET THE <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">FOUNDERS</span>
+                MEET THE <span className="bg-linear-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">FOUNDERS</span>
               </h2>
 
               <p className="mx-auto max-w-2xl text-base leading-relaxed text-zinc-400 sm:text-lg">
@@ -456,9 +458,6 @@ export default function About() {
 
             {/* Component State & Ref Handler */}
             {(() => {
-              const [activeIndex, setActiveIndex] = useState(0);
-              const scrollRef = useRef<HTMLDivElement>(null);
-
               const handleScroll = () => {
                 if (!scrollRef.current) return;
                 const container = scrollRef.current;
@@ -492,7 +491,7 @@ export default function About() {
                         className="w-full shrink-0 snap-center px-1 sm:w-auto sm:shrink sm:snap-align-none sm:px-0"
                       >
                         <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-900/60 transition-all duration-500 hover:-translate-y-1 hover:border-amber-500/50 hover:bg-zinc-900/90 hover:shadow-xl hover:shadow-amber-500/10">
-                          <div className="relative aspect-[4/5] overflow-hidden bg-zinc-800">
+                          <div className="relative aspect-4/5 overflow-hidden bg-zinc-800">
                             <Image
                               src={founder.imageSrc}
                               alt={`${founder.name} - ${founder.role}`}
@@ -500,7 +499,7 @@ export default function About() {
                               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                               className="object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent opacity-80" />
+                            <div className="absolute inset-0 bg-linear-to-t from-zinc-950 via-transparent to-transparent opacity-80" />
                           </div>
 
                           <div className="flex flex-1 flex-col justify-between p-5 sm:p-6">
@@ -556,7 +555,7 @@ export default function About() {
 
               <h3 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl lg:text-4xl">
                 THE NOLL{' '}
-                <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
+                <span className="bg-linear-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
                   PHILOSOPHY
                 </span>
               </h3>
@@ -573,7 +572,7 @@ export default function About() {
           <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-12">
             <div className="space-y-3 text-center">
               <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
-                IDENTITY DESIGN <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">PORTFOLIO</span>
+                IDENTITY DESIGN <span className="bg-linear-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">PORTFOLIO</span>
               </h2>
               <p className="mx-auto max-w-2xl text-base text-zinc-400 sm:text-lg">
                 From flat 2D brand concepts to stunning 3D dimensional showpieces.
@@ -581,9 +580,6 @@ export default function About() {
             </div>
 
             {(() => {
-              const [activeIndex, setActiveIndex] = useState(0);
-              const scrollRef = useRef<HTMLDivElement>(null);
-
               const handleScroll = () => {
                 if (!scrollRef.current) return;
                 const container = scrollRef.current;
@@ -639,7 +635,7 @@ export default function About() {
                                 className="object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
                               />
                             )}
-                            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent opacity-60" />
+                            <div className="absolute inset-0 bg-linear-to-t from-zinc-950/80 via-transparent to-transparent opacity-60" />
                           </div>
 
                           <div className="flex flex-1 flex-col justify-between p-5">
@@ -684,7 +680,7 @@ export default function About() {
           <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-12">
             <div className="space-y-3 text-center">
               <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
-                OUR PRODUCTION <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">TOOLKIT</span>
+                OUR PRODUCTION <span className="bg-linear-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">TOOLKIT</span>
               </h2>
               <p className="mx-auto max-w-2xl text-base text-zinc-400 sm:text-lg">
                 We build with elite, industry-standard systems to ensure flawless audio, 3D dynamics, and visual master-grade cuts.
@@ -719,7 +715,7 @@ export default function About() {
           <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-12">
             <div className="space-y-3 text-center">
               <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl">
-                ENGINEERING &amp; DEVELOPMENT <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">SERVICES</span>
+                ENGINEERING &amp; DEVELOPMENT <span className="bg-linear-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">SERVICES</span>
               </h2>
               <p className="mx-auto max-w-2xl text-base text-zinc-400 sm:text-lg">
                 From modern web platforms to native Linux system apps, we compile robust, pixel-perfect software solutions.
@@ -738,7 +734,7 @@ export default function About() {
                 >
                   <div
                     className={`absolute left-0 top-0 h-full w-1.5 ${
-                      service.highlighted ? 'bg-gradient-to-b from-amber-400 to-orange-500' : 'bg-zinc-800 group-hover:bg-amber-500/50'
+                      service.highlighted ? 'bg-linear-to-b from-amber-400 to-orange-500' : 'bg-zinc-800 group-hover:bg-amber-500/50'
                     }`}
                   />
 
