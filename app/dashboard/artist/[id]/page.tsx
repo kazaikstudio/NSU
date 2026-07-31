@@ -79,21 +79,31 @@ export default function ArtistDetailPage() {
             setBannerUrl(fetchedArtist.bannerUrl || null);
             setProfileUrl(fetchedArtist.profileUrl || null);
           } else {
+            // Safely check if fallback exists before assigning
             const fallbackArtist = getArtistById(params.id);
-            setArtist(fallbackArtist as Artist | null);
-            setBannerUrl((fallbackArtist?.bannerUrl as string | null) || null);
-            setProfileUrl((fallbackArtist?.profileUrl as string | null) || null);
+            if (fallbackArtist) {
+              setArtist(fallbackArtist as Artist);
+              setBannerUrl((fallbackArtist?.bannerUrl as string | null) || null);
+              setProfileUrl((fallbackArtist?.profileUrl as string | null) || null);
+            } else {
+              setArtist(null); // Explicitly trigger the "Artist not found" view safely
+            }
           }
         }
       } catch (error) {
         console.error('Failed to load artist details', error);
         if (!ignore) {
           const fallbackArtist = getArtistById(params.id);
-          setArtist(fallbackArtist as Artist | null);
-          setBannerUrl((fallbackArtist?.bannerUrl as string | null) || null);
-          setProfileUrl((fallbackArtist?.profileUrl as string | null) || null);
+          if (fallbackArtist) {
+            setArtist(fallbackArtist as Artist);
+            setBannerUrl((fallbackArtist?.bannerUrl as string | null) || null);
+            setProfileUrl((fallbackArtist?.profileUrl as string | null) || null);
+          } else {
+            setArtist(null);
+          }
         }
-      } finally {
+      }
+      finally {
         if (!ignore) {
           setLoadingArtist(false);
         }
@@ -231,9 +241,9 @@ export default function ArtistDetailPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 px-6 py-10 pb-24 text-white">
-      <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-2xl">
-        
+    <main className=" text-white">
+      <div className="mx-auto  overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-2xl">
+
         {/* BANNER & PROFILE PICTURE SECTION */}
         <div
           className="relative h-48 w-full bg-cover bg-center transition-all duration-300 md:h-64"

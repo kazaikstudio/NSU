@@ -40,12 +40,22 @@ async function ensureArtistsTable() {
 
     await client.query(`
       ALTER TABLE artists
+      ADD COLUMN IF NOT EXISTS artist_id TEXT,
+      ADD COLUMN IF NOT EXISTS email TEXT,
+      ADD COLUMN IF NOT EXISTS tracks_count INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Active',
       ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT '',
       ADD COLUMN IF NOT EXISTS followers INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS featured_track TEXT DEFAULT '',
       ADD COLUMN IF NOT EXISTS monthly_listeners INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS banner_url TEXT,
       ADD COLUMN IF NOT EXISTS profile_url TEXT
+    `);
+
+    await client.query(`
+      ALTER TABLE artists
+      ALTER COLUMN artist_id DROP NOT NULL,
+      ALTER COLUMN email DROP NOT NULL
     `);
   } finally {
     client.release();
@@ -136,5 +146,29 @@ export async function GET(
       bannerUrl: fallbackArtist.bannerUrl || null,
       profileUrl: fallbackArtist.profileUrl || null,
     } : null });
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
+
+  if (!pool) {
+    return NextResponse.json({ error: 'Database is not configured' }, { status: 500 });
+  }
+
+  try {
+    await ensureArtistsTable();
+    const result = await pool.query('DELETE FROM artists WHERE id::text = $1', [id]);
+
+    if (result.rowCount === 0) {
+      return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }

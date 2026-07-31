@@ -3,9 +3,9 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, History, HardDrive, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, History, HardDrive, LogOut, Video } from 'lucide-react';
 
-type NavPage = 'dashboard' | 'artists' | 'histories' | 'storage';
+type NavPage = 'dashboard' | 'artists' | 'videos' | 'histories' | 'storage' | 'members';
 
 interface User {
   email: string;
@@ -21,6 +21,16 @@ interface Artist {
   status: 'Active' | 'Inactive' | 'Pending';
 }
 
+interface Member {
+  id: string;
+  name: string;
+  email: string;
+  contact?: string;
+  profilePic?: string;
+  category: 'Board Members' | 'Artists' | 'Dancers' | 'Regular Members';
+  status: 'Active' | 'Inactive' | 'Pending';
+}
+
 interface StorageItem {
   id: string;
   title: string;
@@ -33,11 +43,30 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   const router = useRouter();
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isMegaUploadOpen, setIsMegaUploadOpen] = useState(false);
 
-  // Initialized with an empty list
+  useEffect(() => {
+    setMounted(true);
+    const savedMode = window.localStorage.getItem('theme_mode');
+    if (savedMode !== null) {
+      setIsDarkMode(savedMode === 'dark');
+    }
+  }, []);
+
   const [artists, setArtists] = useState<Artist[]>([]);
+
+  const [members, setMembers] = useState<Member[]>([]);
+  const [memberCategoryFilter, setMemberCategoryFilter] = useState<string>('All');
+
+  // Member Form States
+  const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [newMemberContact, setNewMemberContact] = useState('');
+  const [newMemberProfilePic, setNewMemberProfilePic] = useState('');
+  const [newMemberCategory, setNewMemberCategory] = useState<'Board Members' | 'Artists' | 'Dancers' | 'Regular Members'>('Regular Members');
 
   const [newArtistName, setNewArtistName] = useState('');
   const [newArtistGenre, setNewArtistGenre] = useState('');
@@ -49,71 +78,132 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
   const [artistMessage, setArtistMessage] = useState('');
-  const [loadingArtists, setLoadingArtists] = useState(true);
+  const [memberMessage, setMemberMessage] = useState('');
+
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        const [artistsResponse, membersResponse] = await Promise.all([
+          fetch('/api/dashboard/artists'),
+          fetch('/api/members'),
+        ]);
+        const artistsData = await artistsResponse.json();
+        const membersData = await membersResponse.json();
+
+        if (!artistsResponse.ok) throw new Error(artistsData.error || 'Unable to load artists');
+        if (!membersResponse.ok) throw new Error(membersData.error || 'Unable to load members');
+
+        setArtists(artistsData.artists || []);
+        setMembers(membersData.members || []);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to load dashboard data';
+        setArtistMessage(message);
+        setMemberMessage(message);
+      }
+    };
+
+    void loadDashboardData();
+  }, []);
+
+  const handleOpenEditMember = useCallback((member: Member) => {
+    setEditingMember(member);
+    setNewMemberName(member.name);
+    setNewMemberEmail(member.email);
+    setNewMemberContact(member.contact || '');
+    setNewMemberProfilePic(member.profilePic || '');
+    setNewMemberCategory(member.category);
+    setIsMemberModalOpen(true);
+  }, []);
 
   const megaUploadUrl = 'https://mega.nz/filerequest#!N3MQs2f_ucY!d!en';
 
   const navItems = useMemo(
     () => [
       { id: 'dashboard' as NavPage, label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
+      { id: 'members' as NavPage, label: 'Members', icon: <Users className="h-5 w-5" /> },
       { id: 'artists' as NavPage, label: 'Artists', icon: <Users className="h-5 w-5" /> },
+      { id: 'videos' as NavPage, label: 'Videos', icon: <Video className="h-5 w-5" /> },
       { id: 'histories' as NavPage, label: 'Histories', icon: <History className="h-5 w-5" /> },
       { id: 'storage' as NavPage, label: 'Storage', icon: <HardDrive className="h-5 w-5" /> },
     ],
     []
   );
 
-  useEffect(() => {
-    const loadArtists = async () => {
-      try {
-        const response = await fetch('/api/dashboard/artists');
-        const data = await response.json();
-        if (response.ok && Array.isArray(data.artists)) {
-          setArtists(data.artists);
-        }
-      } catch (error) {
-        console.error('Failed to load artists', error);
-      } finally {
-        setLoadingArtists(false);
-      }
-    };
-
-    void loadArtists();
-  }, []);
-
   const handleAddArtist = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newArtistName || !newArtistGenre) return;
+        e.preventDefault();
+        if (!newArtistName || !newArtistGenre) return;
 
-    setArtistMessage('');
+        setArtistMessage('');
+        try {
+          const response = await fetch('/api/dashboard/artists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newArtistName, genre: newArtistGenre }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Unable to save artist');
 
-    try {
-      const response = await fetch('/api/dashboard/artists', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newArtistName, genre: newArtistGenre }),
-      });
+          setArtists((prev) => [data.artist, ...prev]);
+          setNewArtistName('');
+          setNewArtistGenre('');
+          setIsModalOpen(false);
+          setArtistMessage('Artist added successfully.');
+        } catch (error) {
+          setArtistMessage(error instanceof Error ? error.message : 'Unable to save artist');
+        }
+    }, [newArtistName, newArtistGenre]);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to save artist');
-      }
-
-      const newArtist: Artist = data.artist;
-      setArtists((prev) => [newArtist, ...prev]);
-      setNewArtistName('');
-      setNewArtistGenre('');
-      setIsModalOpen(false);
-      setArtistMessage('Artist saved to PostgreSQL.');
-    } catch (error) {
-      setArtistMessage(error instanceof Error ? error.message : 'Unable to save artist.');
-    }
-  }, [newArtistName, newArtistGenre]);
-
-  const handleDeleteArtist = useCallback((id: string) => {
-    setArtists((prev) => prev.filter((a) => a.id !== id));
+  const handleDeleteArtist = useCallback(async (id: string) => {
+    const response = await fetch(`/api/dashboard/artists/${id}`, { method: 'DELETE' });
+    if (response.ok) setArtists((prev) => prev.filter((artist) => artist.id !== id));
   }, []);
+
+  const handleAddMember = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMemberName || !newMemberEmail) return;
+
+    setMemberMessage('');
+    try {
+      const response = await fetch(editingMember ? `/api/members/${editingMember.id}` : '/api/members', {
+        method: editingMember ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newMemberName,
+          email: newMemberEmail,
+          contact: newMemberContact,
+          profilePic: newMemberProfilePic,
+          category: newMemberCategory,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to save member');
+
+      setMembers((prev) => editingMember
+        ? prev.map((member) => member.id === editingMember.id ? data.member : member)
+        : [data.member, ...prev]);
+      setEditingMember(null);
+      setNewMemberName('');
+      setNewMemberEmail('');
+      setNewMemberContact('');
+      setNewMemberProfilePic('');
+      setIsMemberModalOpen(false);
+      setMemberMessage(editingMember ? 'Member updated successfully.' : 'Member added successfully.');
+    } catch (error) {
+      setMemberMessage(error instanceof Error ? error.message : 'Unable to save member');
+    }
+  }, [newMemberName, newMemberEmail, newMemberContact, newMemberProfilePic, newMemberCategory, editingMember]);
+
+  const handleDeleteMember = useCallback(async (id: string) => {
+    const response = await fetch(`/api/members/${id}`, { method: 'DELETE' });
+    if (response.ok) setMembers((prev) => prev.filter((member) => member.id !== id));
+  }, []);
+
+  const filteredMembers = useMemo(() => {
+    if (memberCategoryFilter === 'All') return members;
+    return members.filter((m) => m.category === memberCategoryFilter);
+  }, [members, memberCategoryFilter]);
 
   const handleUpload = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,19 +295,18 @@ export default function DashboardApp({ user }: { user?: User | null }) {
           </nav>
         </div>
 
-
         <div className="space-y-2 border-t border-slate-700/50 pt-4">
           <button
-              onClick={handleLogout}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                isDarkMode
-                  ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300'
-                  : 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
-              }`}
-            >
-              <LogOut className="h-5 w-5" />
-              <span>Log Out</span>
-            </button>
+            onClick={handleLogout}
+            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+              isDarkMode
+                ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300'
+                : 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
+            }`}
+          >
+            <LogOut className="h-5 w-5" />
+            <span>Log Out</span>
+          </button>
           <div
             className={`flex items-center justify-between rounded-xl border p-3 ${
               isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-200 bg-slate-100'
@@ -239,10 +328,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
             <button onClick={() => setIsDarkMode(!isDarkMode)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
-
           </div>
-
-
         </div>
       </aside>
 
@@ -256,20 +342,149 @@ export default function DashboardApp({ user }: { user?: User | null }) {
           </div>
 
           {activePage === 'dashboard' && (
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Email</p>
-                <p className="mt-2 text-lg font-medium">{user?.email || 'N/A'}</p>
+            <div className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Artists</p>
+                  <p className="mt-2 text-lg font-medium">{artists.length}</p>
+                </div>
+
+                <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Uploads</p>
+                  <p className="mt-2 text-lg font-medium">{storageItems.length}</p>
+                </div>
+
+                <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Members</p>
+                  <p className="mt-2 text-lg font-medium">{members.length}</p>
+                </div>
               </div>
 
-              <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Role</p>
-                <p className="mt-2 text-lg font-medium">{user?.role || 'User'}</p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                  <h3 className="mb-4 text-base font-semibold">Streams Over Time</h3>
+                  <div className="flex h-48 items-end justify-between gap-2 pt-4">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => {
+                      const heights = ['h-24', 'h-32', 'h-16', 'h-40', 'h-36', 'h-48', 'h-44'];
+                      return (
+                        <div key={day} className="flex flex-1 flex-col items-center gap-2">
+                          <div className={`w-full rounded-t-md bg-indigo-600 transition-all hover:bg-indigo-500 ${heights[i]}`} />
+                          <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{day}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                  <h3 className="mb-4 text-base font-semibold">Revenue Analytics</h3>
+                  <div className="flex h-48 items-end justify-between gap-2 pt-4">
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'].map((month, i) => {
+                      const heights = ['h-20', 'h-28', 'h-36', 'h-30', 'h-42', 'h-48', 'h-40'];
+                      return (
+                        <div key={month} className="flex flex-1 flex-col items-center gap-2">
+                          <div className={`w-full rounded-t-md bg-emerald-500 transition-all hover:bg-emerald-400 ${heights[i]}`} />
+                          <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{month}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activePage === 'members' && (
+            <div className="space-y-6">
+              <div className={`flex flex-col gap-4 rounded-xl border p-6 sm:flex-row sm:items-center sm:justify-between ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                <div>
+                  <h2 className="text-xl font-semibold">Members Management</h2>
+                  <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>View platform team members across Board Members, Artists, Dancers, and Regular Members.</p>
+                </div>
+                <button onClick={() => { setEditingMember(null); setNewMemberName(''); setNewMemberEmail(''); setNewMemberContact(''); setNewMemberProfilePic(''); setIsMemberModalOpen(true); }} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                  Add New Member
+                </button>
               </div>
 
-              <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Database</p>
-                <p className="mt-2 text-lg font-medium">PostgreSQL</p>
+              {memberMessage ? <p className="text-sm text-emerald-400">{memberMessage}</p> : null}
+
+              <div className="flex flex-wrap gap-2">
+                {['All', 'Board Members', 'Artists', 'Dancers', 'Regular Members'].map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setMemberCategoryFilter(cat)}
+                    className={`rounded-xl px-4 py-2 text-xs font-medium transition-all shadow-sm ${
+                      memberCategoryFilter === cat
+                        ? 'bg-indigo-600 text-white shadow-indigo-600/30'
+                        : isDarkMode
+                        ? 'border border-slate-800 bg-slate-900/80 text-slate-400 hover:border-slate-700 hover:bg-slate-800 hover:text-white'
+                        : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              <div className={`overflow-hidden rounded-xl border ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className={`border-b text-xs uppercase tracking-wider ${isDarkMode ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+                      <tr>
+                        <th className="px-6 py-3.5">Name</th>
+                        <th className="px-6 py-3.5">Email</th>
+                        <th className="px-6 py-3.5">Contact</th>
+                        <th className="px-6 py-3.5">Category</th>
+                        <th className="px-6 py-3.5">Status</th>
+                        <th className="px-6 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
+                      {filteredMembers.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                            <p className="text-sm font-medium text-slate-400">No members found in this category</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredMembers.map((member) => (
+                          <tr key={member.id} onClick={() => handleOpenEditMember(member)} className={`cursor-pointer transition-colors ${isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}`}>
+                            <td className="px-6 py-4 font-medium">
+                              <div className="flex items-center gap-3">
+                                {member.profilePic ? (
+                                  <img src={member.profilePic} alt={member.name} className="h-8 w-8 rounded-full object-cover" />
+                                ) : (
+                                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600/20 text-xs font-semibold text-indigo-400">
+                                    {member.name.charAt(0)}
+                                  </div>
+                                )}
+                                {member.name}
+                              </div>
+                            </td>
+                            <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{member.email}</td>
+                            <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{member.contact || 'N/A'}</td>
+                            <td className="px-6 py-4">
+                              <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-0.5 text-xs font-medium text-indigo-400">
+                                {member.category}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+                                {member.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                              <button onClick={() => handleDeleteMember(member.id)} className="text-xs font-medium text-red-400 transition hover:text-red-300">
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -279,7 +494,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
               <div className={`flex flex-col gap-4 rounded-xl border p-6 sm:flex-row sm:items-center sm:justify-between ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
                 <div>
                   <h2 className="text-xl font-semibold">Noll Artists</h2>
-                  <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manage registered musicians, view analytics, and upload tracks.</p>
+                  <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manage your custom artists and add new profiles.</p>
                 </div>
                 <button onClick={() => setIsModalOpen(true)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
@@ -302,41 +517,53 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                       </tr>
                     </thead>
                     <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
-                      {loadingArtists ? (
-                        <tr>
-                          <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                            <p className="text-sm font-medium text-slate-400">Loading artists…</p>
-                          </td>
-                        </tr>
-                      ) : artists.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                            <div className="flex flex-col items-center justify-center gap-2">
-                              <p className="text-sm font-medium text-slate-400">No artists found</p>
-                              <p className="text-xs text-slate-600">Click &quot;Add New Artist&quot; above to add your first artist profile.</p>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        artists.map((artist) => (
-                          <tr key={artist.id} className={`transition-colors ${isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}`}>
-                            <td className="px-6 py-4 font-medium">
-                              <Link href={`/dashboard/artist/${artist.id}`} className="flex items-center gap-3 transition hover:text-indigo-400">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600/20 text-xs font-semibold text-indigo-400">{artist.name.charAt(0)}</div>
-                                {artist.name}
-                              </Link>
-                            </td>
-                            <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{artist.genre}</td>
-                            <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{artist.tracksCount} tracks</td>
-                            <td className="px-6 py-4"><span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${artist.status === 'Active' ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border border-amber-500/20 bg-amber-500/10 text-amber-400'}`}>{artist.status}</span></td>
-                            <td className="px-6 py-4 text-right"><button onClick={() => handleDeleteArtist(artist.id)} className="text-xs font-medium text-red-400 transition hover:text-red-300">Delete</button></td>
-                          </tr>
-                        ))
-                      )}
+                      {artists.length === 0 ? (
+                                              <tr>
+                                                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                                                  <div className="flex flex-col items-center justify-center gap-2">
+                                                    <p className="text-sm font-medium text-slate-400">No artists added yet</p>
+                                                    <p className="text-xs text-slate-600">Click &quot;Add New Artist&quot; above to create your custom artist profile.</p>
+                                                  </div>
+                                                </td>
+                                              </tr>
+                                            ) : (
+                                              artists.map((artist) => (
+                                                <tr
+                                                  key={artist.id}
+                                                  onClick={() => router.push(`/dashboard/artist/${artist.id}`)}
+                                                  className={`cursor-pointer transition-colors ${isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}`}
+                                                >
+                                                  <td className="px-6 py-4 font-medium">
+                                                    <div className="flex items-center gap-3">
+                                                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600/20 text-xs font-semibold text-indigo-400">{artist.name.charAt(0)}</div>
+                                                      {artist.name}
+                                                    </div>
+                                                  </td>
+                                                  <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{artist.genre}</td>
+                                                  <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{artist.tracksCount} tracks</td>
+                                                  <td className="px-6 py-4"><span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${artist.status === 'Active' ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border border-amber-500/20 bg-amber-500/10 text-amber-400'}`}>{artist.status}</span></td>
+                                                  <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}><button onClick={() => handleDeleteArtist(artist.id)} className="text-xs font-medium text-red-400 transition hover:text-red-300">Delete</button></td>
+                                                </tr>
+                                              ))
+                                            )}
                     </tbody>
                   </table>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activePage === 'videos' && (
+            <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+              <h2 className="mb-2 text-xl font-semibold">Video Library</h2>
+              <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Manage music videos and video media catalog.</p>
+            </div>
+          )}
+
+          {activePage === 'histories' && (
+            <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+              <h2 className="mb-2 text-xl font-semibold">Activity History</h2>
+              <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>View past system updates, file logs, and activity records.</p>
             </div>
           )}
 
@@ -373,79 +600,177 @@ export default function DashboardApp({ user }: { user?: User | null }) {
 
                   <div>
                     <label className="mb-1.5 block text-sm">File</label>
-                    <input type="file" accept="audio/*,image/*" onChange={(event) => setUploadFile(event.target.files?.[0] || null)} className={`w-full rounded-lg border px-3 py-2 text-sm ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} />
+                    <input
+                      type="file"
+                      accept="audio/*,image/*"
+                      onChange={(event) => setUploadFile(event.target.files?.[0] || null)}
+                      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white hover:file:bg-indigo-500 ${
+                        isDarkMode
+                          ? 'border-slate-700 bg-slate-950 text-white'
+                          : 'border-slate-300 bg-slate-50 text-slate-900'
+                      }`}
+                    />
                   </div>
 
-                  {uploadMessage ? <p className="text-sm text-indigo-400">{uploadMessage}</p> : null}
+                  {uploadMessage && (
+                    <p className={`text-sm ${uploadMessage.includes('Unable') ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {uploadMessage}
+                    </p>
+                  )}
 
-                  <button type="submit" disabled={uploading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">{uploading ? 'Uploading...' : 'Save to PostgreSQL'}</button>
+                  <button
+                    type="submit"
+                    disabled={uploading}
+                    className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500 disabled:opacity-50"
+                  >
+                    {uploading ? 'Saving Upload…' : 'Save Upload Record'}
+                  </button>
                 </form>
-              </div>
-
-              <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <h3 className="mb-4 text-lg font-semibold">Stored Media</h3>
-                {storageItems.length === 0 ? (
-                  <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>No uploads yet.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {storageItems.map((item) => (
-                      <div key={item.id} className={`rounded-lg border p-4 ${isDarkMode ? 'border-slate-800 bg-slate-950/60' : 'border-slate-200 bg-slate-50'}`}>
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            <p className="font-medium">{item.title}</p>
-                            <p className="text-sm text-slate-400">{item.type} • {new Date(item.created_at).toLocaleString()}</p>
-                          </div>
-                          <a href={item.file_url} className="text-sm text-indigo-400 hover:text-indigo-300" target="_blank" rel="noreferrer">View file</a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           )}
         </div>
       </main>
 
-      {isMegaUploadOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className={`w-full max-w-5xl rounded-2xl border p-4 shadow-2xl ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
-            <div className="mb-3 flex items-center justify-between">
+      {/* Add Artist Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
+            <h3 className="text-xl font-semibold">Add New Artist</h3>
+            <form onSubmit={handleAddArtist} className="mt-4 space-y-4">
               <div>
-                <h3 className="text-lg font-semibold">Mega Upload</h3>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Use this panel to upload files directly to Mega and keep the dashboard in sync.</p>
+                <label className="mb-1.5 block text-sm font-medium">Artist Name</label>
+                <input
+                  type="text"
+                  value={newArtistName}
+                  onChange={(e) => setNewArtistName(e.target.value)}
+                  required
+                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}
+                  placeholder="Enter name"
+                />
               </div>
-              <button onClick={() => setIsMegaUploadOpen(false)} className="text-sm text-slate-400 hover:text-white">✕</button>
-            </div>
-            <iframe src={megaUploadUrl} title="Mega Upload" className="h-[70vh] w-full rounded-xl border-0" />
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">Genre</label>
+                <input
+                  type="text"
+                  value={newArtistGenre}
+                  onChange={(e) => setNewArtistGenre(e.target.value)}
+                  required
+                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}
+                  placeholder="e.g. Afro-ragga"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                    isDarkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500"
+                >
+                  Save Artist
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      {/* Add/Edit Member Modal */}
+      {isMemberModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Add New Artist</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-sm text-slate-400 hover:text-white">✕</button>
+              <h3 className="text-lg font-semibold">{editingMember ? 'Edit Member' : 'Add New Member'}</h3>
+              <button onClick={() => setIsMemberModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
-
-            <form onSubmit={handleAddArtist} className="space-y-4">
+            <form onSubmit={handleAddMember} className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-medium opacity-80">Artist Name</label>
-                <input type="text" required value={newArtistName} onChange={(e) => setNewArtistName(e.target.value)} placeholder="e.g. Jose Chameleone" className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} />
+                <label className="mb-1.5 block text-sm">Full Name</label>
+                <input type="text" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} required className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} placeholder="Enter full name" />
               </div>
-
               <div>
-                <label className="mb-1.5 block text-xs font-medium opacity-80">Genre</label>
-                <input type="text" required value={newArtistGenre} onChange={(e) => setNewArtistGenre(e.target.value)} placeholder="e.g. Afro-ragga, Hip Hop" className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} />
+                <label className="mb-1.5 block text-sm">Email Address</label>
+                <input type="email" value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} required className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} placeholder="Enter email address" />
               </div>
-
+              <div>
+                <label className="mb-1.5 block text-sm">Contact Phone</label>
+                <input type="text" value={newMemberContact} onChange={(e) => setNewMemberContact(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} placeholder="Enter phone number" />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm">Profile Picture (Optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setNewMemberProfilePic(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white hover:file:bg-indigo-500 ${
+                    isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'
+                  }`}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm">Category</label>
+                <select value={newMemberCategory} onChange={(e) => setNewMemberCategory(e.target.value as any)} className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}>
+                  <option value="Board Members">Board Members</option>
+                  <option value="Artists">Artists</option>
+                  <option value="Dancers">Dancers</option>
+                  <option value="Regular Members">Regular Members</option>
+                </select>
+              </div>
               <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setIsModalOpen(false)} className={`rounded-lg px-4 py-2 text-sm font-medium ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-200 hover:bg-slate-300'}`}>Cancel</button>
-                <button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500">Save Artist</button>
+                <button type="button" onClick={() => setIsMemberModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-400 hover:text-white">Cancel</button>
+                <button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">{editingMember ? 'Update Member' : 'Save Member'}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Mega Upload Modal */}
+      {isMegaUploadOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className={`w-full max-w-lg rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
+            <h3 className="text-xl font-semibold">Mega File Request</h3>
+            <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+              Upload files directly through Mega&apos;s dropzone request link below:
+            </p>
+            <div className={`my-4 rounded-xl border p-3 text-xs break-all ${isDarkMode ? 'border-slate-800 bg-slate-950 text-indigo-400' : 'border-slate-200 bg-slate-100 text-indigo-600'}`}>
+              {megaUploadUrl}
+            </div>
+            <div className="flex justify-end gap-3">
+              <a
+                href={megaUploadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+              >
+                Open in Mega
+              </a>
+              <button
+                type="button"
+                onClick={() => setIsMegaUploadOpen(false)}
+                className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                  isDarkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'
+                }`}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
