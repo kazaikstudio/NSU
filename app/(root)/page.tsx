@@ -31,7 +31,8 @@ const Home = () => {
     open: boolean;
     videoId: string | null;
     position: { x: number; y: number } | null;
-  }>({ open: false, videoId: null, position: null });
+    anchor: HTMLElement | null;
+  }>({ open: false, videoId: null, position: null, anchor: null });
 
   const [searchQuery, setSearchQuery] = useState("");
   // Category state toggles strictly between "official" and "short"
@@ -123,6 +124,7 @@ const Home = () => {
     setDownloadModal({
       open: true,
       videoId,
+      anchor: e.currentTarget,
       position: {
         x: rect.left + rect.width / 2,
         y: rect.bottom + 8,
@@ -131,7 +133,7 @@ const Home = () => {
   };
 
   const closeDownloadModal = () =>
-    setDownloadModal({ open: false, videoId: null, position: null });
+    setDownloadModal({ open: false, videoId: null, position: null, anchor: null });
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 pb-28">
@@ -354,6 +356,7 @@ const Home = () => {
           open={downloadModal.open}
           videoId={downloadModal.videoId}
           position={downloadModal.position}
+          anchor={downloadModal.anchor}
           onClose={closeDownloadModal}
         />
       </div>

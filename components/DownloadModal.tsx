@@ -8,6 +8,7 @@ type DownloadFormat = {
   kind: string;
   mimeType: string;
   extension: string;
+  outputBitrate?: number;
   codec: string;
   size: number | null;
   bitrate: number;
@@ -17,10 +18,11 @@ type DownloadModalProps = {
   open: boolean;
   videoId: string | null;
   position: { x: number; y: number } | null;
+  anchor: HTMLElement | null;
   onClose: () => void;
 };
 
-const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps) => {
+const DownloadModal = ({ open, videoId, position, anchor, onClose }: DownloadModalProps) => {
   const [loadingFormat, setLoadingFormat] = useState<string | null>(null);
   const [formats, setFormats] = useState<DownloadFormat[]>([]);
   const [title, setTitle] = useState("");
@@ -37,24 +39,30 @@ const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps)
   useLayoutEffect(() => {
     if (!open || !position) return;
 
-    const modalWidth = modalRef.current?.offsetWidth || 350;
-    const modalHeight = modalRef.current?.offsetHeight || 250;
+    const updatePosition = () => {
+      const modalWidth = modalRef.current?.offsetWidth || 350;
+      const modalHeight = Math.min(modalRef.current?.offsetHeight || 250, window.innerHeight * 0.72);
+      const rect = anchor?.getBoundingClientRect();
+      const sourceX = rect ? rect.left + rect.width / 2 : position.x;
+      const sourceY = rect ? rect.bottom + 8 : position.y;
+      const padding = 16;
+      const maxX = window.innerWidth - modalWidth / 2 - padding;
+      const clampedX = Math.max(modalWidth / 2 + padding, Math.min(sourceX, maxX));
+      const placeAbove = sourceY + modalHeight > window.innerHeight - padding;
+      const clampedY = placeAbove
+        ? Math.max(padding, (rect?.top || sourceY) - modalHeight - 8)
+        : Math.max(padding, sourceY);
+      setCoords({ x: clampedX, y: clampedY, placeAbove });
+    };
 
-    const padding = 16;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    const minX = modalWidth / 2 + padding;
-    const maxX = viewportWidth - modalWidth / 2 - padding;
-    const clampedX = Math.max(minX, Math.min(position.x, maxX));
-
-    const placeAbove = position.y + modalHeight > viewportHeight - padding;
-    const clampedY = placeAbove
-      ? Math.max(padding, position.y - modalHeight - 16)
-      : position.y;
-
-    setCoords({ x: clampedX, y: clampedY, placeAbove });
-  }, [open, position]);
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, position, anchor]);
 
   useLayoutEffect(() => {
     if (!open || !videoId) return;
@@ -90,7 +98,7 @@ const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps)
   const handleDownload = async (format: DownloadFormat) => {
     setLoadingFormat(String(format.itag));
     try {
-      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}`);
+      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}&bitrate=${format.outputBitrate || ''}`);
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.error || "Unable to download this format.");
@@ -153,7 +161,7 @@ const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps)
         </div>
 
         <p className="mb-3 truncate text-xs text-slate-400">{title}</p>
-        <div className="relative z-10 space-y-2.5">
+        <div className="relative z-10 max-h-[min(72vh,32rem)] space-y-2.5 overflow-y-auto pr-1">
           {loadingFormats && <p className="py-4 text-center text-sm text-slate-400">Checking available formats...</p>}
           {error && <p className="py-2 text-sm text-red-400" role="alert">{error}</p>}
           {!loadingFormats && !error && (['audio', 'video'] as const).map((section) => {
@@ -163,7 +171,7 @@ const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps)
               <div key={section} className="space-y-2.5">
                 <h4 className="border-b border-slate-700 pb-1 text-xs font-bold uppercase tracking-wider text-rose-300">{section} formats</h4>
                 {sectionFormats.map((format) => (
-                  <div key={`${format.itag}-${format.extension}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/80 p-2.5">
+                  <div key={`${format.itag}-${format.extension}-${format.outputBitrate || format.label}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/80 p-2.5">
                     <div>
                       <div className="font-semibold text-xs text-white">{format.label} {format.extension.toUpperCase()}</div>
                       <div className="text-[10px] text-slate-400">{format.kind.replace('+', ' + ')}{format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ""}</div>

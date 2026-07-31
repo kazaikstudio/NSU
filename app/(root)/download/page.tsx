@@ -27,6 +27,7 @@ type DownloadFormat = {
   label: string
   kind: string
   extension: string
+  outputBitrate?: number
   size: number | null
 }
 
@@ -81,7 +82,7 @@ function DownloadForm() {
     if (!videoId) return
     setLoadingFormat(format.itag)
     try {
-      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}`)
+      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}&bitrate=${format.outputBitrate || ''}`)
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null
         throw new Error(payload?.error || 'Unable to download this video.')

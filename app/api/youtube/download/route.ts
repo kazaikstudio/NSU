@@ -43,6 +43,7 @@ export async function GET(req: Request) {
   const id = searchParams.get("id") || searchParams.get("videoId");
   const itag = Number(searchParams.get("itag"));
   const output = searchParams.get("output") || "mp4";
+  const bitrate = Number(searchParams.get("bitrate")) || 192;
   if (!id) {
     return withCors(
       NextResponse.json({ error: "Missing video 'id' parameter" }, { status: 400 }),
@@ -81,7 +82,7 @@ export async function GET(req: Request) {
       if (!ffmpegPath) throw new Error("Audio conversion is unavailable on this server.");
       const input = Readable.fromWeb(stream as never);
       const codecArgs = output === "mp3"
-        ? ["-codec:a", "libmp3lame", "-b:a", "192k", "-f", "mp3"]
+        ? ["-codec:a", "libmp3lame", "-b:a", `${bitrate}k`, "-f", "mp3"]
         : output === "wav"
           ? ["-codec:a", "pcm_s16le", "-f", "wav"]
           : ["-codec:a", "aac", "-b:a", "192k", "-f", "ipod"];
