@@ -66,6 +66,9 @@ export async function GET(req: Request) {
       ...(info.streaming_data?.adaptive_formats || []),
     ];
     const selectedFormat = availableFormats.find((format) => format.itag === itag);
+    if (!selectedFormat) {
+      throw new Error("The requested format is no longer available.");
+    }
     const stream = await info.download({
       ...(Number.isInteger(itag) && itag > 0
         ? { itag }
@@ -93,6 +96,34 @@ export async function GET(req: Request) {
         headers: {
           "Content-Type": mimeType,
           "Content-Disposition": `attachment; filename="${safeTitle}.${extension}"; filename*=UTF-8''${encodedFilename}`,
+          "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+      });
+      return withCors(response, req);
+    }
+
+    if (selectedFormat.has_video && !selectedFormat.has_audio) {
+      if (!ffmpegPath) throw new Error("Video merging is unavailable on this server.");
+      const audioSource = availableFormats
+        .filter((format) => format.has_audio && !format.has_video && !format.has_text)
+        .sort((left, right) => right.bitrate - left.bitrate)[0];
+      if (!audioSource) throw new Error("An audio stream is unavailable for this video.");
+
+      const audioStream = await info.download({ itag: audioSource.itag });
+      const videoInput = Readable.fromWeb(stream as never);
+      const audioInput = Readable.fromWeb(audioStream as never);
+      const merger = spawn(ffmpegPath, [
+        "-loglevel", "error", "-i", "pipe:3", "-i", "pipe:4",
+        "-map", "0:v:0", "-map", "1:a:0", "-c", "copy", "-f", "mp4", "pipe:1",
+      ], { stdio: ["ignore", "pipe", "pipe", "pipe", "pipe"] });
+      videoInput.pipe(merger.stdio[3] as NodeJS.WritableStream);
+      audioInput.pipe(merger.stdio[4] as NodeJS.WritableStream);
+
+      const response = new Response(Readable.toWeb(merger.stdout!) as unknown as ReadableStream<Uint8Array>, {
+        status: 200,
+        headers: {
+          "Content-Type": "video/mp4",
+          "Content-Disposition": `attachment; filename="video-${id}.mp4"; filename*=UTF-8''${encodeURIComponent(`${safeTitle}.mp4`)}`,
           "Access-Control-Expose-Headers": "Content-Disposition",
         },
       });

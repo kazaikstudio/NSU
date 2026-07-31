@@ -173,8 +173,8 @@ const DownloadModal = ({ open, videoId, position, anchor, onClose }: DownloadMod
                 {sectionFormats.map((format) => (
                   <div key={`${format.itag}-${format.extension}-${format.outputBitrate || format.label}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/80 p-2.5">
                     <div>
-                      <div className="font-semibold text-xs text-white">{format.label} {format.extension.toUpperCase()}</div>
-                      <div className="text-[10px] text-slate-400">{format.kind.replace('+', ' + ')}{format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ""}</div>
+                      <div className="font-semibold text-xs text-white">{format.label}</div>
+                      <div className="text-[10px] text-slate-400">{format.extension === "mp3" ? "converts to MP3" : format.kind.replace('+', ' + ')}{format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ""}</div>
                     </div>
                     <button onClick={() => void handleDownload(format)} disabled={loadingFormat !== null} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-500 disabled:opacity-50">
                       {loadingFormat === String(format.itag) ? "Preparing..." : "Download"}

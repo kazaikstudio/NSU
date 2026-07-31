@@ -31,11 +31,14 @@ export async function GET(request: Request) {
     ];
     const audioSource = allFormats
       .filter((format) => format.has_audio && !format.has_video && !format.has_text)
-      .sort((left, right) => right.bitrate - left.bitrate)[0];
+      .sort((left, right) => right.bitrate - left.bitrate)[0]
+      || allFormats
+        .filter((format) => format.has_audio && !format.has_text)
+        .sort((left, right) => right.bitrate - left.bitrate)[0];
     const videoSource = allFormats
       .filter((format) => {
         const quality = Number(format.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
-        return format.has_video && format.has_audio && !format.has_text && quality >= 360;
+        return format.has_video && !format.has_text && format.mime_type?.startsWith('video/mp4') && quality >= 360;
       })
       .sort((left, right) => {
         const leftQuality = Number(left.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
@@ -51,7 +54,7 @@ export async function GET(request: Request) {
       ...videoSource.map((video) => ({
         itag: video.itag,
         label: video.quality_label || 'Video',
-        kind: 'video+audio',
+        kind: video.has_audio ? 'video+audio' : 'video',
         mimeType: 'video/mp4',
         extension: 'mp4',
         size: video.content_length || null,
