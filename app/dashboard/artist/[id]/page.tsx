@@ -21,9 +21,12 @@ interface Artist {
 
 interface Track {
   id: string;
+  kind?: string;
   title: string;
   album: string;
   fileName: string;
+  fileUrl?: string;
+  createdAt?: string;
   uploadedAt: string;
 }
 
@@ -35,6 +38,8 @@ export default function ArtistDetailPage() {
   // Image State Management
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [profileUrl, setProfileUrl] = useState<string | null>(null);
+  const [selectedBanner, setSelectedBanner] = useState<File | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<File | null>(null);
 
   // File Input Refs for Images
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +83,18 @@ export default function ArtistDetailPage() {
             setArtist(fetchedArtist);
             setBannerUrl(fetchedArtist.bannerUrl || null);
             setProfileUrl(fetchedArtist.profileUrl || null);
+            const mediaResponse = await fetch(`/api/dashboard/artists/${params.id}/media`);
+            const mediaData = await mediaResponse.json();
+            if (mediaResponse.ok && !ignore) {
+              setTracks((mediaData.media || []).filter((item: Track) => item.kind === 'track').map((item: Track) => ({
+                id: item.id,
+                title: item.title,
+                album: item.album || 'Single',
+                fileName: item.fileName,
+                fileUrl: item.fileUrl,
+                uploadedAt: new Date(item.uploadedAt || item.createdAt || new Date().toISOString()).toISOString().split('T')[0],
+              })));
+            }
           } else {
             // Safely check if fallback exists before assigning
             const fallbackArtist = getArtistById(params.id);
@@ -147,6 +164,7 @@ export default function ArtistDetailPage() {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setBannerUrl(URL.createObjectURL(file));
+      setSelectedBanner(file);
       setIsDirty(true);
       setSaveSuccess(false);
     }
@@ -157,6 +175,7 @@ export default function ArtistDetailPage() {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setProfileUrl(URL.createObjectURL(file));
+      setSelectedProfile(file);
       setIsDirty(true);
       setSaveSuccess(false);
     }
@@ -195,30 +214,42 @@ export default function ArtistDetailPage() {
     setTrackTitle(cleanedName);
   };
 
-  const handleUploadTrack = (e: React.FormEvent) => {
+  const uploadMedia = async (file: File, kind: 'banner' | 'profile' | 'track', title = '', album = '') => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('kind', kind);
+    formData.append('title', title);
+    formData.append('album', album);
+    const response = await fetch(`/api/dashboard/artists/${params.id}/media`, { method: 'POST', body: formData });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to upload media');
+    return data.media as Track;
+  };
+
+  const handleUploadTrack = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile || !trackTitle) return;
 
     setIsUploading(true);
-
-    setTimeout(() => {
-      const newTrack: Track = {
-        id: Date.now().toString(),
-        title: trackTitle,
-        album: albumName || 'Single',
-        fileName: selectedFile.name,
-        uploadedAt: new Date().toISOString().split('T')[0],
-      };
-
-      setTracks((prevTracks) => [newTrack, ...prevTracks]);
+    try {
+      const media = await uploadMedia(selectedFile, 'track', trackTitle, albumName || 'Single');
+      setTracks((prevTracks) => [{
+        id: media.id,
+        title: media.title,
+        album: media.album || 'Single',
+        fileName: media.fileName,
+        fileUrl: media.fileUrl,
+        uploadedAt: new Date(media.createdAt || new Date().toISOString()).toISOString().split('T')[0],
+      }, ...prevTracks]);
       setSelectedFile(null);
       setTrackTitle('');
       setAlbumName('');
-      setIsUploading(false);
-      setIsDirty(true);
-      setSaveSuccess(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
-    }, 1200);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Unable to upload track');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleDeleteTrack = (id: string) => {
@@ -230,14 +261,25 @@ export default function ArtistDetailPage() {
   // Save All Changes to Server
   const handleSaveChanges = async () => {
     setIsSaving(true);
-
-    setTimeout(() => {
+    try {
+      if (selectedBanner) {
+        const media = await uploadMedia(selectedBanner, 'banner');
+        setBannerUrl(media.fileUrl || null);
+        setSelectedBanner(null);
+      }
+      if (selectedProfile) {
+        const media = await uploadMedia(selectedProfile, 'profile');
+        setProfileUrl(media.fileUrl || null);
+        setSelectedProfile(null);
+      }
       setIsSaving(false);
       setIsDirty(false);
       setSaveSuccess(true);
-
       setTimeout(() => setSaveSuccess(false), 3000);
-    }, 1500);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Unable to save artist changes');
+      setIsSaving(false);
+    }
   };
 
   return (

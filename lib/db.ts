@@ -1,7 +1,10 @@
 // lib/db.ts
 import { Pool } from 'pg';
 
-const connectionString = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const configuredConnectionString = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const connectionString = configuredConnectionString && !/USER|PASSWORD|your_railway_postgres_url/i.test(configuredConnectionString)
+  ? configuredConnectionString
+  : undefined;
 
 const pool = new Pool({
   connectionString,
