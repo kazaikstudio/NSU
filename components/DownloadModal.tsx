@@ -95,8 +95,11 @@ const DownloadModal = ({ open, videoId, position, anchor, onClose }: DownloadMod
 
   if (!open || !videoId || !position) return null;
 
+  const getFormatKey = (format: DownloadFormat) => `${format.itag}-${format.extension}-${format.outputBitrate || "source"}`;
+
   const handleDownload = async (format: DownloadFormat) => {
-    setLoadingFormat(String(format.itag));
+    const formatKey = getFormatKey(format);
+    setLoadingFormat(formatKey);
     try {
       const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}&bitrate=${format.outputBitrate || ''}`);
       if (!response.ok) {
@@ -106,11 +109,14 @@ const DownloadModal = ({ open, videoId, position, anchor, onClose }: DownloadMod
       const disposition = response.headers.get("Content-Disposition") || "";
       const encodedFilename = disposition.match(/filename\*=UTF-8''([^;]+)/)?.[1];
       const filename = encodedFilename ? decodeURIComponent(encodedFilename) : `${title || videoId}.mp4`;
-      const blobUrl = URL.createObjectURL(await response.blob());
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(new Blob([blob], { type: format.mimeType }));
       const anchor = document.createElement("a");
       anchor.href = blobUrl;
       anchor.download = filename;
+      document.body.appendChild(anchor);
       anchor.click();
+      anchor.remove();
       URL.revokeObjectURL(blobUrl);
     } catch (downloadError: unknown) {
       setError(downloadError instanceof Error ? downloadError.message : "Unable to download this format.");
@@ -171,13 +177,13 @@ const DownloadModal = ({ open, videoId, position, anchor, onClose }: DownloadMod
               <div key={section} className="space-y-2.5">
                 <h4 className="border-b border-slate-700 pb-1 text-xs font-bold uppercase tracking-wider text-rose-300">{section} formats</h4>
                 {sectionFormats.map((format) => (
-                  <div key={`${format.itag}-${format.extension}-${format.outputBitrate || format.label}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/80 p-2.5">
+                  <div key={getFormatKey(format)} className="flex items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/80 p-2.5">
                     <div>
                       <div className="font-semibold text-xs text-white">{format.label}</div>
                       <div className="text-[10px] text-slate-400">{format.extension === "mp3" ? "converts to MP3" : format.kind.replace('+', ' + ')}{format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ""}</div>
                     </div>
                     <button onClick={() => void handleDownload(format)} disabled={loadingFormat !== null} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-500 disabled:opacity-50">
-                      {loadingFormat === String(format.itag) ? "Preparing..." : "Download"}
+                      {loadingFormat === getFormatKey(format) ? "Preparing..." : "Download"}
                     </button>
                   </div>
                 ))}
