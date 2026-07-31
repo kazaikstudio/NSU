@@ -9,6 +9,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   const range = request.headers.get('range');
+  const requestedFilename = new URL(request.url).searchParams.get('filename');
   const response = await fetch(`https://drive.google.com/uc?export=download&id=${id}`, {
     headers: range ? { Range: range } : undefined,
   });
@@ -26,6 +27,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (contentRange) headers.set('Content-Range', contentRange);
   headers.set('Accept-Ranges', 'bytes');
   headers.set('Cache-Control', 'public, max-age=3600');
+
+  if (requestedFilename) {
+    const safeFilename = requestedFilename.replace(/[\r\n"\\/]/g, '_');
+    headers.set('Content-Disposition', `attachment; filename="${safeFilename}"`);
+  }
 
   return new NextResponse(response.body, { status: response.status, headers });
 }

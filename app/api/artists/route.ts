@@ -4,8 +4,28 @@ import pool, { ensureDatabaseReady } from '@/lib/db';
 export async function GET() {
   try {
     await ensureDatabaseReady();
-    const { rows } = await pool.query('SELECT * FROM artists ORDER BY created_at DESC');
-    return NextResponse.json({ artists: rows });
+    const { rows } = await pool.query(`
+      SELECT
+        id::text AS id,
+        name,
+        genre,
+        tracks_count AS "tracksCount",
+        status,
+        profile_url AS "profileUrl"
+      FROM artists
+      ORDER BY created_at DESC
+    `);
+
+    return NextResponse.json({
+      artists: rows.map((artist) => ({
+        id: artist.id,
+        name: artist.name,
+        genre: artist.genre,
+        tracksCount: Number(artist.tracksCount || 0),
+        status: artist.status || 'Active',
+        profileUrl: artist.profileUrl || null,
+      })),
+    });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

@@ -47,7 +47,7 @@ const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps)
     setLoadingFormat(format);
 
     // Build the stream endpoint URL
-    const downloadUrl = `/api/download?id=${encodeURIComponent(videoId)}&format=${format}`;
+    const downloadUrl = `/api/youtube/download?id=${encodeURIComponent(videoId)}&format=${format}`;
 
     // Create an invisible anchor tag to trigger instant browser download streaming
     const a = document.createElement("a");

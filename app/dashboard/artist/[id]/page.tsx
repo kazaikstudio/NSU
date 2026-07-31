@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { getArtistById } from '@/lib/artists';
+import AudioPlayer from '@/components/AudioPlayer';
 
 interface Artist {
   id: string;
@@ -665,7 +666,10 @@ export default function ArtistDetailPage() {
                           </td>
                           <td className="px-6 py-4">
                             {track.fileUrl ? (
-                              <audio controls preload="metadata" className="h-8 w-48" src={getPlayableAudioUrl(track.fileUrl) || undefined} aria-label={`Play ${track.title}`} />
+                              <AudioPlayer
+                                src={getPlayableAudioUrl(track.fileUrl) || ''}
+                                title={track.title}
+                              />
                             ) : (
                               <span className="text-xs text-slate-500">Unavailable</span>
                             )}

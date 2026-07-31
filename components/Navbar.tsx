@@ -11,7 +11,7 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const navRef = useRef<HTMLHeadingElement>(null);
   const pathname = usePathname();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
 
   useClickOutside(navRef, () => {
     if (isOpen) setIsOpen(false);
@@ -20,7 +20,7 @@ const Navbar = () => {
   return (
     <header
       ref={navRef}
-      className="sticky top-0 z-50 w-full border-b border-zinc-800/80 bg-zinc-950/70 text-white backdrop-blur-xl shadow-2xl shadow-zinc-950/50"
+      className="sticky top-0 z-50 w-full border-b border-zinc-200/80 bg-white/80 text-zinc-950 shadow-2xl shadow-zinc-300/20 backdrop-blur-xl dark:border-zinc-800/80 dark:bg-zinc-950/70 dark:text-white dark:shadow-zinc-950/50"
     >
       <nav className="flex items-center justify-between px-4 py-2 sm:px-6 max-w-7xl mx-auto">
         {/* Logo & Brand Name */}
@@ -111,12 +111,11 @@ const Navbar = () => {
           </li>
           <li>
             <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
               className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/60 text-zinc-300 backdrop-blur-sm transition-all duration-300 hover:border-amber-500/50 hover:bg-zinc-900 hover:text-amber-400 hover:shadow-lg hover:shadow-amber-500/10"
               aria-label="Toggle theme"
             >
-              <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
           </li>
         </ul>
@@ -124,12 +123,11 @@ const Navbar = () => {
         {/* Mobile Right Container (Theme Toggle + Hamburger) */}
         <div className="flex items-center gap-2 md:hidden">
           <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
             className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/60 text-zinc-300 backdrop-blur-sm transition-all duration-300 hover:border-amber-500/50 hover:bg-zinc-900 hover:text-amber-400"
             aria-label="Toggle theme"
           >
-            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
 
           <button

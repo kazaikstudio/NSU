@@ -7,7 +7,8 @@
 }
 
 body {
-    background-color: #000322;
+  background-color: #f8fafc;
+  color: #0f172a;
 
 }
 
@@ -31,4 +32,34 @@ body.dark, .dark body {
 
 .marquee-track > *:active {
   transform: scale(0.95);
+}
+
+.audio-range {
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #fbbf24 var(--range-progress),
+    #334155 var(--range-progress)
+  );
+  cursor: pointer;
+}
+
+.audio-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+}
+
+.audio-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
 }

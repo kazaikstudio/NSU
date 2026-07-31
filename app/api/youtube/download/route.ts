@@ -93,7 +93,7 @@ export async function GET(req: Request) {
     const filename = `${cleanTitle}.${fileExtension}`;
 
     // 2. Convert Node stream to Web ReadableStream
-    const webStream = Readable.toWeb(nodeStream as any) as ReadableStream;
+    const webStream = Readable.toWeb(nodeStream) as unknown as ReadableStream<Uint8Array>;
 
     // 3. Return Web Response with converted stream
     const response = new Response(webStream, {
@@ -106,11 +106,11 @@ export async function GET(req: Request) {
     });
 
     return withCors(response, req);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Download route error:", error);
     return withCors(
       NextResponse.json(
-        { error: error?.message ?? "Failed to process download stream" },
+        { error: error instanceof Error ? error.message : "Failed to process download stream" },
         { status: 500 }
       ),
       req

@@ -2,11 +2,11 @@
 
 import React, { useState } from 'react';
 import Switchbutton from '../../../components/Switchbutton';
-import AudioCard from '../../../components/AudioCard';
+import FeaturedAudioCards from '../../../components/FeaturedAudioCards';
+import AudioTrackList from '../../../components/AudioTrackList';
+import ArtistList from '../../../components/ArtistList';
 
 const Music = () => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const cards = [0, 1, 2, 3, 4];
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'music' | 'artist'>('music');
 
@@ -24,35 +24,7 @@ const Music = () => {
         <h3 className="text-sm sm:text-lg text-yellow-500 mt-1 italic">&ldquo;If you can dream it, Noll can design, shoot, and store it.&rdquo;</h3>
       </div>
 
-      <div
-        className="overflow-x-auto snap-x snap-mandatory scrollbar-none w-full pb-4 cursor-grab active:cursor-grabbing select-none"
-        onScroll={(e) => {
-          const scrollLeft = e.currentTarget.scrollLeft;
-          const cardWidth = e.currentTarget.firstElementChild?.firstElementChild?.clientWidth || e.currentTarget.clientWidth;
-          const newIndex = Math.round(scrollLeft / cardWidth);
-          setCurrentIndex(newIndex);
-        }}
-      >
-        <div className="slider-track flex gap-4 w-full">
-          {cards.map((_, index) => (
-            <div key={index} className="w-full sm:w-[calc(50%-8px)] lg:w-[calc(20%-13px)] shrink-0 snap-start">
-              <AudioCard />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Mobile Swipe Dots Indicator */}
-      <div className="flex justify-center items-center gap-2 mt-2 mb-2 sm:hidden">
-        {cards.map((_, index) => (
-          <span
-            key={index}
-            className={`h-2 rounded-full transition-all duration-300 ${
-              currentIndex === index ? 'w-6 bg-amber-500' : 'w-2 bg-zinc-700'
-            }`}
-          />
-        ))}
-      </div>
+      <FeaturedAudioCards />
 
       <p className="text-zinc-300 text-sm">🔥 Exploring the Hot, fresh Audio and Visual creations emerging from Noll Studio Uganda.</p>
 
@@ -97,17 +69,11 @@ const Music = () => {
       <div className="mt-1 max-w-8xl mx-auto">
         {activeTab === 'music' ? (
           <div id="music-list-container" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 w-full">
-            {/* Music items will be rendered here */}
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6 text-zinc-400 text-sm flex items-center justify-center min-h-140px w-full col-span-full">
-              New Music Creations Container (Wide Screen)
-            </div>
+            <AudioTrackList searchTerm={searchTerm} />
           </div>
         ) : (
           <div id="artist-list-container" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 w-full">
-            {/* Artist items will be rendered here */}
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6 text-zinc-400 text-sm flex items-center justify-center min-h-140px w-full col-span-full">
-              New Artist Creations Container (Wide Screen)
-            </div>
+            <ArtistList searchTerm={searchTerm} />
           </div>
         )}
       </div>
