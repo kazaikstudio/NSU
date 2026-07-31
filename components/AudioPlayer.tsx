@@ -22,10 +22,6 @@ function formatTime(time: number) {
   return `${minutes}:${seconds}`;
 }
 
-function formatDate(date: string) {
-  return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(date));
-}
-
 function getDownloadUrl(fileUrl: string | undefined, fileName: string | undefined, title: string) {
   if (!fileUrl) return undefined;
 
@@ -39,9 +35,7 @@ export default function AudioPlayer({
   src,
   title,
   fileUrl,
-  album,
   fileName,
-  createdAt,
   artistName,
   artistGenre,
 }: AudioPlayerProps) {
@@ -49,6 +43,7 @@ export default function AudioPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isExpanded, setIsExpanded] = useState(false);
   const waveId = useId();
 
   // Pseudo-random wave bar heights to simulate an equalizer visualizer
@@ -66,18 +61,51 @@ export default function AudioPlayer({
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
+    setIsExpanded(false);
   }, [src]);
 
-  const togglePlay = async () => {
+  // Global event listener to pause this audio and collapse it back to default when another row/player starts playing
+  useEffect(() => {
+    const handleGlobalPlay = (e: Event) => {
+      const audio = audioRef.current;
+      if (audio && e.target !== audio) {
+        audio.pause();
+        setIsPlaying(false);
+        setIsExpanded(false);
+      }
+    };
+
+    window.addEventListener('play', handleGlobalPlay, true);
+    return () => {
+      window.removeEventListener('play', handleGlobalPlay, true);
+    };
+  }, []);
+
+  const togglePlay = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     const audio = audioRef.current;
     if (!audio) return;
 
     if (audio.paused) {
-      await audio.play();
-      setIsPlaying(true);
+      try {
+        await audio.play();
+        setIsPlaying(true);
+      } catch (err) {
+        console.error("Play failed:", err);
+      }
     } else {
       audio.pause();
       setIsPlaying(false);
+    }
+  };
+
+  const handleRowClick = () => {
+
+    const nextExpanded = !isExpanded;
+    setIsExpanded(nextExpanded);
+
+    if (nextExpanded && audioRef.current) {
+      audioRef.current.dispatchEvent(new Event('play', { bubbles: true }));
     }
   };
 
@@ -92,31 +120,33 @@ export default function AudioPlayer({
   const downloadUrl = getDownloadUrl(fileUrl, fileName, title);
   const hasArtistDetails = Boolean(artistName);
 
+  const audioTag = (
+    <audio
+      ref={audioRef}
+      preload="metadata"
+      src={src}
+      onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+      onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+      onPlay={() => setIsPlaying(true)}
+      onPause={() => setIsPlaying(false)}
+      onEnded={() => {
+        setIsPlaying(false);
+        setCurrentTime(0);
+      }}
+      className="sr-only"
+      aria-label={`Audio player for ${title}`}
+    />
+  );
+
   const player = (
     <div className="flex w-full items-center gap-3">
-      <audio
-        ref={audioRef}
-        preload="metadata"
-        src={src}
-        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
-        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={() => {
-          setIsPlaying(false);
-          setCurrentTime(0);
-        }}
-        className="sr-only"
-        aria-label={`Audio player for ${title}`}
-      />
-
       <button
         type="button"
         onClick={togglePlay}
         aria-label={isPlaying ? 'Pause track' : 'Play track'}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400 text-slate-950 transition hover:bg-amber-300 focus:outline-none shadow-md shadow-amber-400/20"
+        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-400 text-slate-950 transition hover:bg-amber-300 focus:outline-none shadow-md shadow-amber-400/20"
       >
-        {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+        {isPlaying ? <Pause size={25} fill="currentColor" /> : <Play size={25} fill="currentColor" className="ml-0.5" />}
       </button>
 
       <span className="shrink-0 text-[10px] font-medium tabular-nums text-slate-400">
@@ -124,7 +154,7 @@ export default function AudioPlayer({
       </span>
 
       {/* Interactive Waveform Bar Visualizer */}
-      <div className="relative min-w-0 flex-1 group py-2 cursor-pointer flex items-center">
+      <div className="relative min-w-0 flex-1 group py-2 cursor-pointer flex items-center" onClick={(e) => e.stopPropagation()}>
         <input
           type="range"
           min="0"
@@ -162,30 +192,43 @@ export default function AudioPlayer({
     </div>
   );
 
-  if (!hasArtistDetails) return player;
+  if (!hasArtistDetails) {
+    return (
+      <div onClick={handleRowClick} className="cursor-pointer">
+        {audioTag}
+        {isExpanded ? player : <div className="text-white text-sm font-semibold">{title}</div>}
+      </div>
+    );
+  }
 
   return (
-    <article className="flex min-w-0 items-center gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 transition hover:border-amber-400/45">
-      <div className="min-w-0 shrink-0 basis-52">
-        <h2 className="truncate text-base font-semibold text-white">{title}</h2>
-        <p className="mt-1 truncate text-xs text-amber-300">{artistName} {artistGenre ? `• ${artistGenre}` : ''}</p>
-      </div>
+    <article
+      onClick={handleRowClick}
+      className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 transition hover:border-amber-400/45 cursor-pointer"
+    >
+      {audioTag}
 
-      <div className="min-w-0 flex-1">
-        {player}
-      </div>
-
-      <div className="hidden min-w-0 shrink-0 basis-48 lg:block">
-        <p className="truncate text-[11px] text-slate-500">{album || 'Single'}</p>
-        <p className="mt-1 truncate text-[11px] text-slate-400">{fileName || `${title}.mp3`}</p>
-      </div>
-
-      {createdAt && <span className="hidden shrink-0 text-[11px] text-slate-500 xl:block">{formatDate(createdAt)}</span>}
+      {!isExpanded ? (
+        <>
+          <div className="min-w-0 shrink-0 basis-52">
+            <h2 className="truncate text-base font-semibold text-white">{title}</h2>
+            <p className="mt-1 truncate text-xs text-amber-300">{artistName} {artistGenre ? `• ${artistGenre}` : ''}</p>
+          </div>
+          <div className="flex-1" />
+        </>
+      ) : (
+        <>
+          <div className="min-w-0 flex-1">
+            {player}
+          </div>
+        </>
+      )}
 
       {downloadUrl && (
         <a
           href={downloadUrl}
           download={fileName || `${title}.mp3`}
+          onClick={(e) => e.stopPropagation()}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:border-amber-300 hover:bg-amber-400/20"
           aria-label={`Download ${title}`}
         >

@@ -18,15 +18,17 @@ const Music = () => {
     <main className="px-4 py-8 max-w-9xl mx-auto">
       <Switchbutton />
 
-      <div className="mt-5 text-center sm:text-start flex flex-col items-center sm:items-start">
+      <div className="mt-2 mb-5 text-center sm:text-start flex flex-col items-center sm:items-start">
         <p className="w-fit rounded-[5px] px-4 sm:px-6 py-2.5 sm:py-3 bg-amber-300 text-black text-xs sm:text-sm font-medium text-center">Your Vision, Our Craft.</p>
-        <h1 className="text-3xl sm:text-5xl mt-2 font-bold text-amber-50">NOLL VISUALS</h1>
+        <h1 className="text-5xl sm:text-5xl mt-2 font-bold text-amber-50">Noll Music</h1>
         <h3 className="text-sm sm:text-lg text-yellow-500 mt-1 italic">&ldquo;If you can dream it, Noll can design, shoot, and store it.&rdquo;</h3>
       </div>
 
       <FeaturedAudioCards />
 
-      <p className="text-zinc-300 text-sm">🔥 Exploring the Hot, fresh Audio and Visual creations emerging from Noll Studio Uganda.</p>
+      <p className="mt-5 text-center text-sm text-zinc-300 md:text-left">
+        🔥 Exploring the Hot, fresh Audio and Visual creations emerging from Noll Studio Uganda.
+      </p>
 
       <div className="search-box mt-4">
         <input

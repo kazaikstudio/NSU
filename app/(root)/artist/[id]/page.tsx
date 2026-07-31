@@ -107,7 +107,7 @@ export default function PublicArtistDetailPage() {
           className="absolute inset-0 bg-cover bg-center opacity-25 filter blur-[1px]"
           style={{ backgroundImage: artist.bannerUrl ? `url(${artist.bannerUrl})` : undefined }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/60 via-slate-950/85 to-slate-950" />
+        <div className="absolute inset-0 bg-linear-to-b from-slate-950/60 via-slate-950/85 to-slate-950" />
 
         <div className="relative mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
           <Link href="/Audio" className="inline-flex items-center gap-2 text-sm font-medium text-slate-300 transition hover:text-amber-300 mb-8">
@@ -129,7 +129,7 @@ export default function PublicArtistDetailPage() {
                 <Sparkles size={12} />
                 <span>{artist.status} artist</span>
               </div>
-              <h1 className="text-4xl font-black tracking-tight text-white sm:text-6xl bg-gradient-to-r from-white via-slate-100 to-amber-200 bg-clip-text text-transparent">
+              <h1 className="text-4xl font-black tracking-tight text-white sm:text-6xl bg-linear-to-r from-white via-slate-100 to-amber-200 bg-clip-text ">
                 {artist.name}
               </h1>
               <p className="mt-2 text-base font-medium text-amber-400/90 flex items-center gap-2">
