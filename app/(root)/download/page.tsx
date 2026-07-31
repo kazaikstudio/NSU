@@ -39,6 +39,7 @@ function DownloadForm() {
   const [formats, setFormats] = useState<DownloadFormat[]>([])
   const [loadingFormats, setLoadingFormats] = useState(false)
   const [loadingFormat, setLoadingFormat] = useState<number | null>(null)
+  const [downloadProgress, setDownloadProgress] = useState(0)
 
   const fetchFormats = async (videoId: string) => {
     setLoadingFormats(true)
@@ -81,6 +82,7 @@ function DownloadForm() {
     const videoId = getVideoId(source)
     if (!videoId) return
     setLoadingFormat(format.itag)
+    setDownloadProgress(0)
     try {
       const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}&bitrate=${format.outputBitrate || ''}`)
       if (!response.ok) {
@@ -91,7 +93,33 @@ function DownloadForm() {
       const filenameHeader = response.headers.get('Content-Disposition') || ''
       const encodedFilename = filenameHeader.match(/filename\*=UTF-8''([^;]+)/)?.[1]
       const filename = encodedFilename ? decodeURIComponent(encodedFilename) : `${title || `youtube-${videoId}`}.mp4`
-      const blobUrl = URL.createObjectURL(await response.blob())
+      const contentLength = Number(response.headers.get('Content-Length'))
+      const reader = response.body?.getReader()
+      const chunks: Uint8Array[] = []
+      let receivedLength = 0
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (!value) continue
+          chunks.push(value)
+          receivedLength += value.length
+          if (Number.isFinite(contentLength) && contentLength > 0) {
+            setDownloadProgress(Math.round((receivedLength / contentLength) * 100))
+          }
+        }
+      } else {
+        chunks.push(new Uint8Array(await response.arrayBuffer()))
+      }
+
+      setDownloadProgress(100)
+      const blobParts = chunks.map((chunk) => {
+        const copy = new Uint8Array(chunk.byteLength)
+        copy.set(chunk)
+        return copy.buffer
+      })
+      const blobUrl = URL.createObjectURL(new Blob(blobParts))
       const anchor = document.createElement('a')
       anchor.href = blobUrl
       anchor.download = filename
@@ -103,6 +131,7 @@ function DownloadForm() {
       setError(downloadError instanceof Error ? downloadError.message : 'Unable to download this video.')
     } finally {
       setLoadingFormat(null)
+      setDownloadProgress(0)
     }
   }
 
@@ -155,7 +184,8 @@ function DownloadForm() {
                 <div key={section} className="space-y-3">
                   <h2 className="border-b border-slate-700 pb-2 text-sm font-bold uppercase tracking-wider text-rose-300">{section} formats</h2>
                   {sectionFormats.map((format) => (
-                    <div key={`${format.itag}-${format.extension}`} className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                    <div key={`${format.itag}-${format.extension}`} className="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                      <div className="flex items-center justify-between gap-4">
                       <div>
                         <p className="text-sm font-semibold text-white">{format.label} {format.extension.toUpperCase()}</p>
                         <p className="mt-1 text-xs text-slate-500">{format.kind.replace('+', ' + ')}{format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ''}</p>
@@ -164,6 +194,15 @@ function DownloadForm() {
                         <Download size={15} aria-hidden="true" />
                         {loadingFormat === format.itag ? 'Preparing...' : 'Download'}
                       </button>
+                      </div>
+                      {loadingFormat === format.itag && (
+                        <div className="mt-3" role="status" aria-label={downloadProgress ? `Download ${downloadProgress}% complete` : 'Download in progress'}>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
+                            <div className={`h-full rounded-full bg-rose-500 transition-[width] duration-200 ${downloadProgress ? '' : 'w-1/3 animate-pulse'}`} style={downloadProgress ? { width: `${downloadProgress}%` } : undefined} />
+                          </div>
+                          <p className="mt-1 text-right text-[10px] text-slate-500">{downloadProgress ? `${downloadProgress}%` : 'Preparing download...'}</p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
