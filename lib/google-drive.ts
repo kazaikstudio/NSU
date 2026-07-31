@@ -13,20 +13,42 @@ type DriveFile = {
   thumbnailLink?: string;
 };
 
+function getGoogleConfig() {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN?.trim();
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('Google Drive is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN on the server.');
+  }
+
+  if (/your_|example|placeholder/i.test(`${clientId} ${clientSecret} ${refreshToken}`)) {
+    throw new Error('Google Drive is using placeholder credentials. Replace the Google OAuth environment variables with real server-side values.');
+  }
+
+  return { clientId, clientSecret, refreshToken };
+}
+
 async function getAccessToken() {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID || '',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
-      refresh_token: process.env.GOOGLE_REFRESH_TOKEN || '',
+      client_id: getGoogleConfig().clientId,
+      client_secret: getGoogleConfig().clientSecret,
+      refresh_token: getGoogleConfig().refreshToken,
       grant_type: 'refresh_token',
     }),
   });
 
   const data = await response.json();
   if (!response.ok || !data.access_token) {
+    if (data.error === 'invalid_client') {
+      throw new Error('Google rejected the OAuth client. Verify GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET belong to the client that issued GOOGLE_REFRESH_TOKEN.');
+    }
+    if (data.error === 'invalid_grant') {
+      throw new Error('Google rejected the refresh token. Generate a new refresh token for this OAuth client with Drive access.');
+    }
     throw new Error(data.error_description || 'Unable to authenticate with Google Drive');
   }
 
