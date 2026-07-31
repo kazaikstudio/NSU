@@ -14,6 +14,8 @@ interface SwitchbuttonProps {
 const Switchbutton = ({ onScrollToSearch }: SwitchbuttonProps) => {
   const pathname = usePathname()
   const isAudio = pathname === '/Audio'
+  const isDownload = pathname === '/download'
+  const isVideo = pathname === '/' || pathname.startsWith('/video/')
 
   return (
     <div className="fixed inset-x-0 bottom-6 z-50 flex items-center justify-center gap-2 px-4 pointer-events-none">
@@ -22,7 +24,7 @@ const Switchbutton = ({ onScrollToSearch }: SwitchbuttonProps) => {
         <Link
           href="/"
           className={`rounded-full px-5 py-2 text-sm font-medium transition ${
-            !isAudio
+            isVideo
               ? 'bg-rose-600 text-white hover:bg-rose-500'
               : 'text-slate-300 hover:bg-slate-800'
           }`}
@@ -38,6 +40,16 @@ const Switchbutton = ({ onScrollToSearch }: SwitchbuttonProps) => {
           }`}
         >
           Audio
+        </Link>
+        <Link
+          href="/download"
+          className={`rounded-full px-5 py-2 text-sm font-medium transition ${
+            isDownload
+              ? 'bg-rose-600 text-white hover:bg-rose-500'
+              : 'text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          Download
         </Link>
       </div>
 
@@ -64,6 +76,7 @@ const Switchbutton = ({ onScrollToSearch }: SwitchbuttonProps) => {
           </svg>
         </button>
       )}
+
     </div>
   )
 }

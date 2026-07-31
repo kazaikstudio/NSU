@@ -4,16 +4,32 @@ import pool, { ensureDatabaseReady } from '@/lib/db';
 export async function GET() {
   try {
     await ensureDatabaseReady();
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS artist_media (
+        id TEXT PRIMARY KEY,
+        artist_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        album TEXT,
+        file_name TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        drive_file_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
     const { rows } = await pool.query(`
       SELECT
-        id::text AS id,
-        name,
-        genre,
-        tracks_count AS "tracksCount",
-        status,
-        profile_url AS "profileUrl"
+        artists.id::text AS id,
+        artists.name,
+        artists.genre,
+        COUNT(media.id) FILTER (WHERE media.kind = 'track')::int AS "tracksCount",
+        artists.status,
+        artists.profile_url AS "profileUrl"
       FROM artists
-      ORDER BY created_at DESC
+      LEFT JOIN artist_media AS media ON media.artist_id = artists.id::text
+      GROUP BY artists.id, artists.name, artists.genre, artists.status, artists.profile_url, artists.created_at
+      ORDER BY artists.created_at DESC
     `);
 
     return NextResponse.json({

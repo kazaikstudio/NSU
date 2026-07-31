@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
-import ytdl from "@distube/ytdl-core";
-import { Readable } from "stream";
+import { ClientType, Innertube } from "youtubei.js";
 
 export const maxDuration = 60; // Extend serverless limit
 export const dynamic = "force-dynamic";
+
+let youtubeClientPromise: Promise<Innertube> | undefined;
+
+function getYoutubeClient() {
+  youtubeClientPromise ??= Innertube.create({ client_type: ClientType.ANDROID_VR, retrieve_player: true });
+  return youtubeClientPromise;
+}
 
 const ALLOWED_ORIGINS = [
   "https://nollstudios.org",
@@ -32,8 +38,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
 
   const id = searchParams.get("id") || searchParams.get("videoId");
-  const format = searchParams.get("format")?.toLowerCase() || "720p";
-
+  const itag = Number(searchParams.get("itag"));
   if (!id) {
     return withCors(
       NextResponse.json({ error: "Missing video 'id' parameter" }, { status: 400 }),
@@ -42,65 +47,36 @@ export async function GET(req: Request) {
   }
 
   try {
-    const videoUrl = `https://www.youtube.com/watch?v=${id}`;
-
-    if (!ytdl.validateID(id) && !ytdl.validateURL(videoUrl)) {
+    if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) {
       return withCors(
         NextResponse.json({ error: "Invalid YouTube Video ID" }, { status: 400 }),
         req
       );
     }
 
-    const info = await ytdl.getInfo(videoUrl);
+    const youtube = await getYoutubeClient();
+    const info = await youtube.getBasicInfo(id);
+    const availableFormats = [
+      ...(info.streaming_data?.formats || []),
+      ...(info.streaming_data?.adaptive_formats || []),
+    ];
+    const selectedFormat = availableFormats.find((format) => format.itag === itag);
+    const stream = await info.download({
+      ...(Number.isInteger(itag) && itag > 0
+        ? { itag }
+        : { type: "video+audio", quality: "best", format: "mp4" }),
+    });
+    const title = info.basic_info.title || `youtube-${id}`;
+    const safeTitle = title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").trim() || `youtube-${id}`;
+    const [mimeType] = selectedFormat?.mime_type?.split(';') || ['video/mp4'];
+    const extension = mimeType.split('/')[1] || 'mp4';
+    const encodedFilename = encodeURIComponent(`${safeTitle}.${extension}`);
 
-    const cleanTitle = (info.videoDetails.title || "video").replace(/[^a-zA-Z0-9_ -]/g, "");
-
-    const downloadOptions: ytdl.downloadOptions = {};
-
-    let contentType = "video/mp4";
-    let fileExtension = "mp4";
-
-    if (format === "mp3") {
-      contentType = "audio/mpeg";
-      fileExtension = "mp3";
-      downloadOptions.filter = "audioonly";
-      downloadOptions.quality = "highestaudio";
-    } else {
-      const combinedFormats = info.formats.filter(
-        (f) => f.hasVideo && f.hasAudio
-      );
-
-      let targetFormat = null;
-      if (format === "1080p") {
-        targetFormat = combinedFormats.find((f) => f.qualityLabel?.includes("1080p"));
-      } else if (format === "720p") {
-        targetFormat = combinedFormats.find((f) => f.qualityLabel?.includes("720p"));
-      }
-
-      if (targetFormat) {
-        downloadOptions.format = targetFormat;
-      } else if (combinedFormats.length > 0) {
-        downloadOptions.filter = "audioandvideo";
-        downloadOptions.quality = "highest";
-      } else {
-        downloadOptions.filter = "videoonly";
-        downloadOptions.quality = "highestvideo";
-      }
-    }
-
-    // 1. Get Node stream
-    const nodeStream = ytdl(videoUrl, downloadOptions);
-    const filename = `${cleanTitle}.${fileExtension}`;
-
-    // 2. Convert Node stream to Web ReadableStream
-    const webStream = Readable.toWeb(nodeStream) as unknown as ReadableStream<Uint8Array>;
-
-    // 3. Return Web Response with converted stream
-    const response = new Response(webStream, {
+    const response = new Response(stream, {
       status: 200,
       headers: {
-        "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+        "Content-Type": mimeType,
+        "Content-Disposition": `attachment; filename="video-${id}.${extension}"; filename*=UTF-8''${encodedFilename}`,
         "Access-Control-Expose-Headers": "Content-Disposition",
       },
     });

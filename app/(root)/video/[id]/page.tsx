@@ -41,41 +41,12 @@ export default async function VideoDetailPage({ params }: VideoDetailPageProps) 
 
           {/* Action & Download Buttons */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Download MP3 Audio */}
-            <a
-              href={`/api/youtube/download?id=${decodedId}&format=mp3`}
-              download
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition shadow-lg shadow-emerald-950/30"
+            <Link
+              href={`/download?video=${decodedId}`}
+              className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-500 shadow-lg shadow-rose-950/30"
             >
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path d="M12 16l-5-5h3V4h4v7h3l-5 5zm9-4v9H3v-9H1v9c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2v-9h-2z" />
-              </svg>
-              Audio (MP3)
-            </a>
-
-            {/* Download 720p Video */}
-            <a
-              href={`/api/youtube/download?id=${decodedId}&format=720p`}
-              download
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white transition shadow-lg shadow-indigo-950/30"
-            >
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path d="M12 16l-5-5h3V4h4v7h3l-5 5zm9-4v9H3v-9H1v9c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2v-9h-2z" />
-              </svg>
-              Video (720p)
-            </a>
-
-            {/* Download 1080p Video */}
-            <a
-              href={`/api/youtube/download?id=${decodedId}&format=1080p`}
-              download
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition shadow-lg shadow-blue-950/30"
-            >
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path d="M12 16l-5-5h3V4h4v7h3l-5 5zm9-4v9H3v-9H1v9c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2v-9h-2z" />
-              </svg>
-              Video (1080p)
-            </a>
+              Download formats
+            </Link>
 
             {/* Watch on YouTube */}
             <a
@@ -113,7 +84,7 @@ export default async function VideoDetailPage({ params }: VideoDetailPageProps) 
             About this video
           </h2>
           <p className="mt-2 text-sm text-slate-400 leading-relaxed">
-            Streaming directly via YouTube embedded player. Select any download option above to fetch MP3 audio or MP4 video files.
+            Streaming directly via YouTube embedded player. Open the download options to select a format currently available for this video.
           </p>
         </div>
       </div>

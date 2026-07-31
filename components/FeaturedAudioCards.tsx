@@ -49,10 +49,11 @@ export default function FeaturedAudioCards() {
         }}
       >
         <div className="flex gap-4">
-          {tracks.map((track) => (
+          {tracks.map((track, index) => (
             <div key={track.id} className="w-full shrink-0 snap-start sm:w-[calc(50%-8px)] lg:w-[calc(20%-13px)]">
               <AudioCard
                 track={track}
+                index={index}
                 isPlaying={activeTrackId === track.id}
                 onToggle={() => setActiveTrackId((currentId) => currentId === track.id ? null : track.id)}
                 onEnded={() => setActiveTrackId(null)}

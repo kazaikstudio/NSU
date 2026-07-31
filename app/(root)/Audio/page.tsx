@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Switchbutton from '../../../components/Switchbutton';
 import FeaturedAudioCards from '../../../components/FeaturedAudioCards';
 import AudioTrackList from '../../../components/AudioTrackList';
@@ -9,14 +9,20 @@ import ArtistList from '../../../components/ArtistList';
 const Music = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'music' | 'artist'>('music');
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const filterTracks = (query: string) => {
     setSearchTerm(query);
   };
 
+  const scrollToSearch = () => {
+    searchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    searchRef.current?.focus();
+  };
+
   return (
     <main className="px-4 py-8 max-w-9xl mx-auto">
-      <Switchbutton />
+      <Switchbutton onScrollToSearch={scrollToSearch} />
 
       <div className="mt-2 mb-5 text-center sm:text-start flex flex-col items-center sm:items-start">
         <p className="w-fit rounded-[5px] px-4 sm:px-6 py-2.5 sm:py-3 bg-amber-300 text-black text-xs sm:text-sm font-medium text-center">Your Vision, Our Craft.</p>
@@ -32,6 +38,7 @@ const Music = () => {
 
       <div className="search-box mt-4">
         <input
+          ref={searchRef}
           type="text"
           id="trackSearchInput"
           placeholder="Search tracks or artists..."

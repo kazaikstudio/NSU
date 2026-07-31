@@ -2,6 +2,17 @@
 
 import { useState, useLayoutEffect, useRef } from "react";
 
+type DownloadFormat = {
+  itag: number;
+  label: string;
+  kind: string;
+  mimeType: string;
+  extension: string;
+  codec: string;
+  size: number | null;
+  bitrate: number;
+};
+
 type DownloadModalProps = {
   open: boolean;
   videoId: string | null;
@@ -11,6 +22,10 @@ type DownloadModalProps = {
 
 const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps) => {
   const [loadingFormat, setLoadingFormat] = useState<string | null>(null);
+  const [formats, setFormats] = useState<DownloadFormat[]>([]);
+  const [title, setTitle] = useState("");
+  const [loadingFormats, setLoadingFormats] = useState(false);
+  const [error, setError] = useState("");
   const [coords, setCoords] = useState<{ x: number; y: number; placeAbove: boolean }>({
     x: 0,
     y: 0,
@@ -41,31 +56,59 @@ const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps)
     setCoords({ x: clampedX, y: clampedY, placeAbove });
   }, [open, position]);
 
+  useLayoutEffect(() => {
+    if (!open || !videoId) return;
+
+    let cancelled = false;
+    const loadFormats = async () => {
+      setLoadingFormats(true);
+      setError("");
+      setFormats([]);
+
+      try {
+        const response = await fetch(`/api/youtube/formats?id=${encodeURIComponent(videoId)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Unable to fetch formats.");
+        if (!cancelled) {
+          setTitle(payload.title);
+          setFormats(payload.formats);
+        }
+      } catch (loadError: unknown) {
+        if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Unable to fetch formats.");
+      } finally {
+        if (!cancelled) setLoadingFormats(false);
+      }
+    };
+
+    void loadFormats();
+
+    return () => { cancelled = true; };
+  }, [open, videoId]);
+
   if (!open || !videoId || !position) return null;
 
-  const handleDownload = (format: string) => {
-    setLoadingFormat(format);
-
-    // Build the stream endpoint URL
-    const downloadUrl = `/api/youtube/download?id=${encodeURIComponent(videoId)}&format=${format}`;
-
-    // Create an invisible anchor tag to trigger instant browser download streaming
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    a.style.display = "none";
-    
-    // Suggest filename to browser
-    const extension = format === "mp3" ? "mp3" : "mp4";
-    a.download = `video_${videoId}.${extension}`;
-
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    // Reset button loading indicator after triggering browser download tray
-    setTimeout(() => {
+  const handleDownload = async (format: DownloadFormat) => {
+    setLoadingFormat(String(format.itag));
+    try {
+      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || "Unable to download this format.");
+      }
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const encodedFilename = disposition.match(/filename\*=UTF-8''([^;]+)/)?.[1];
+      const filename = encodedFilename ? decodeURIComponent(encodedFilename) : `${title || videoId}.mp4`;
+      const blobUrl = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (downloadError: unknown) {
+      setError(downloadError instanceof Error ? downloadError.message : "Unable to download this format.");
+    } finally {
       setLoadingFormat(null);
-    }, 2000);
+    }
   };
 
   return (
@@ -109,52 +152,30 @@ const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps)
           </button>
         </div>
 
-        {/* Content Options */}
+        <p className="mb-3 truncate text-xs text-slate-400">{title}</p>
         <div className="relative z-10 space-y-2.5">
-          {/* MP3 */}
-          <div className="flex justify-between items-center p-2.5 bg-slate-800/80 rounded-xl border border-slate-700/50">
-            <div>
-              <div className="font-semibold text-xs text-white">Audio Only (MP3)</div>
-              <div className="text-[10px] text-slate-400">High Quality</div>
-            </div>
-            <button
-              onClick={() => handleDownload("mp3")}
-              disabled={loadingFormat === "mp3"}
-              className="bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {loadingFormat === "mp3" ? "Starting..." : "Download"}
-            </button>
-          </div>
-
-          {/* 720p */}
-          <div className="flex justify-between items-center p-2.5 bg-slate-800/80 rounded-xl border border-slate-700/50">
-            <div>
-              <div className="font-semibold text-xs text-white">Video (720p)</div>
-              <div className="text-[10px] text-slate-400">HD MP4</div>
-            </div>
-            <button
-              onClick={() => handleDownload("720p")}
-              disabled={loadingFormat === "720p"}
-              className="bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {loadingFormat === "720p" ? "Starting..." : "Download"}
-            </button>
-          </div>
-
-          {/* 1080p */}
-          <div className="flex justify-between items-center p-2.5 bg-slate-800/80 rounded-xl border border-slate-700/50">
-            <div>
-              <div className="font-semibold text-xs text-white">Video (1080p)</div>
-              <div className="text-[10px] text-slate-400">Full HD MP4</div>
-            </div>
-            <button
-              onClick={() => handleDownload("1080p")}
-              disabled={loadingFormat === "1080p"}
-              className="bg-blue-600 hover:bg-blue-500 text-xs font-semibold px-3 py-1.5 rounded-lg text-white transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {loadingFormat === "1080p" ? "Starting..." : "Download"}
-            </button>
-          </div>
+          {loadingFormats && <p className="py-4 text-center text-sm text-slate-400">Checking available formats...</p>}
+          {error && <p className="py-2 text-sm text-red-400" role="alert">{error}</p>}
+          {!loadingFormats && !error && (['audio', 'video'] as const).map((section) => {
+            const sectionFormats = formats.filter((format) => section === 'audio' ? !format.kind.includes('video') : format.kind.includes('video'));
+            if (!sectionFormats.length) return null;
+            return (
+              <div key={section} className="space-y-2.5">
+                <h4 className="border-b border-slate-700 pb-1 text-xs font-bold uppercase tracking-wider text-rose-300">{section} formats</h4>
+                {sectionFormats.map((format) => (
+                  <div key={format.itag} className="flex items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/80 p-2.5">
+                    <div>
+                      <div className="font-semibold text-xs text-white">{format.label} {format.extension.toUpperCase()}</div>
+                      <div className="text-[10px] text-slate-400">{format.kind.replace('+', ' + ')}{format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ""}</div>
+                    </div>
+                    <button onClick={() => void handleDownload(format)} disabled={loadingFormat !== null} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-500 disabled:opacity-50">
+                      {loadingFormat === String(format.itag) ? "Preparing..." : "Download"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </>
