@@ -19,6 +19,7 @@ interface Artist {
   genre: string;
   tracksCount: number;
   status: 'Active' | 'Inactive' | 'Pending';
+  profileUrl?: string | null;
 }
 
 interface Member {
@@ -37,6 +38,34 @@ interface StorageItem {
   type: string;
   file_url: string;
   created_at: string;
+}
+
+interface HistoryItem {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  description: string;
+  createdAt: string;
+}
+
+interface DriveStorage {
+  used: number;
+  limit: number | null;
+  usedInDrive: number;
+  usedInTrash: number;
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unitIndex = -1;
+  do {
+    value /= 1024;
+    unitIndex += 1;
+  } while (value >= 1024 && unitIndex < units.length - 1);
+  return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
 export default function DashboardApp({ user }: { user?: User | null }) {
@@ -72,6 +101,10 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   const [newArtistGenre, setNewArtistGenre] = useState('');
 
   const [storageItems, setStorageItems] = useState<StorageItem[]>([]);
+  const [totalUploads, setTotalUploads] = useState(0);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [driveStorage, setDriveStorage] = useState<DriveStorage | null>(null);
+  const [driveStorageError, setDriveStorageError] = useState('');
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadType, setUploadType] = useState('music');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -85,18 +118,32 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        const [artistsResponse, membersResponse] = await Promise.all([
+        const [artistsResponse, membersResponse, mediaResponse, historyResponse, storageResponse] = await Promise.all([
           fetch('/api/dashboard/artists'),
           fetch('/api/members'),
+          fetch('/api/dashboard/media'),
+          fetch('/api/dashboard/history'),
+          fetch('/api/dashboard/storage'),
         ]);
         const artistsData = await artistsResponse.json();
         const membersData = await membersResponse.json();
+        const mediaData = await mediaResponse.json();
+        const historyData = await historyResponse.json();
+        const storageData = await storageResponse.json();
 
         if (!artistsResponse.ok) throw new Error(artistsData.error || 'Unable to load artists');
         if (!membersResponse.ok) throw new Error(membersData.error || 'Unable to load members');
+        if (!mediaResponse.ok) throw new Error(mediaData.error || 'Unable to load upload count');
+        if (!historyResponse.ok) throw new Error(historyData.error || 'Unable to load activity history');
+        if (!storageResponse.ok) throw new Error(storageData.error || 'Unable to load Drive storage');
 
         setArtists(artistsData.artists || []);
         setMembers(membersData.members || []);
+        setTotalUploads(Number(mediaData.totalUploads || 0));
+        setHistory(historyData.history || []);
+        setStorageItems(storageData.items || []);
+        setDriveStorage(storageData.driveStorage || null);
+        setDriveStorageError(storageData.driveStorageError || '');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to load dashboard data';
         setArtistMessage(message);
@@ -198,6 +245,16 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   const handleDeleteMember = useCallback(async (id: string) => {
     const response = await fetch(`/api/members/${id}`, { method: 'DELETE' });
     if (response.ok) setMembers((prev) => prev.filter((member) => member.id !== id));
+  }, []);
+
+  const handleDeleteHistory = useCallback(async (id: string) => {
+    const response = await fetch(`/api/dashboard/history?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (response.ok) setHistory((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const handleClearHistory = useCallback(async () => {
+    const response = await fetch('/api/dashboard/history', { method: 'DELETE' });
+    if (response.ok) setHistory([]);
   }, []);
 
   const filteredMembers = useMemo(() => {
@@ -351,7 +408,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
 
                 <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
                   <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Uploads</p>
-                  <p className="mt-2 text-lg font-medium">{storageItems.length}</p>
+                  <p className="mt-2 text-lg font-medium">{totalUploads}</p>
                 </div>
 
                 <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
@@ -535,7 +592,11 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                                                 >
                                                   <td className="px-6 py-4 font-medium">
                                                     <div className="flex items-center gap-3">
-                                                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600/20 text-xs font-semibold text-indigo-400">{artist.name.charAt(0)}</div>
+                                                      {artist.profileUrl ? (
+                                                        <img src={artist.profileUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+                                                      ) : (
+                                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600/20 text-xs font-semibold text-indigo-400">{artist.name.charAt(0)}</div>
+                                                      )}
                                                       {artist.name}
                                                     </div>
                                                   </td>
@@ -554,16 +615,57 @@ export default function DashboardApp({ user }: { user?: User | null }) {
           )}
 
           {activePage === 'videos' && (
-            <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-              <h2 className="mb-2 text-xl font-semibold">Video Library</h2>
-              <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Manage music videos and video media catalog.</p>
+            <div className="space-y-6">
+              <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                <h2 className="mb-2 text-xl font-semibold">Video Library</h2>
+                <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Manage music videos and video media catalog.</p>
+              </div>
+              <div className={`flex items-center justify-between gap-4 rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                <div>
+                  <h3 className="text-lg font-semibold">Mega Upload</h3>
+                  <p className={isDarkMode ? 'mt-1 text-sm text-slate-400' : 'mt-1 text-sm text-slate-600'}>Send video files through the Mega file request.</p>
+                </div>
+                <button type="button" onClick={() => setIsMegaUploadOpen(true)} className="shrink-0 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-400 transition hover:bg-indigo-500/20">Open Mega Upload</button>
+              </div>
             </div>
           )}
 
           {activePage === 'histories' && (
-            <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-              <h2 className="mb-2 text-xl font-semibold">Activity History</h2>
-              <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>View past system updates, file logs, and activity records.</p>
+            <div className="space-y-6">
+              <div>
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold">Activity History</h2>
+                    <p className={isDarkMode ? 'mt-1 text-sm text-slate-400' : 'mt-1 text-sm text-slate-600'}>Every recorded dashboard change with the exact time it happened.</p>
+                  </div>
+                  <button type="button" onClick={handleClearHistory} disabled={history.length === 0} className="rounded-lg border border-rose-500/40 px-3 py-2 text-sm font-medium text-rose-400 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40">Clear all history</button>
+                </div>
+              </div>
+              <div className={`overflow-hidden rounded-xl border ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className={`border-b text-xs uppercase tracking-wider ${isDarkMode ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+                      <tr><th className="px-6 py-3.5">Change</th><th className="px-6 py-3.5">Type</th><th className="px-6 py-3.5">Time</th></tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
+                      {history.length === 0 ? (
+                        <tr><td colSpan={3} className="px-6 py-12 text-center text-slate-500">No activity recorded yet.</td></tr>
+                      ) : history.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-6 py-4 font-medium">{item.description}</td>
+                          <td className={`px-6 py-4 capitalize ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{item.action} {item.entityType.replace('_', ' ')}</td>
+                          <td className={`whitespace-nowrap px-6 py-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            <div className="flex items-center justify-between gap-4">
+                              <span>{new Date(item.createdAt).toLocaleString()}</span>
+                              <button type="button" onClick={() => handleDeleteHistory(item.id)} className="text-xs font-medium text-rose-400 hover:text-rose-300">Clear</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
@@ -571,19 +673,20 @@ export default function DashboardApp({ user }: { user?: User | null }) {
             <div className="space-y-6">
               <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
                 <h2 className="mb-2 text-xl font-semibold">Storage Overview</h2>
-                <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Upload music and images and save their metadata in PostgreSQL.</p>
+                <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Google Drive capacity used by your uploaded media.</p>
+                {driveStorage ? (
+                  <div className="mt-5 space-y-3">
+                    <div className="flex items-end justify-between gap-4">
+                      <div><p className="text-2xl font-semibold">{formatBytes(driveStorage.used)}</p><p className="text-xs text-slate-400">used across Drive</p></div>
+                      <p className="text-right text-sm text-slate-400">{driveStorage.limit ? `${formatBytes(driveStorage.limit)} total` : 'No storage limit reported'}</p>
+                    </div>
+                    {driveStorage.limit ? <div className="h-3 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min((driveStorage.used / driveStorage.limit) * 100, 100)}%` }} /></div> : null}
+                    <div className="flex flex-wrap gap-4 text-xs text-slate-400"><span>My Drive: {formatBytes(driveStorage.usedInDrive)}</span><span>Trash: {formatBytes(driveStorage.usedInTrash)}</span></div>
+                  </div>
+                ) : <p className="mt-4 text-sm text-rose-400">{driveStorageError || 'Drive storage usage is unavailable.'}</p>}
               </div>
 
-              <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold">Upload Media</h3>
-                    <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Files are registered in PostgreSQL and linked through Mega&apos;s upload request.</p>
-                  </div>
-                  <button type="button" onClick={() => setIsMegaUploadOpen(true)} className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-400 transition hover:bg-indigo-500/20">
-                    Open Mega Upload
-                  </button>
-                </div>
+              <div className="hidden">
                 <form onSubmit={handleUpload} className="space-y-4">
                   <div>
                     <label className="mb-1.5 block text-sm">Title</label>

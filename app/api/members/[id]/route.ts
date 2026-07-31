@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { ensureDatabaseReady } from '@/lib/db';
+import { recordActivity } from '@/lib/activity';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -28,6 +29,13 @@ export async function PUT(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 });
     }
 
+    await recordActivity({
+      action: 'updated',
+      entityType: 'member',
+      entityId: id,
+      description: `Updated member ${rows[0].name}`,
+    });
+
     return NextResponse.json({ member: rows[0] });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
@@ -44,6 +52,13 @@ export async function DELETE(_request: Request, context: RouteContext) {
     if (result.rowCount === 0) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 });
     }
+
+    await recordActivity({
+      action: 'deleted',
+      entityType: 'member',
+      entityId: id,
+      description: `Deleted member ${id}`,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { recordActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -54,7 +55,7 @@ export async function GET() {
     await ensureArtistsTable();
 
     const { rows } = await pool.query(`
-      SELECT id::text AS id, name, genre, tracks_count AS "tracksCount", status
+      SELECT id::text AS id, name, genre, tracks_count AS "tracksCount", status, profile_url AS "profileUrl"
       FROM artists
       ORDER BY created_at DESC, name ASC
     `);
@@ -66,6 +67,7 @@ export async function GET() {
         genre: row.genre,
         tracksCount: Number(row.tracksCount || 0),
         status: row.status || 'Active',
+        profileUrl: row.profileUrl || null,
       })),
     });
   } catch (error) {
@@ -91,12 +93,18 @@ export async function POST(request: Request) {
       `
         INSERT INTO artists (artist_id, name, genre, tracks_count, status)
         VALUES ($1, $2, $3, $4, $5)
-        RETURNING id::text AS id, name, genre, tracks_count AS "tracksCount", status
+        RETURNING id::text AS id, name, genre, tracks_count AS "tracksCount", status, profile_url AS "profileUrl"
       `,
       [artistId, name, genre, 0, 'Active']
     );
 
     const artist = result.rows[0];
+    await recordActivity({
+      action: 'created',
+      entityType: 'artist',
+      entityId: String(artist.id),
+      description: `Created artist ${artist.name}`,
+    });
 
     return NextResponse.json({
       artist: {
@@ -105,6 +113,7 @@ export async function POST(request: Request) {
         genre: artist.genre,
         tracksCount: Number(artist.tracksCount || 0),
         status: artist.status || 'Active',
+        profileUrl: artist.profileUrl || null,
       },
     });
   } catch (error) {

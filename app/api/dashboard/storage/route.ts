@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
+import { getGoogleDriveStorageUsage } from '@/lib/google-drive';
+import { recordActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -34,8 +36,16 @@ async function ensureStorageTable() {
 }
 
 export async function GET() {
+  let driveStorage = null;
+  let driveStorageError = '';
+  try {
+    driveStorage = await getGoogleDriveStorageUsage();
+  } catch (error) {
+    driveStorageError = (error as Error).message;
+  }
+
   if (!pool) {
-    return NextResponse.json({ items: [] });
+    return NextResponse.json({ items: [], driveStorage, driveStorageError });
   }
 
   try {
@@ -55,10 +65,12 @@ export async function GET() {
         file_url: row.fileUrl,
         created_at: row.createdAt,
       })),
+      driveStorage,
+      driveStorageError,
     });
   } catch (error) {
     console.warn('Falling back to an empty storage list because PostgreSQL is unavailable', error);
-    return NextResponse.json({ items: [] });
+    return NextResponse.json({ items: [], driveStorage, driveStorageError });
   }
 }
 
@@ -107,6 +119,12 @@ export async function POST(request: Request) {
     );
 
     const item = result.rows[0];
+    await recordActivity({
+      action: 'created',
+      entityType: 'storage_item',
+      entityId: item.id,
+      description: `Added storage record ${item.title}`,
+    });
 
     return NextResponse.json({
       item: {

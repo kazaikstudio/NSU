@@ -13,6 +13,13 @@ type DriveFile = {
   thumbnailLink?: string;
 };
 
+export type DriveStorageUsage = {
+  used: number;
+  limit: number | null;
+  usedInDrive: number;
+  usedInTrash: number;
+};
+
 async function fetchGoogle(input: string, init: RequestInit) {
   let lastError: unknown;
 
@@ -120,6 +127,39 @@ export async function uploadToGoogleDrive(upload: DriveUpload) {
     ...file,
     publicUrl: file.mimeType.startsWith('image/')
       ? `https://drive.google.com/thumbnail?id=${file.id}&sz=w1600`
-      : `https://drive.google.com/uc?export=download&id=${file.id}`,
+      : `/api/dashboard/media/${file.id}`,
+  };
+}
+
+export async function deleteFromGoogleDrive(fileId: string) {
+  const accessToken = await getAccessToken();
+  const response = await fetchGoogle(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Unable to delete Google Drive file ${fileId}`);
+  }
+}
+
+export async function getGoogleDriveStorageUsage(): Promise<DriveStorageUsage> {
+  const accessToken = await getAccessToken();
+  const response = await fetchGoogle('https://www.googleapis.com/drive/v3/about?fields=storageQuota', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await response.json() as {
+    storageQuota?: { usage?: string; limit?: string; usageInDrive?: string; usageInDriveTrash?: string };
+  };
+
+  if (!response.ok || !data.storageQuota) {
+    throw new Error('Unable to read Google Drive storage usage');
+  }
+
+  return {
+    used: Number(data.storageQuota.usage || 0),
+    limit: data.storageQuota.limit ? Number(data.storageQuota.limit) : null,
+    usedInDrive: Number(data.storageQuota.usageInDrive || 0),
+    usedInTrash: Number(data.storageQuota.usageInDriveTrash || 0),
   };
 }

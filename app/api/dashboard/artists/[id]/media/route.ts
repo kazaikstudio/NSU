@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { ensureDatabaseReady } from '@/lib/db';
-import { uploadToGoogleDrive } from '@/lib/google-drive';
+import { deleteFromGoogleDrive, uploadToGoogleDrive } from '@/lib/google-drive';
+import { recordActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -62,6 +63,13 @@ export async function POST(request: Request, context: Context) {
     });
     await ensureMediaTable();
 
+    const previousMedia = kind === 'banner' || kind === 'profile'
+      ? await pool.query<{ id: string; driveFileId: string | null }>(
+        `SELECT id, drive_file_id AS "driveFileId" FROM artist_media WHERE artist_id = $1 AND kind = $2`,
+        [artistId, kind]
+      )
+      : { rows: [] as { id: string; driveFileId: string | null }[] };
+
     const mediaId = `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const mediaTitle = title.trim() || (kind === 'banner' ? 'Artist Banner' : 'Artist Profile');
     const { rows } = await pool.query(
@@ -73,7 +81,21 @@ export async function POST(request: Request, context: Context) {
 
     if (kind === 'banner' || kind === 'profile') {
       await pool.query(`UPDATE artists SET ${kind === 'banner' ? 'banner_url' : 'profile_url'} = $1 WHERE id::text = $2`, [driveFile.publicUrl, artistId]);
+      await pool.query('DELETE FROM artist_media WHERE id = ANY($1::text[])', [previousMedia.rows.map((media) => media.id)]);
+      await Promise.allSettled(
+        previousMedia.rows
+          .map((media) => media.driveFileId)
+          .filter((fileId): fileId is string => Boolean(fileId))
+          .map((fileId) => deleteFromGoogleDrive(fileId))
+      );
     }
+
+    await recordActivity({
+      action: kind === 'track' ? 'uploaded' : 'replaced',
+      entityType: kind === 'track' ? 'track' : 'artist_media',
+      entityId: mediaId,
+      description: `${kind === 'track' ? 'Uploaded' : 'Replaced'} ${kind} file ${file.name} for artist ${artistId}`,
+    });
 
     return NextResponse.json({ media: rows[0] }, { status: 201 });
   } catch (error) {

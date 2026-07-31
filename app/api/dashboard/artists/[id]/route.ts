@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import { artistsSeed } from '@/lib/artists';
+import { deleteFromGoogleDrive } from '@/lib/google-drive';
+import { recordActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -63,6 +65,25 @@ async function ensureArtistsTable() {
   } finally {
     client.release();
   }
+}
+
+async function ensureArtistMediaTable() {
+  if (!pool) return;
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS artist_media (
+      id TEXT PRIMARY KEY,
+      artist_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      album TEXT,
+      file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      file_url TEXT NOT NULL,
+      drive_file_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 }
 
 export async function GET(
@@ -164,13 +185,33 @@ export async function DELETE(
 
   try {
     await ensureArtistsTable();
+    await ensureArtistMediaTable();
+    const mediaResult = await pool.query<{ driveFileId: string | null }>(
+      'SELECT drive_file_id AS "driveFileId" FROM artist_media WHERE artist_id::text = $1',
+      [id]
+    );
     const result = await pool.query('DELETE FROM artists WHERE id::text = $1', [id]);
 
     if (result.rowCount === 0) {
       return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true });
+    await pool.query('DELETE FROM artist_media WHERE artist_id::text = $1', [id]);
+    const driveDeletes = await Promise.allSettled(
+      mediaResult.rows
+        .map((media) => media.driveFileId)
+        .filter((fileId): fileId is string => Boolean(fileId))
+        .map((fileId) => deleteFromGoogleDrive(fileId))
+    );
+    const failedDriveDeletes = driveDeletes.filter((result) => result.status === 'rejected').length;
+    await recordActivity({
+      action: 'deleted',
+      entityType: 'artist',
+      entityId: id,
+      description: `Deleted artist ${id} and all related media${failedDriveDeletes ? ` (${failedDriveDeletes} Drive files could not be deleted)` : ''}`,
+    });
+
+    return NextResponse.json({ success: true, failedDriveDeletes });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

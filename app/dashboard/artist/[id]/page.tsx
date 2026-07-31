@@ -39,6 +39,13 @@ function getDisplayImageUrl(url: string | null | undefined) {
     : url;
 }
 
+function getPlayableAudioUrl(url: string | null | undefined) {
+  if (!url) return null;
+
+  const match = url.match(/[?&]id=([^&]+)/);
+  return match?.[1] ? `/api/dashboard/media/${match[1]}` : url;
+}
+
 export default function ArtistDetailPage() {
   const params = useParams<{ id: string }>();
   const [artist, setArtist] = useState<Artist | null>(null);
@@ -63,6 +70,9 @@ export default function ArtistDetailPage() {
   const [trackTitle, setTrackTitle] = useState('');
   const [albumName, setAlbumName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [saveProgress, setSaveProgress] = useState(0);
+  const [processMessage, setProcessMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Global Save Changes State
@@ -228,16 +238,41 @@ export default function ArtistDetailPage() {
     setTrackTitle(cleanedName);
   };
 
-  const uploadMedia = async (file: File, kind: 'banner' | 'profile' | 'track', title = '', album = '') => {
+  const uploadMedia = async (file: File, kind: 'banner' | 'profile' | 'track', title = '', album = '', onProgress?: (progress: number) => void) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('kind', kind);
     formData.append('title', title);
     formData.append('album', album);
-    const response = await fetch(`/api/dashboard/artists/${params.id}/media`, { method: 'POST', body: formData });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Unable to upload media');
-    return data.media as Track;
+    return await new Promise<Track>((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open('POST', `/api/dashboard/artists/${params.id}/media`);
+      request.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      };
+      request.onload = () => {
+        let data: { media?: Track; error?: string } = {};
+        try {
+          data = JSON.parse(request.responseText);
+        } catch {
+          reject(new Error('The server returned an invalid upload response'));
+          return;
+        }
+        if (request.status < 200 || request.status >= 300) {
+          reject(new Error(data.error || `Upload failed (${request.status})`));
+          return;
+        }
+        if (!data.media) {
+          reject(new Error('Upload completed without media details'));
+          return;
+        }
+        onProgress?.(100);
+        resolve(data.media);
+      };
+      request.onerror = () => reject(new Error('Unable to connect to the local upload server'));
+      request.onabort = () => reject(new Error('Upload was cancelled'));
+      request.send(formData);
+    });
   };
 
   const handleUploadTrack = async (e: React.FormEvent) => {
@@ -245,8 +280,10 @@ export default function ArtistDetailPage() {
     if (!selectedFile || !trackTitle) return;
 
     setIsUploading(true);
+    setUploadProgress(0);
+    setProcessMessage('Uploading track to Google Drive...');
     try {
-      const media = await uploadMedia(selectedFile, 'track', trackTitle, albumName || 'Single');
+      const media = await uploadMedia(selectedFile, 'track', trackTitle, albumName || 'Single', setUploadProgress);
       setTracks((prevTracks) => [{
         id: media.id,
         title: media.title,
@@ -259,8 +296,15 @@ export default function ArtistDetailPage() {
       setTrackTitle('');
       setAlbumName('');
       if (fileInputRef.current) fileInputRef.current.value = '';
+      setProcessMessage('Track saved to Google Drive and added to the list.');
+      setTimeout(() => {
+        setProcessMessage('');
+        setUploadProgress(0);
+      }, 3000);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : 'Unable to upload track');
+      setProcessMessage('Track upload failed.');
+      setTimeout(() => setProcessMessage(''), 3000);
     } finally {
       setIsUploading(false);
     }
@@ -275,24 +319,40 @@ export default function ArtistDetailPage() {
   // Save All Changes to Server
   const handleSaveChanges = async () => {
     setIsSaving(true);
+    setSaveProgress(0);
+    setProcessMessage('Preparing image changes...');
     try {
+      const imageUploads = [selectedBanner, selectedProfile].filter(Boolean).length;
+      let completedUploads = 0;
       if (selectedBanner) {
-        const media = await uploadMedia(selectedBanner, 'banner');
+        setProcessMessage('Uploading banner to Google Drive...');
+        const media = await uploadMedia(selectedBanner, 'banner', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
         setBannerUrl(media.fileUrl || null);
         setSelectedBanner(null);
+        completedUploads += 1;
       }
       if (selectedProfile) {
-        const media = await uploadMedia(selectedProfile, 'profile');
+        setProcessMessage('Uploading profile picture to Google Drive...');
+        const media = await uploadMedia(selectedProfile, 'profile', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
         setProfileUrl(media.fileUrl || null);
         setSelectedProfile(null);
+        completedUploads += 1;
       }
+      setSaveProgress(100);
       setIsSaving(false);
       setIsDirty(false);
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setProcessMessage('Images saved successfully.');
+      setTimeout(() => {
+        setSaveSuccess(false);
+        setProcessMessage('');
+        setSaveProgress(0);
+      }, 3000);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : 'Unable to save artist changes');
+      setProcessMessage('Saving changes failed.');
       setIsSaving(false);
+      setTimeout(() => setProcessMessage(''), 3000);
     }
   };
 
@@ -456,6 +516,28 @@ export default function ArtistDetailPage() {
                 )}
               </div>
 
+              {(isUploading || isSaving || processMessage) && (
+                <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/70 p-3" aria-live="polite">
+                  <div className="mb-2 flex items-center justify-between text-xs text-slate-300">
+                    <span>{processMessage}</span>
+                    <span>{isSaving ? saveProgress : uploadProgress}%</span>
+                  </div>
+                  <div
+                    className="h-2 overflow-hidden rounded-full bg-slate-800"
+                    role="progressbar"
+                    aria-label={isSaving ? 'Saving image changes' : 'Uploading track'}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={isSaving ? saveProgress : uploadProgress}
+                  >
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${isSaving ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                      style={{ width: `${isSaving ? saveProgress : uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Text Inputs */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
@@ -548,6 +630,7 @@ export default function ArtistDetailPage() {
                   <thead className="border-b border-slate-800 bg-slate-900/50 text-xs uppercase tracking-wider text-slate-400">
                     <tr>
                       <th className="px-6 py-3.5">Title</th>
+                      <th className="px-6 py-3.5">Play</th>
                       <th className="px-6 py-3.5">Album</th>
                       <th className="px-6 py-3.5">File Name</th>
                       <th className="px-6 py-3.5">Date Added</th>
@@ -557,7 +640,7 @@ export default function ArtistDetailPage() {
                   <tbody className="divide-y divide-slate-800">
                     {tracks.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <svg className="h-8 w-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
@@ -579,6 +662,13 @@ export default function ArtistDetailPage() {
                               </div>
                               {track.title}
                             </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {track.fileUrl ? (
+                              <audio controls preload="metadata" className="h-8 w-48" src={getPlayableAudioUrl(track.fileUrl) || undefined} aria-label={`Play ${track.title}`} />
+                            ) : (
+                              <span className="text-xs text-slate-500">Unavailable</span>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-slate-400">{track.album}</td>
                           <td className="px-6 py-4 text-xs font-mono text-slate-500">{track.fileName}</td>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { ensureDatabaseReady } from '@/lib/db';
+import { recordActivity } from '@/lib/activity';
 
 export async function GET() {
   try {
@@ -31,6 +32,12 @@ export async function POST(request: Request) {
     `;
     const values = [name, email, contact, profilePic, category, status];
     const { rows } = await pool.query(query, values);
+    await recordActivity({
+      action: 'created',
+      entityType: 'member',
+      entityId: String(rows[0].id),
+      description: `Created member ${rows[0].name}`,
+    });
 
     return NextResponse.json({ member: rows[0] }, { status: 201 });
   } catch (error) {
