@@ -81,7 +81,7 @@ function DownloadForm() {
     if (!videoId) return
     setLoadingFormat(format.itag)
     try {
-      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}`)
+      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}`)
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null
         throw new Error(payload?.error || 'Unable to download this video.')
@@ -154,7 +154,7 @@ function DownloadForm() {
                 <div key={section} className="space-y-3">
                   <h2 className="border-b border-slate-700 pb-2 text-sm font-bold uppercase tracking-wider text-rose-300">{section} formats</h2>
                   {sectionFormats.map((format) => (
-                    <div key={format.itag} className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                    <div key={`${format.itag}-${format.extension}`} className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4">
                       <div>
                         <p className="text-sm font-semibold text-white">{format.label} {format.extension.toUpperCase()}</p>
                         <p className="mt-1 text-xs text-slate-500">{format.kind.replace('+', ' + ')}{format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ''}</p>

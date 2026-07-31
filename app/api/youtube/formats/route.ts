@@ -29,37 +29,35 @@ export async function GET(request: Request) {
       ...(info.streaming_data?.formats || []),
       ...(info.streaming_data?.adaptive_formats || []),
     ];
-    const formats = Array.from(new Map(
-      allFormats
-        .filter((format) => (format.has_video || format.has_audio) && !format.has_text)
-        .map((format) => [format.itag, format]),
-    ).values())
-      .sort((left, right) => {
-        const kindWeight = Number(right.has_video) - Number(left.has_video);
-        return kindWeight || (right.height || 0) - (left.height || 0) || right.bitrate - left.bitrate;
+    const audioSource = allFormats
+      .filter((format) => format.has_audio && !format.has_video && !format.has_text)
+      .sort((left, right) => right.bitrate - left.bitrate)[0];
+    const videoSource = allFormats
+      .filter((format) => {
+        const quality = Number(format.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
+        return format.has_video && format.has_audio && !format.has_text && quality >= 360;
       })
-      .map((format) => {
-        const [mimeType] = format.mime_type.split(';');
-        const extension = mimeType.split('/')[1] || 'bin';
-        const kind = format.has_video && format.has_audio
-          ? 'video+audio'
-          : format.has_video
-            ? 'video'
-            : 'audio';
-
-        return {
-          itag: format.itag,
-          label: format.quality_label || format.quality || (format.has_audio ? 'Audio' : 'Video'),
-          kind,
-          mimeType,
-          extension,
-          codec: format.mime_type,
-          hasAudio: format.has_audio,
-          hasVideo: format.has_video,
-          size: format.content_length || null,
-          bitrate: format.bitrate,
-        };
+      .sort((left, right) => {
+        const leftQuality = Number(left.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
+        const rightQuality = Number(right.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
+        return leftQuality - rightQuality || left.bitrate - right.bitrate;
       });
+    const formats = [
+      ...(audioSource ? [
+        { itag: audioSource.itag, label: 'MP3', kind: 'audio', mimeType: 'audio/mpeg', extension: 'mp3', size: null, bitrate: audioSource.bitrate },
+        { itag: audioSource.itag, label: 'WAV', kind: 'audio', mimeType: 'audio/wav', extension: 'wav', size: null, bitrate: audioSource.bitrate },
+        { itag: audioSource.itag, label: 'M4A', kind: 'audio', mimeType: 'audio/mp4', extension: 'm4a', size: audioSource.content_length || null, bitrate: audioSource.bitrate },
+      ] : []),
+      ...videoSource.map((video) => ({
+        itag: video.itag,
+        label: video.quality_label || 'Video',
+        kind: 'video+audio',
+        mimeType: 'video/mp4',
+        extension: 'mp4',
+        size: video.content_length || null,
+        bitrate: video.bitrate,
+      })),
+    ];
 
     return NextResponse.json({
       videoId: id,

@@ -90,7 +90,7 @@ const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps)
   const handleDownload = async (format: DownloadFormat) => {
     setLoadingFormat(String(format.itag));
     try {
-      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}`);
+      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}`);
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.error || "Unable to download this format.");
@@ -163,7 +163,7 @@ const DownloadModal = ({ open, videoId, position, onClose }: DownloadModalProps)
               <div key={section} className="space-y-2.5">
                 <h4 className="border-b border-slate-700 pb-1 text-xs font-bold uppercase tracking-wider text-rose-300">{section} formats</h4>
                 {sectionFormats.map((format) => (
-                  <div key={format.itag} className="flex items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/80 p-2.5">
+                  <div key={`${format.itag}-${format.extension}`} className="flex items-center justify-between gap-3 rounded-xl border border-slate-700/50 bg-slate-800/80 p-2.5">
                     <div>
                       <div className="font-semibold text-xs text-white">{format.label} {format.extension.toUpperCase()}</div>
                       <div className="text-[10px] text-slate-400">{format.kind.replace('+', ' + ')}{format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ""}</div>

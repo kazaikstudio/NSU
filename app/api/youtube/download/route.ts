@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { ClientType, Innertube } from "youtubei.js";
+import ffmpegPath from "ffmpeg-static";
+import { Readable } from "node:stream";
+import { spawn } from "node:child_process";
 
 export const maxDuration = 60; // Extend serverless limit
 export const dynamic = "force-dynamic";
@@ -39,6 +42,7 @@ export async function GET(req: Request) {
 
   const id = searchParams.get("id") || searchParams.get("videoId");
   const itag = Number(searchParams.get("itag"));
+  const output = searchParams.get("output") || "mp4";
   if (!id) {
     return withCors(
       NextResponse.json({ error: "Missing video 'id' parameter" }, { status: 400 }),
@@ -68,9 +72,31 @@ export async function GET(req: Request) {
     });
     const title = info.basic_info.title || `youtube-${id}`;
     const safeTitle = title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").trim() || `youtube-${id}`;
-    const [mimeType] = selectedFormat?.mime_type?.split(';') || ['video/mp4'];
-    const extension = mimeType.split('/')[1] || 'mp4';
+    const audioOutput = output === "mp3" || output === "wav" || output === "m4a";
+    const extension = audioOutput ? output : "mp4";
+    const mimeType = output === "mp3" ? "audio/mpeg" : output === "wav" ? "audio/wav" : output === "m4a" ? "audio/mp4" : selectedFormat?.mime_type?.split(';')[0] || "video/mp4";
     const encodedFilename = encodeURIComponent(`${safeTitle}.${extension}`);
+
+    if (audioOutput) {
+      if (!ffmpegPath) throw new Error("Audio conversion is unavailable on this server.");
+      const input = Readable.fromWeb(stream as never);
+      const codecArgs = output === "mp3"
+        ? ["-codec:a", "libmp3lame", "-b:a", "192k", "-f", "mp3"]
+        : output === "wav"
+          ? ["-codec:a", "pcm_s16le", "-f", "wav"]
+          : ["-codec:a", "aac", "-b:a", "192k", "-f", "ipod"];
+      const converter = spawn(ffmpegPath, ["-loglevel", "error", "-i", "pipe:0", "-vn", ...codecArgs, "pipe:1"], { stdio: ["pipe", "pipe", "pipe"] });
+      input.pipe(converter.stdin);
+      const response = new Response(Readable.toWeb(converter.stdout) as unknown as ReadableStream<Uint8Array>, {
+        status: 200,
+        headers: {
+          "Content-Type": mimeType,
+          "Content-Disposition": `attachment; filename="${safeTitle}.${extension}"; filename*=UTF-8''${encodedFilename}`,
+          "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+      });
+      return withCors(response, req);
+    }
 
     const response = new Response(stream, {
       status: 200,
