@@ -13,6 +13,23 @@ type DriveFile = {
   thumbnailLink?: string;
 };
 
+async function fetchGoogle(input: string, init: RequestInit) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await fetch(input, init);
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+  }
+
+  throw new Error(`Unable to reach Google Drive: ${lastError instanceof Error ? lastError.message : 'network request failed'}`);
+}
+
 function getGoogleConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
@@ -30,7 +47,7 @@ function getGoogleConfig() {
 }
 
 async function getAccessToken() {
-  const response = await fetch('https://oauth2.googleapis.com/token', {
+  const response = await fetchGoogle('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -70,7 +87,7 @@ export async function uploadToGoogleDrive(upload: DriveUpload) {
   body.set(new Uint8Array(upload.bytes), prefix.byteLength);
   body.set(suffix, prefix.byteLength + upload.bytes.byteLength);
 
-  const response = await fetch(
+  const response = await fetchGoogle(
     'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink,webContentLink,thumbnailLink',
     {
       method: 'POST',
@@ -86,7 +103,7 @@ export async function uploadToGoogleDrive(upload: DriveUpload) {
     throw new Error(file.error?.message || 'Unable to upload file to Google Drive');
   }
 
-  const permissionResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}/permissions`, {
+  const permissionResponse = await fetchGoogle(`https://www.googleapis.com/drive/v3/files/${file.id}/permissions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -102,7 +119,7 @@ export async function uploadToGoogleDrive(upload: DriveUpload) {
   return {
     ...file,
     publicUrl: file.mimeType.startsWith('image/')
-      ? `https://drive.google.com/uc?export=view&id=${file.id}`
+      ? `https://drive.google.com/thumbnail?id=${file.id}&sz=w1600`
       : `https://drive.google.com/uc?export=download&id=${file.id}`,
   };
 }

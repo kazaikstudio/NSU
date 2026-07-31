@@ -30,6 +30,15 @@ interface Track {
   uploadedAt: string;
 }
 
+function getDisplayImageUrl(url: string | null | undefined) {
+  if (!url) return null;
+
+  const match = url.match(/[?&]id=([^&]+)/);
+  return match?.[1]
+    ? `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1600`
+    : url;
+}
+
 export default function ArtistDetailPage() {
   const params = useParams<{ id: string }>();
   const [artist, setArtist] = useState<Artist | null>(null);
@@ -86,7 +95,12 @@ export default function ArtistDetailPage() {
             const mediaResponse = await fetch(`/api/dashboard/artists/${params.id}/media`);
             const mediaData = await mediaResponse.json();
             if (mediaResponse.ok && !ignore) {
-              setTracks((mediaData.media || []).filter((item: Track) => item.kind === 'track').map((item: Track) => ({
+              const media = mediaData.media || [];
+              const bannerMedia = media.find((item: Track) => item.kind === 'banner');
+              const profileMedia = media.find((item: Track) => item.kind === 'profile');
+              if (bannerMedia?.fileUrl) setBannerUrl(bannerMedia.fileUrl);
+              if (profileMedia?.fileUrl) setProfileUrl(profileMedia.fileUrl);
+              setTracks(media.filter((item: Track) => item.kind === 'track').map((item: Track) => ({
                 id: item.id,
                 title: item.title,
                 album: item.album || 'Single',
@@ -221,7 +235,7 @@ export default function ArtistDetailPage() {
     formData.append('title', title);
     formData.append('album', album);
     const response = await fetch(`/api/dashboard/artists/${params.id}/media`, { method: 'POST', body: formData });
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Unable to upload media');
     return data.media as Track;
   };
@@ -290,8 +304,8 @@ export default function ArtistDetailPage() {
         <div
           className="relative h-48 w-full bg-cover bg-center transition-all duration-300 md:h-64"
           style={{
-            backgroundImage: bannerUrl
-              ? `url(${bannerUrl})`
+            backgroundImage: getDisplayImageUrl(bannerUrl)
+              ? `url(${getDisplayImageUrl(bannerUrl)})`
               : 'linear-gradient(to right, #312e81, #0f172a, #581c87)',
           }}
         >
@@ -328,8 +342,8 @@ export default function ArtistDetailPage() {
           {/* Profile Avatar Overlay */}
           <div className="absolute -bottom-10 left-8 flex items-end gap-5">
             <div className="group relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border-4 border-slate-900 bg-indigo-600 text-3xl font-bold shadow-xl md:h-28 md:w-28">
-              {profileUrl ? (
-                <img src={profileUrl} alt={artist.name} className="h-full w-full object-cover" />
+              {getDisplayImageUrl(profileUrl) ? (
+                <img src={getDisplayImageUrl(profileUrl) || undefined} alt={artist.name} className="h-full w-full object-cover" />
               ) : (
                 <span>{artist.name.charAt(0)}</span>
               )}

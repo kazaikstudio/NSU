@@ -9,7 +9,10 @@ const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL ||
 let pool: Pool | null = null;
 
 if (connectionString) {
-  pool = new Pool({ connectionString });
+  pool = new Pool({
+    connectionString,
+    ssl: /railway|rlwy/i.test(connectionString) ? { rejectUnauthorized: false } : false,
+  });
 }
 
 async function ensureArtistsTable() {
