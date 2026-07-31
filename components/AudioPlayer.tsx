@@ -99,13 +99,16 @@ export default function AudioPlayer({
     }
   };
 
-  const handleRowClick = () => {
+  const handleRowClick = async () => {
+    const audio = audioRef.current;
+    setIsExpanded(true);
 
-    const nextExpanded = !isExpanded;
-    setIsExpanded(nextExpanded);
+    if (!audio || !audio.paused) return;
 
-    if (nextExpanded && audioRef.current) {
-      audioRef.current.dispatchEvent(new Event('play', { bubbles: true }));
+    try {
+      await audio.play();
+    } catch (err) {
+      console.error('Play failed:', err);
     }
   };
 
