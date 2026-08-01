@@ -1,18 +1,100 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Download } from 'lucide-react';
 import { useClickOutside } from "./useClickOutside";
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+
+interface DownloadNotice {
+  status: 'downloading' | 'done' | 'error';
+  title: string;
+  progress?: number;
+}
+
+interface DownloadEntry {
+  id: string;
+  title: string;
+  status: 'downloading' | 'done' | 'error';
+  progress?: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
+  const [downloadNotice, setDownloadNotice] = useState<DownloadNotice | null>(null);
   const navRef = useRef<HTMLHeadingElement>(null);
+  const noticeTimerRef = useRef<number | null>(null);
   const pathname = usePathname();
+  const router = useRouter();
 
   useClickOutside(navRef, () => {
     if (isOpen) setIsOpen(false);
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const restoreEntries = () => {
+      try {
+        const storedEntries = window.localStorage.getItem('nsu-download-history');
+        if (storedEntries) {
+          const parsedEntries = JSON.parse(storedEntries) as DownloadEntry[];
+          if (Array.isArray(parsedEntries)) setDownloadEntries(parsedEntries);
+        }
+      } catch {
+        // Ignore malformed storage values and fall back to an empty list.
+      }
+    };
+
+    restoreEntries();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleDownloadStatus = (event: Event) => {
+      const detail = (event as CustomEvent<DownloadNotice>).detail;
+      if (!detail) return;
+
+      if (noticeTimerRef.current) {
+        window.clearTimeout(noticeTimerRef.current);
+      }
+
+      setDownloadNotice(detail);
+
+      setDownloadEntries((previousEntries) => {
+        const nextEntries = previousEntries.filter((entry) => entry.title !== detail.title);
+        const now = new Date().toISOString();
+        const updatedEntry: DownloadEntry = {
+          id: previousEntries.find((entry) => entry.title === detail.title)?.id ?? `${detail.title}-${now}`,
+          title: detail.title,
+          status: detail.status,
+          progress: detail.progress,
+          createdAt: previousEntries.find((entry) => entry.title === detail.title)?.createdAt ?? now,
+          updatedAt: now,
+        };
+
+        const mergedEntries = [updatedEntry, ...nextEntries].slice(0, 12);
+        window.localStorage.setItem('nsu-download-history', JSON.stringify(mergedEntries));
+        return mergedEntries;
+      });
+
+      if (detail.status !== 'downloading') {
+        noticeTimerRef.current = window.setTimeout(() => setDownloadNotice(null), 2200);
+      }
+    };
+
+    window.addEventListener('nsu-download-status', handleDownloadStatus as EventListener);
+    return () => {
+      window.removeEventListener('nsu-download-status', handleDownloadStatus as EventListener);
+      if (noticeTimerRef.current) {
+        window.clearTimeout(noticeTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleThemeToggle = () => {
     const root = document.documentElement;
@@ -20,10 +102,12 @@ const Navbar = () => {
     window.localStorage.setItem('nsu-theme', isDark ? 'dark' : 'light');
   };
 
+  const activeDownloads = downloadEntries.filter((entry) => entry.status === 'downloading');
+
   return (
     <header
       ref={navRef}
-      className="sticky top-1 z-50 w-[97%] mx-auto rounded-xl border-b border-slate-500 bg-backnav/80
+      className="sticky top-1 z-50 w-[97%] mx-auto rounded-xl border-b border-slate-500 bg-backnav/80 relative
       text-primary shadow-2xl shadow-zinc-300/20 backdrop-blur-xl
       dark:border-zinc-800/80 dark:shadow-zinc-950/50"
     >
@@ -77,7 +161,23 @@ const Navbar = () => {
         </Link>
 
         {/* Desktop Links & Theme Toggle */}
-        <ul className="hidden md:flex items-center gap-6 text-sm font-medium">
+        <div className="hidden md:flex min-w-0 flex-1 items-center justify-end">
+          <div className="relative mr-4">
+            <button
+              type="button"
+              onClick={() => router.push('/downloads')}
+              className="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-400/20"
+              aria-label="Open downloads"
+            >
+              <Download size={16} />
+              {activeDownloads.length > 0 ? (
+                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-slate-950">
+                  {activeDownloads.length}
+                </span>
+              ) : null}
+            </button>
+          </div>
+          <ul className="flex items-center gap-6 text-sm font-medium">
           <li>
             <Link
               href="/"
@@ -129,10 +229,26 @@ const Navbar = () => {
               </svg>
             </button>
           </li>
-        </ul>
+          </ul>
+        </div>
 
         {/* Mobile Actions Container: Theme Toggle + Hamburger Menu */}
         <div className="flex items-center gap-2 md:hidden">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => router.push('/downloads')}
+              className="rounded-lg p-2 text-primary transition hover:bg-gray-700/10 dark:hover:bg-zinc-800"
+              aria-label="Open downloads"
+            >
+              <Download size={18} />
+              {activeDownloads.length > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-slate-950">
+                  {activeDownloads.length}
+                </span>
+              ) : null}
+            </button>
+          </div>
           {/* Mobile Theme Toggle Button (Always Visible) */}
           <button
             onClick={handleThemeToggle}
@@ -171,6 +287,15 @@ const Navbar = () => {
           </button>
         </div>
       </nav>
+
+      {downloadNotice && (
+        <div className="mx-4 mb-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] font-semibold text-amber-300 shadow-sm shadow-amber-400/10 md:hidden">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0">{downloadNotice.status === 'downloading' ? '⬇' : downloadNotice.status === 'done' ? '✓' : '!'}</span>
+            <span className="truncate">{downloadNotice.status === 'downloading' ? `Downloading ${downloadNotice.title}` : downloadNotice.status === 'done' ? `Downloaded ${downloadNotice.title}` : 'Download failed'}</span>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Dropdown Menu */}
       {isOpen && (

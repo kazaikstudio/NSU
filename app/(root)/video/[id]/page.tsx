@@ -1,4 +1,8 @@
+"use client";
+
+import { use, useState } from "react";
 import Link from "next/link";
+import DownloadModal from "../../../../components/DownloadModal";
 
 type VideoDetailPageProps = {
   params: Promise<{
@@ -6,8 +10,25 @@ type VideoDetailPageProps = {
   }>;
 };
 
-export default async function VideoDetailPage({ params }: VideoDetailPageProps) {
-  const { id } = await params;
+export default function VideoDetailPage({ params }: VideoDetailPageProps) {
+  const { id } = use(params);
+  const [activeDownloadVideoId, setActiveDownloadVideoId] = useState<string | null>(null);
+  const [downloadPosition, setDownloadPosition] = useState<{ x: number; y: number } | null>(null);
+  const [downloadAnchor, setDownloadAnchor] = useState<HTMLElement | null>(null);
+
+  const openDownloadModal = (event: React.MouseEvent<HTMLButtonElement>, videoId: string) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setActiveDownloadVideoId(videoId);
+    setDownloadPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+    setDownloadAnchor(event.currentTarget);
+  };
+
+  const closeDownloadModal = () => {
+    setActiveDownloadVideoId(null);
+    setDownloadPosition(null);
+    setDownloadAnchor(null);
+  };
+
   const decodedId = encodeURIComponent(id);
 
   return (
@@ -41,12 +62,13 @@ export default async function VideoDetailPage({ params }: VideoDetailPageProps) 
 
           {/* Action & Download Buttons */}
           <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href={`/download?video=${decodedId}`}
+            <button
+              type="button"
+              onClick={(event) => openDownloadModal(event, id)}
               className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-500 shadow-lg shadow-rose-950/30"
             >
               Download formats
-            </Link>
+            </button>
 
             {/* Watch on YouTube */}
             <a
@@ -88,6 +110,14 @@ export default async function VideoDetailPage({ params }: VideoDetailPageProps) 
           </p>
         </div>
       </div>
+
+      <DownloadModal
+        open={Boolean(activeDownloadVideoId)}
+        videoId={activeDownloadVideoId}
+        position={downloadPosition}
+        anchor={downloadAnchor}
+        onClose={closeDownloadModal}
+      />
     </main>
   );
 }

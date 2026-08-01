@@ -26,20 +26,15 @@ const Home = () => {
   const [videos, setVideos] = useState<YouTubeVideo[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Modal State includes position tracking for row/card anchoring
-  const [downloadModal, setDownloadModal] = useState<{
-    open: boolean;
-    videoId: string | null;
-    position: { x: number; y: number } | null;
-    anchor: HTMLElement | null;
-  }>({ open: false, videoId: null, position: null, anchor: null });
-
   const [searchQuery, setSearchQuery] = useState("");
   // Category state toggles strictly between "official" and "short"
   const [selectedCategory, setSelectedCategory] = useState<"official" | "short">("official");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeDownloadVideoId, setActiveDownloadVideoId] = useState<string | null>(null);
+  const [downloadPosition, setDownloadPosition] = useState<{ x: number; y: number } | null>(null);
+  const [downloadAnchor, setDownloadAnchor] = useState<HTMLElement | null>(null);
 
   const router = useRouter();
   const mainSearchRef = useRef<HTMLDivElement>(null);
@@ -116,24 +111,19 @@ const Home = () => {
     router.push(`/video/${encodeURIComponent(videoId)}`);
   };
 
-  // Handler captures button click event to anchor modal position
   const openDownloadModal = (e: React.MouseEvent<HTMLButtonElement>, videoId: string) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
-
-    setDownloadModal({
-      open: true,
-      videoId,
-      anchor: e.currentTarget,
-      position: {
-        x: rect.left + rect.width / 2,
-        y: rect.bottom + 8,
-      },
-    });
+    setActiveDownloadVideoId(videoId);
+    setDownloadPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+    setDownloadAnchor(e.currentTarget);
   };
 
-  const closeDownloadModal = () =>
-    setDownloadModal({ open: false, videoId: null, position: null, anchor: null });
+  const closeDownloadModal = () => {
+    setActiveDownloadVideoId(null);
+    setDownloadPosition(null);
+    setDownloadAnchor(null);
+  };
 
   return (
     <main className="min-h-screen pb-28">
@@ -351,15 +341,15 @@ const Home = () => {
                 </div>
         </div>
 
-        {/* Modal dynamically anchored to click position */}
-        <DownloadModal
-                open={downloadModal.open}
-                videoId={downloadModal.videoId}
-                position={downloadModal.position}
-                anchor={downloadModal.anchor}
-                onClose={closeDownloadModal}
-          />
       </div>
+
+      <DownloadModal
+        open={Boolean(activeDownloadVideoId)}
+        videoId={activeDownloadVideoId}
+        position={downloadPosition}
+        anchor={downloadAnchor}
+        onClose={closeDownloadModal}
+      />
 
     </main>
   );

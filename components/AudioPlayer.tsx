@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState, useId } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
 
+interface DownloadNoticePayload {
+  status: 'downloading' | 'done' | 'error';
+  title: string;
+}
+
 interface AudioPlayerProps {
   src: string;
   title: string;
@@ -48,7 +53,6 @@ export default function AudioPlayer({
   const [duration, setDuration] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'done' | 'error'>('idle');
-  const [downloadProgress, setDownloadProgress] = useState(0);
   const waveId = useId();
   const downloadTimerRef = useRef<number | null>(null);
 
@@ -147,30 +151,11 @@ export default function AudioPlayer({
       window.clearTimeout(downloadTimerRef.current);
     }
 
-    setDownloadProgress(0);
     setDownloadStatus('downloading');
+    window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
+      detail: { status: 'downloading', title },
+    }));
     onDownload?.();
-
-    const startProgress = () => {
-      if (downloadTimerRef.current) {
-        window.clearTimeout(downloadTimerRef.current);
-      }
-
-      const tick = () => {
-        setDownloadProgress((previous) => {
-          if (previous >= 92) {
-            return previous;
-          }
-          return Math.min(92, previous + Math.max(2, Math.round((100 - previous) / 12)));
-        });
-
-        downloadTimerRef.current = window.setTimeout(tick, 180);
-      };
-
-      tick();
-    };
-
-    startProgress();
 
     try {
       const response = await fetch(downloadUrl, { cache: 'no-store' });
@@ -193,7 +178,9 @@ export default function AudioPlayer({
           receivedLength += value.byteLength;
 
           if (Number.isFinite(contentLength) && contentLength > 0) {
-            setDownloadProgress((previous) => Math.max(previous, Math.min(98, Math.round((receivedLength / contentLength) * 100))));
+            // Keep the navbar notice responsive without showing a broken inline bar.
+            void receivedLength;
+            void contentLength;
           }
         }
       } else {
@@ -205,7 +192,6 @@ export default function AudioPlayer({
         throw new Error('The download stream was empty.');
       }
 
-      setDownloadProgress(100);
       const blobParts = chunks.map((chunk) => {
         const copiedChunk = new Uint8Array(chunk.byteLength);
         copiedChunk.set(chunk);
@@ -221,17 +207,21 @@ export default function AudioPlayer({
       anchor.remove();
       URL.revokeObjectURL(blobUrl);
       setDownloadStatus('done');
+      window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
+        detail: { status: 'done', title },
+      }));
       downloadTimerRef.current = window.setTimeout(() => {
         setDownloadStatus('idle');
-        setDownloadProgress(0);
-      }, 1200);
+      }, 1800);
     } catch (error) {
       console.error('Download failed:', error);
       setDownloadStatus('error');
-      setDownloadProgress(0);
+      window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
+        detail: { status: 'error', title },
+      }));
       downloadTimerRef.current = window.setTimeout(() => {
         setDownloadStatus('idle');
-      }, 1600);
+      }, 2200);
     }
   };
 
@@ -322,15 +312,15 @@ export default function AudioPlayer({
   return (
       <article
         onClick={handleRowClick}
-      className="flex min-w-0 items-center justify-between gap-4 rounded-lg border border-card1/5
-        bg-mrow/60 px-4 py-3 transition hover:border-amber-400/45 cursor-pointer text-Eltext1"
+      className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-card1/5
+        bg-mrow/60 px-3 py-2.5 transition hover:border-amber-400/45 cursor-pointer text-Eltext1 sm:gap-4 sm:px-4 sm:py-3"
       >
         {audioTag}
 
         {!isExpanded ? (
           <>
             <div className="min-w-0 shrink-0 basis-60 sm:basis-auto">
-              <h2 className="truncate text-xs sm:text-base font-semibold text-Eltext1">{title}</h2>
+              <h2 className="truncate text-[11px] font-semibold text-Eltext1 sm:text-sm">{title}</h2>
             </div>
             <div className="flex-1" />
           </>
@@ -343,27 +333,17 @@ export default function AudioPlayer({
         )}
 
         {downloadUrl && (
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
-            <a
-              href={downloadUrl}
-              download={fileName || `${title}.mp3`}
-              onClick={handleDownloadClick}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30
-                bg-amber-400/10 px-3 py-2 text-xs font-semibold text-Eltext1 transition hover:border-amber-300 hover:bg-amber-400/20"
-              aria-label={`Download ${title}`}
-            >
-              <Download size={14} />
-              <span className="hidden sm:inline">{downloadStatus === 'downloading' ? 'Downloading…' : downloadStatus === 'done' ? 'Saved' : 'Download'}</span>
-            </a>
-            {downloadStatus === 'downloading' && (
-              <div className="w-[96px] sm:w-[120px]">
-                <div className="h-1.5 overflow-hidden rounded-full bg-black/10">
-                  <div className="h-full rounded-full bg-amber-400 transition-[width] duration-150" style={{ width: `${downloadProgress}%` }} />
-                </div>
-                <p className="mt-1 text-[10px] font-medium text-amber-400/85">{downloadProgress > 0 ? `${downloadProgress}%` : 'Preparing…'}</p>
-              </div>
-            )}
-          </div>
+          <a
+            href={downloadUrl}
+            download={fileName || `${title}.mp3`}
+            onClick={handleDownloadClick}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30
+              bg-amber-400/10 px-2.5 py-2 text-[11px] font-semibold text-Eltext1 transition hover:border-amber-300 hover:bg-amber-400/20 sm:px-3"
+            aria-label={`Download ${title}`}
+          >
+            <Download size={14} />
+            <span className="hidden sm:inline">{downloadStatus === 'downloading' ? 'Downloading…' : downloadStatus === 'done' ? 'Saved' : 'Download'}</span>
+          </a>
         )}
       </article>
     );
