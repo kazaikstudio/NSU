@@ -107,7 +107,7 @@ const Navbar = () => {
   return (
     <header
       ref={navRef}
-      className="sticky top-1 z-50 w-[97%] mx-auto rounded-xl border-b border-slate-500 bg-backnav/80 relative
+      className="sticky top-1 z-50 w-[97%] mx-auto rounded-xl border-b border-slate-500 bg-backnav/80
       text-primary shadow-2xl shadow-zinc-300/20 backdrop-blur-xl
       dark:border-zinc-800/80 dark:shadow-zinc-950/50"
     >
@@ -157,7 +157,11 @@ const Navbar = () => {
             </g>
           </svg>
 
-          <span className="text-primary transition-colors">NOLL STUDIO UGANDA</span>
+          <span className="text-primary transition-colors text-xs font-bold tracking-tight min-[380px]:text-sm sm:text-xl md:text-xl whitespace-nowrap">
+            <span className="sm:hidden">NOLL STUDIO UG</span>
+            <span className="hidden sm:inline">NOLL STUDIO UGANDA</span>
+          </span>
+
         </Link>
 
         {/* Desktop Links & Theme Toggle */}
