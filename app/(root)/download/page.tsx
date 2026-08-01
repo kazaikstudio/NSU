@@ -136,91 +136,91 @@ function DownloadForm() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 pb-32 pt-24 text-slate-100">
-      <Switchbutton />
+    <main className="min-h-screen px-4 pb-32 pt-24 text-primary">
+          <Switchbutton />
 
-      <section className="mx-auto max-w-3xl">
-        <div className="rounded-3xl border border-slate-800 bg-linear-to-br from-slate-900 via-slate-900 to-rose-950/30 p-6 shadow-2xl shadow-black/30 sm:p-10">
-          <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-400">
-            <Download size={28} aria-hidden="true" />
-          </div>
+          <section className="mx-auto max-w-3xl">
+            <div className="rounded-3xl border border-card1/20 bg-linear-to-br from-cardcl via-cardcl to-rose-950/30 p-6 shadow-2xl shadow-black/30 sm:p-10">
+              <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-400">
+                <Download size={28} aria-hidden="true" />
+              </div>
 
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-rose-400">Noll Studio Downloads</p>
-          <h1 className="mt-3 text-3xl font-bold text-white sm:text-5xl">Download your media</h1>
-          <p className="mt-4 max-w-xl text-sm leading-6 text-slate-400 sm:text-base">
-            Paste a YouTube video link or ID to see the formats YouTube makes available.
-          </p>
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-rose-400">Noll Studio Downloads</p>
+              <h1 className="mt-3 text-3xl font-bold text-primary sm:text-5xl">Download your media</h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-secondry sm:text-base">
+                Paste a YouTube video link or ID to see the formats YouTube makes available.
+              </p>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-slate-200">YouTube video</span>
-              <span className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-950/80 px-4 transition focus-within:border-rose-500">
-                <LinkIcon size={18} className="shrink-0 text-slate-500" aria-hidden="true" />
-                <input
-                  type="text"
-                  value={source}
-                  onChange={(event) => {
-                    setSource(event.target.value)
-                    if (!getVideoId(event.target.value)) {
-                      setFormats([])
-                      setTitle('')
-                      setError('')
-                    }
-                  }}
-                  placeholder="https://youtube.com/watch?v=..."
-                  className="min-w-0 flex-1 bg-transparent py-4 text-sm text-white outline-none placeholder:text-slate-600"
-                  aria-describedby={error ? 'download-error' : undefined}
-                />
-              </span>
-            </label>
+              <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-primary">YouTube video</span>
+                  <span className="flex items-center gap-3 rounded-xl border border-card1/20 bg-cardcl/80 px-4 transition focus-within:border-rose-500">
+                    <LinkIcon size={18} className="shrink-0 text-secondry" aria-hidden="true" />
+                    <input
+                      type="text"
+                      value={source}
+                      onChange={(event) => {
+                        setSource(event.target.value)
+                        if (!getVideoId(event.target.value)) {
+                          setFormats([])
+                          setTitle('')
+                          setError('')
+                        }
+                      }}
+                      placeholder="https://youtube.com/watch?v=..."
+                      className="min-w-0 flex-1 bg-transparent py-4 text-sm text-primary outline-none placeholder:text-secondry/60"
+                      aria-describedby={error ? 'download-error' : undefined}
+                    />
+                  </span>
+                </label>
 
-            {error && <p id="download-error" className="text-sm text-red-400" role="alert">{error}</p>}
-            {loadingFormats && <p className="text-sm text-slate-400">Checking available formats...</p>}
-            {title && <p className="text-sm font-semibold text-white">{title}</p>}
-            {!loadingFormats && !error && (['audio', 'video'] as const).map((section) => {
-              const sectionFormats = formats.filter((format) => section === 'audio' ? !format.kind.includes('video') : format.kind.includes('video'))
-              if (!sectionFormats.length) return null
-              return (
-                <div key={section} className="space-y-3">
-                  <h2 className="border-b border-slate-700 pb-2 text-sm font-bold uppercase tracking-wider text-rose-300">{section} formats</h2>
-                  {sectionFormats.map((format) => (
-                    <div key={`${format.itag}-${format.extension}`} className="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
-                      <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold text-white">{format.label} {format.extension.toUpperCase()}</p>
-                        <p className="mt-1 text-xs text-slate-500">{format.kind.replace('+', ' + ')}{format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ''}</p>
-                      </div>
-                      <button type="button" onClick={() => void handleDownload(format)} disabled={loadingFormat !== null} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-500 disabled:opacity-60">
-                        <Download size={15} aria-hidden="true" />
-                        {loadingFormat === format.itag ? 'Preparing...' : 'Download'}
-                      </button>
-                      </div>
-                      {loadingFormat === format.itag && (
-                        <div className="mt-3" role="status" aria-label={downloadProgress ? `Download ${downloadProgress}% complete` : 'Download in progress'}>
-                          <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
-                            <div className={`h-full rounded-full bg-rose-500 transition-[width] duration-200 ${downloadProgress ? '' : 'w-1/3 animate-pulse'}`} style={downloadProgress ? { width: `${downloadProgress}%` } : undefined} />
+                {error && <p id="download-error" className="text-sm text-red-400" role="alert">{error}</p>}
+                {loadingFormats && <p className="text-sm text-secondry">Checking available formats...</p>}
+                {title && <p className="text-sm font-semibold text-primary">{title}</p>}
+                {!loadingFormats && !error && (['audio', 'video'] as const).map((section) => {
+                  const sectionFormats = formats.filter((format) => section === 'audio' ? !format.kind.includes('video') : format.kind.includes('video'))
+                  if (!sectionFormats.length) return null
+                  return (
+                    <div key={section} className="space-y-3">
+                      <h2 className="border-b border-card1/20 pb-2 text-sm font-bold uppercase tracking-wider text-rose-300">{section} formats</h2>
+                      {sectionFormats.map((format) => (
+                        <div key={`${format.itag}-${format.extension}`} className="rounded-xl border border-card1/20 bg-cardcl/70 p-4">
+                          <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-primary">{format.label} {format.extension.toUpperCase()}</p>
+                            <p className="mt-1 text-xs text-secondry">{format.kind.replace('+', ' + ')}{format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ''}</p>
                           </div>
-                          <p className="mt-1 text-right text-[10px] text-slate-500">{downloadProgress ? `${downloadProgress}%` : 'Preparing download...'}</p>
+                          <button type="button" onClick={() => void handleDownload(format)} disabled={loadingFormat !== null} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-500 disabled:opacity-60 cursor-pointer">
+                            <Download size={15} aria-hidden="true" />
+                            {loadingFormat === format.itag ? 'Preparing...' : 'Download'}
+                          </button>
+                          </div>
+                          {loadingFormat === format.itag && (
+                            <div className="mt-3" role="status" aria-label={downloadProgress ? `Download ${downloadProgress}% complete` : 'Download in progress'}>
+                              <div className="h-1.5 overflow-hidden rounded-full bg-card1/20">
+                                <div className={`h-full rounded-full bg-rose-500 transition-[width] duration-200 ${downloadProgress ? '' : 'w-1/3 animate-pulse'}`} style={downloadProgress ? { width: `${downloadProgress}%` } : undefined} />
+                              </div>
+                              <p className="mt-1 text-right text-[10px] text-secondry">{downloadProgress ? `${downloadProgress}%` : 'Preparing download...'}</p>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )
-            })}
-            <button type="submit" className="w-full rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-200 transition hover:border-rose-500 hover:text-white">
-              Refresh formats
-            </button>
-          </form>
-        </div>
-      </section>
-    </main>
+                  )
+                })}
+                <button type="submit" className="w-full rounded-xl border border-card1/20 px-5 py-3 text-sm font-semibold text-primary transition hover:border-rose-500 hover:text-white cursor-pointer">
+                  Refresh formats
+                </button>
+              </form>
+            </div>
+          </section>
+        </main>
   )
 }
 
 export default function DownloadPage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-slate-950" />}>
+    <Suspense fallback={<main className="min-h-screen bg-cardcl text-primary" />}>
       <DownloadForm />
     </Suspense>
   )

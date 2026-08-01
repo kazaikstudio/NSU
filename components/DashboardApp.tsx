@@ -79,7 +79,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
 
   useEffect(() => {
     setMounted(true);
-    const savedMode = window.localStorage.getItem('theme_mode');
+    const savedMode = window.localStorage.getItem('nsu-theme') || window.localStorage.getItem('theme_mode');
     if (savedMode !== null) {
       setIsDarkMode(savedMode === 'dark');
     }
@@ -382,7 +382,11 @@ export default function DashboardApp({ user }: { user?: User | null }) {
               <span className="text-xs font-medium">{isDarkMode ? 'Dark Mode' : 'Light Mode'}</span>
             </div>
 
-            <button onClick={() => setIsDarkMode(!isDarkMode)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+            <button onClick={() => {
+              const nextMode = !isDarkMode;
+              setIsDarkMode(nextMode);
+              window.localStorage.setItem('nsu-theme', nextMode ? 'dark' : 'light');
+            }} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>

@@ -49,28 +49,28 @@ export default function ArtistList({ searchTerm }: { searchTerm: string }) {
   }
 
   return (
-    <div className="col-span-full grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {filteredArtists.map((artist) => (
-        <Link href={`/artist/${encodeURIComponent(artist.id)}`} key={artist.id} className="flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 transition hover:border-amber-400/40">
-          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-amber-400/30 bg-amber-400/10">
-            {artist.profileUrl ? (
-              <div
-                role="img"
-                aria-label={`${artist.name} profile`}
-                className="h-full w-full bg-cover bg-center"
-                style={{ backgroundImage: `url(${artist.profileUrl})` }}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-lg font-bold text-amber-300">{artist.name.charAt(0).toUpperCase()}</div>
-            )}
-          </div>
-          <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-white">{artist.name}</h2>
-            <p className="mt-1 text-xs text-amber-300">{artist.genre}</p>
-            <p className="mt-1 text-xs text-slate-500">{artist.tracksCount} uploaded track{artist.tracksCount === 1 ? '' : 's'} • {artist.status}</p>
-          </div>
-        </Link>
-      ))}
-    </div>
+    <div className="col-span-full grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 text-primary">
+          {filteredArtists.map((artist) => (
+            <Link href={`/artist/${encodeURIComponent(artist.id)}`} key={artist.id} className="flex items-center gap-4 rounded-2xl border border-card1/20 bg-cardcl/70 p-4 transition hover:border-amber-400/40">
+              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-amber-400/30 bg-amber-400/10">
+                {artist.profileUrl ? (
+                  <div
+                    role="img"
+                    aria-label={`${artist.name} profile`}
+                    className="h-full w-full bg-cover bg-center"
+                    style={{ backgroundImage: `url(${artist.profileUrl})` }}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-lg font-bold text-amber-300">{artist.name.charAt(0).toUpperCase()}</div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-semibold text-primary">{artist.name}</h2>
+                <p className="mt-1 text-xs text-amber-400">{artist.genre}</p>
+                <p className="mt-1 text-xs text-secondry">{artist.tracksCount} uploaded track{artist.tracksCount === 1 ? '' : 's'} • {artist.status}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
   );
 }

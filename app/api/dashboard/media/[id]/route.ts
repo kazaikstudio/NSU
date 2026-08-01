@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import pool, { ensureDatabaseReady } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -9,7 +10,28 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   const range = request.headers.get('range');
-  const requestedFilename = new URL(request.url).searchParams.get('filename');
+  const searchParams = new URL(request.url).searchParams;
+  const requestedFilename = searchParams.get('filename');
+
+  if (searchParams.get('download') === '1') {
+    try {
+      await ensureDatabaseReady();
+      await pool.query(
+        `UPDATE artist_media
+         SET download_count = COALESCE(download_count, 0) + 1
+         WHERE drive_file_id = $1 AND kind = 'track'`,
+        [id]
+      );
+      await pool.query(
+        `UPDATE artists
+         SET total_downloads = COALESCE(total_downloads, 0) + 1
+         WHERE id::text = (SELECT artist_id FROM artist_media WHERE drive_file_id = $1 LIMIT 1)`,
+        [id]
+      );
+    } catch (error) {
+      console.error('Unable to record artist download:', error);
+    }
+  }
   const response = await fetch(`https://drive.google.com/uc?export=download&id=${id}`, {
     headers: range ? { Range: range } : undefined,
   });

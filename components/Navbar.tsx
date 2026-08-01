@@ -4,23 +4,28 @@ import { useState, useRef } from "react";
 import Link from "next/link";
 import { useClickOutside } from "./useClickOutside";
 import { usePathname } from 'next/navigation';
-import { useTheme } from 'next-themes';
-import { Sun, Moon } from 'lucide-react';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const navRef = useRef<HTMLHeadingElement>(null);
   const pathname = usePathname();
-  const { resolvedTheme, setTheme } = useTheme();
 
   useClickOutside(navRef, () => {
     if (isOpen) setIsOpen(false);
   });
 
+  const handleThemeToggle = () => {
+    const root = document.documentElement;
+    const isDark = root.classList.toggle('dark');
+    window.localStorage.setItem('nsu-theme', isDark ? 'dark' : 'light');
+  };
+
   return (
     <header
       ref={navRef}
-      className="sticky top-0 z-50 w-full border-b border-zinc-200/80 bg-white/80 text-zinc-950 shadow-2xl shadow-zinc-300/20 backdrop-blur-xl dark:border-zinc-800/80 dark:bg-zinc-950/70 dark:text-white dark:shadow-zinc-950/50"
+      className="sticky top-1 z-50 w-[97%] mx-auto rounded-xl border-b border-slate-500 bg-backnav/80
+      text-primary shadow-2xl shadow-zinc-300/20 backdrop-blur-xl
+      dark:border-zinc-800/80 dark:shadow-zinc-950/50"
     >
       <nav className="flex items-center justify-between px-4 py-2 sm:px-6 max-w-7xl mx-auto">
         {/* Logo & Brand Name */}
@@ -31,7 +36,7 @@ const Navbar = () => {
               window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className="flex items-center gap-2 text-base sm:text-lg font-bold min-w-0 hover:text-gray-300 transition-colors"
-        >
+          >
           {/* Your Original SVG Logo */}
           <svg
             viewBox="0 0 710 710"
@@ -47,7 +52,7 @@ const Navbar = () => {
             <g
               transform="matrix(0.86124224,0,0,0.86124224,1242.0795,-105.62585)"
               id="g1"
-            >
+              >
               <circle
                 style={{
                   fill: "none",
@@ -68,18 +73,18 @@ const Navbar = () => {
             </g>
           </svg>
 
-          <span className="truncate">NOLL STUDIO UGANDA</span>
+          <span className="text-primary transition-colors">NOLL STUDIO UGANDA</span>
         </Link>
 
-        {/* Desktop Links */}
+        {/* Desktop Links & Theme Toggle */}
         <ul className="hidden md:flex items-center gap-6 text-sm font-medium">
           <li>
             <Link
               href="/"
               className={`transition-colors py-2 relative ${
                 pathname === '/'
-                  ? 'text-amber-400 font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-400'
-                  : 'text-zinc-300 hover:text-white'
+                  ? 'text-navlink font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5'
+                  : 'text-primary hover:text-amber-900'
               }`}
             >
               Home
@@ -87,11 +92,11 @@ const Navbar = () => {
           </li>
           <li>
             <Link
-              href="/feature"
+              href="/Feature"
               className={`transition-colors py-2 relative ${
-                pathname === '/feature'
-                  ? 'text-amber-400 font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-400'
-                  : 'text-zinc-300 hover:text-white'
+                pathname === '/Feature'
+                  ? 'text-navlink font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5'
+                  : 'text-primary hover:text-amber-900'
               }`}
             >
               Features
@@ -102,42 +107,55 @@ const Navbar = () => {
               href="/about"
               className={`transition-colors py-2 relative ${
                 pathname === '/about'
-                  ? 'text-amber-400 font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-400'
-                  : 'text-zinc-300 hover:text-white'
+                  ? 'text-navlink font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5'
+                  : 'text-primary hover:text-amber-900'
               }`}
             >
               About NSU
             </Link>
           </li>
           <li>
+            {/* Desktop Theme Toggle Button */}
             <button
-              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/60 text-zinc-300 backdrop-blur-sm transition-all duration-300 hover:border-amber-500/50 hover:bg-zinc-900 hover:text-amber-400 hover:shadow-lg hover:shadow-amber-500/10"
-              aria-label="Toggle theme"
+              onClick={handleThemeToggle}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-primary hover:bg-gray-700/10 dark:hover:bg-zinc-800"
+              aria-label="Toggle Theme"
             >
-              {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              <svg className="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <svg className="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
             </button>
           </li>
         </ul>
 
-        {/* Mobile Right Container (Theme Toggle + Hamburger) */}
+        {/* Mobile Actions Container: Theme Toggle + Hamburger Menu */}
         <div className="flex items-center gap-2 md:hidden">
+          {/* Mobile Theme Toggle Button (Always Visible) */}
           <button
-            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-zinc-800/80 bg-zinc-900/60 text-zinc-300 backdrop-blur-sm transition-all duration-300 hover:border-amber-500/50 hover:bg-zinc-900 hover:text-amber-400"
-            aria-label="Toggle theme"
+            onClick={handleThemeToggle}
+            className="p-2 text-primary hover:bg-gray-700/10 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+            aria-label="Toggle Theme"
           >
-            {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <svg className="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <svg className="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
           </button>
 
+          {/* Hamburger Menu Button */}
           <button
             onClick={() => setIsOpen((prev) => !prev)}
             type="button"
-            className="shrink-0 p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg focus:outline-none"
+            className="shrink-0 p-2 text-primary hover:bg-gray-700/10 dark:hover:bg-zinc-800 rounded-lg focus:outline-none transition-colors"
             aria-controls="mobile-menu"
             aria-expanded={isOpen}
             aria-label="Toggle navigation menu"
-            >
+          >
             <svg
               className="w-6 h-6 transform transition-transform duration-300"
               fill="none"
@@ -145,23 +163,12 @@ const Navbar = () => {
               viewBox="0 0 24 24"
             >
               {isOpen ? (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               )}
             </svg>
           </button>
-
         </div>
       </nav>
 
@@ -183,10 +190,10 @@ const Navbar = () => {
             Home
           </Link>
           <Link
-            href="/feature"
+            href="/Feature"
             onClick={() => setIsOpen(false)}
             className={`block px-4 py-3 rounded-xl text-base font-medium transition-colors ${
-              pathname === '/feature'
+              pathname === '/Feature'
                 ? 'text-amber-400 bg-amber-500/10 font-semibold'
                 : 'text-zinc-200 hover:text-amber-400 hover:bg-zinc-800/80'
             }`}

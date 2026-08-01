@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import ThemeProvider from "../components/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "Noll Studios Ug",
@@ -14,8 +13,22 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (() => {
+                try {
+                  const savedTheme = localStorage.getItem('nsu-theme') || localStorage.getItem('theme_mode');
+                  if (savedTheme !== 'light') document.documentElement.classList.add('dark');
+                } catch {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
-        <ThemeProvider>{children}</ThemeProvider>
+        {children}
       </body>
     </html>
   );

@@ -20,8 +20,13 @@ async function ensureMediaTable() {
       mime_type TEXT NOT NULL,
       file_url TEXT NOT NULL,
       drive_file_id TEXT,
+      download_count INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  await pool.query(`
+    ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0
   `);
 }
 
@@ -30,7 +35,7 @@ export async function GET(_request: Request, context: Context) {
   try {
     await ensureMediaTable();
     const { rows } = await pool.query(
-      `SELECT id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", created_at AS "createdAt"
+      `SELECT id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", download_count AS "downloadCount", created_at AS "createdAt"
        FROM artist_media WHERE artist_id = $1 ORDER BY created_at DESC`,
       [id]
     );

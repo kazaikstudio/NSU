@@ -49,6 +49,7 @@ const initDatabase = async () => {
         ADD COLUMN IF NOT EXISTS artist_id VARCHAR(255),
         ADD COLUMN IF NOT EXISTS email VARCHAR(255),
         ADD COLUMN IF NOT EXISTS tracks_count INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS total_downloads INTEGER NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'Active',
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
       `);
@@ -67,6 +68,15 @@ const initDatabase = async () => {
         ADD COLUMN IF NOT EXISTS category VARCHAR(100) NOT NULL DEFAULT 'Regular Members',
         ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'Active',
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS artist_follows (
+          artist_id TEXT NOT NULL,
+          subscriber_id TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (artist_id, subscriber_id)
+        );
       `);
       console.log('Database tables verified/created successfully.');
     } finally {

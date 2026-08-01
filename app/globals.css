@@ -1,25 +1,67 @@
 @import "tailwindcss";
 
-:root {
-    --bg-base: #121212c2;
-    --bg-surface: #1f1f27e8;
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-backnav: #e3f2fd;
+  --color-primary: #023047;
+  --color-secondary: #023047;
+  --color-secondry: #023047;
+  --color-navlink: #ff4800;
+
+  /* Card content */
+  --color-cardcl: #e0fbfc;
+  --color-card1: #060615;
+  --color-Eltext: #060615;
+  --color-Eltext1: #dce1ef;
+}
+.dark{
+    --color-backnav:#00072d;
+    --color-primary: #fff;
+    --color-secondary: #bcc0ce;
+    --color-secondry: #bcc0ce;
+    --color-navlink: #fe9000;
+
+    /* Card content */
+    --color-cardcl: #00072d;
+    --color-card1: #ffffff;
+    --color-Eltext: #dce1ef;
+    --color-Eltext1: #00072d;
 }
 
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
+  background:
+    linear-gradient(to right, rgba(207, 216, 255, 0.5), rgba(132, 141, 255, 0.2)),
+    url('/bg/light.jpeg');
 
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+
+    min-height: 100vh;
+    width: 100vw;
+    margin: 0;
+    overflow-x: hidden;
 }
 
-/* Target body when .dark is present on it or an ancestor */
-body.dark, .dark body {
-  background-color: #000322;
-  background-image: radial-gradient(circle at 50% 0%, rgba(245, 158, 11, 0.15), transparent 50%),
-                    radial-gradient(circle at 100% 100%, rgba(249, 115, 22, 0.1), transparent 40%);
+html.dark body {
+  background:
+    linear-gradient(to right, rgba(18, 0, 25, 0.7), rgba(2, 0, 46, 0.7)),
+    url('/bg/dark.jpeg');
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   background-attachment: fixed;
-  color: white;
+
+  min-height: 100vh;
+  width: 100vw;
+  margin: 0;
+  overflow-x: hidden;
 }
+
+
 
 .marquee-track > * {
   transition: transform 0.3s ease-in-out;
@@ -38,12 +80,12 @@ body.dark, .dark body {
   appearance: none;
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    #fbbf24 var(--range-progress),
-    #334155 var(--range-progress)
-  );
+  background: linear-gradient(    to right,    #fbbf24 var(--range-progress),    #334155 var(--range-progress)  );
   cursor: pointer;
+  -webkit-border-radius: 999px;
+  -moz-border-radius: 999px;
+  -ms-border-radius: 999px;
+  -o-border-radius: 999px;
 }
 
 .audio-range::-webkit-slider-thumb {
@@ -62,4 +104,21 @@ body.dark, .dark body {
   border-radius: 50%;
   background: #fbbf24;
   box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+}
+
+@media (max-width: 639px) {
+  body h1 {
+    font-size: 2.25rem;
+    line-height: 1.1;
+  }
+
+  body h2 {
+    font-size: 1.75rem;
+    line-height: 1.2;
+  }
+
+  body h3 {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
 }
