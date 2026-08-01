@@ -160,9 +160,9 @@ const Home = () => {
         </div>
       </div>
 
-      <div className="px-4 text-primary">
+      <div className=" text-primary">
         {/* Animated Marquee Banner */}
-        <div className="overflow-hidden w-full py-2">
+        <div className="overflow-hidden w-full py-2 px-1">
                 <div
                   className="flex sm:grid overflow-x-auto sm:overflow-visible snap-x sm:snap-none snap-mandatory scrollbar-none sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full px-[7.5vw] sm:px-0 pb-4 sm:pb-0"
                   onScroll={(e) => {
@@ -215,7 +215,7 @@ const Home = () => {
         </div>
 
         {/* Header & Search */}
-        <div className="mt-8 text-start">
+        <div className="mt-8 text-start px-4">
                 <div className="my-6 rounded-xl bg-linear-to-r from-rose-600 to-amber-600 p-0.5 shadow-lg shadow-rose-900/20">
                   <div className="rounded-[10px] bg-cardcl p-5 sm:p-6 flex items-center gap-4">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-2xl border border-rose-500/20">
@@ -281,8 +281,8 @@ const Home = () => {
                 </div>
 
                 {/* Main Grid Section Inside the Box */}
-                <div className="p-4 sm:p-6">
-                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
+                <div className="p-1 sm:p-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1 sm:gap-2">
                     {loading ? (
                       <p className="text-secondry col-span-full py-12 text-center">Loading videos from YouTube...</p>
                     ) : error ? (

@@ -1,6 +1,5 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --color-backnav: #e3f2fd;
@@ -14,6 +13,10 @@
   --color-card1: #060615;
   --color-Eltext: #060615;
   --color-Eltext1: #dce1ef;
+
+  /* Card content */
+  --color-mrow: #00072d;
+
 }
 .dark{
     --color-backnav:#00072d;
@@ -27,6 +30,9 @@
     --color-card1: #ffffff;
     --color-Eltext: #dce1ef;
     --color-Eltext1: #00072d;
+
+    /* Card content */
+    --color-mrow: #B9D9EB;
 }
 
 body {

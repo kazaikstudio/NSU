@@ -77,7 +77,7 @@ const Switchbutton = ({ onScrollToSearch }: SwitchbuttonProps) => {
             </button>
           )}
 
-        </div>
+    </div>
   )
 }
 

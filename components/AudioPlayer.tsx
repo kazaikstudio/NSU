@@ -39,7 +39,6 @@ export default function AudioPlayer({
   fileUrl,
   fileName,
   artistName,
-  artistGenre,
   onPlay,
   onDownload,
 }: AudioPlayerProps) {
@@ -48,7 +47,10 @@ export default function AudioPlayer({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'done' | 'error'>('idle');
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const waveId = useId();
+  const downloadTimerRef = useRef<number | null>(null);
 
   // Pseudo-random wave bar heights to simulate an equalizer visualizer
   const waveBars = [
@@ -67,6 +69,14 @@ export default function AudioPlayer({
     setDuration(0);
     setIsExpanded(false);
   }, [src]);
+
+  useEffect(() => {
+    return () => {
+      if (downloadTimerRef.current) {
+        window.clearTimeout(downloadTimerRef.current);
+      }
+    };
+  }, []);
 
   // Global event listener to pause this audio and collapse it back to default when another row/player starts playing
   useEffect(() => {
@@ -127,6 +137,104 @@ export default function AudioPlayer({
   const downloadUrl = getDownloadUrl(fileUrl, fileName, title);
   const hasArtistDetails = Boolean(artistName);
 
+  const handleDownloadClick = async (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!downloadUrl) return;
+
+    if (downloadTimerRef.current) {
+      window.clearTimeout(downloadTimerRef.current);
+    }
+
+    setDownloadProgress(0);
+    setDownloadStatus('downloading');
+    onDownload?.();
+
+    const startProgress = () => {
+      if (downloadTimerRef.current) {
+        window.clearTimeout(downloadTimerRef.current);
+      }
+
+      const tick = () => {
+        setDownloadProgress((previous) => {
+          if (previous >= 92) {
+            return previous;
+          }
+          return Math.min(92, previous + Math.max(2, Math.round((100 - previous) / 12)));
+        });
+
+        downloadTimerRef.current = window.setTimeout(tick, 180);
+      };
+
+      tick();
+    };
+
+    startProgress();
+
+    try {
+      const response = await fetch(downloadUrl, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`);
+      }
+
+      const contentLength = Number(response.headers.get('Content-Length'));
+      const reader = response.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let receivedLength = 0;
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+
+          chunks.push(value);
+          receivedLength += value.byteLength;
+
+          if (Number.isFinite(contentLength) && contentLength > 0) {
+            setDownloadProgress((previous) => Math.max(previous, Math.min(98, Math.round((receivedLength / contentLength) * 100))));
+          }
+        }
+      } else {
+        const buffer = await response.arrayBuffer();
+        chunks.push(new Uint8Array(buffer));
+      }
+
+      if (!chunks.length) {
+        throw new Error('The download stream was empty.');
+      }
+
+      setDownloadProgress(100);
+      const blobParts = chunks.map((chunk) => {
+        const copiedChunk = new Uint8Array(chunk.byteLength);
+        copiedChunk.set(chunk);
+        return copiedChunk;
+      });
+      const blob = new Blob(blobParts, { type: response.headers.get('Content-Type') || 'application/octet-stream' });
+      const blobUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = blobUrl;
+      anchor.download = fileName || `${title}.mp3`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(blobUrl);
+      setDownloadStatus('done');
+      downloadTimerRef.current = window.setTimeout(() => {
+        setDownloadStatus('idle');
+        setDownloadProgress(0);
+      }, 1200);
+    } catch (error) {
+      console.error('Download failed:', error);
+      setDownloadStatus('error');
+      setDownloadProgress(0);
+      downloadTimerRef.current = window.setTimeout(() => {
+        setDownloadStatus('idle');
+      }, 1600);
+    }
+  };
+
   const audioTag = (
     <audio
       ref={audioRef}
@@ -149,17 +257,17 @@ export default function AudioPlayer({
   );
 
   const player = (
-    <div className="flex w-full items-center gap-3 text-primary">
+    <div className="flex w-full items-center gap-3 text-Eltext1">
           <button
             type="button"
             onClick={togglePlay}
             aria-label={isPlaying ? 'Pause track' : 'Play track'}
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-400 text-cardcl transition hover:bg-amber-300 focus:outline-none shadow-md shadow-amber-400/20"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400 text-cardcl transition hover:bg-amber-300 focus:outline-none shadow-md shadow-amber-400/20"
           >
-            {isPlaying ? <Pause size={25} fill="currentColor" /> : <Play size={25} fill="currentColor" className="ml-0.5" />}
+            {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
           </button>
 
-          <span className="shrink-0 text-[10px] font-medium tabular-nums text-secondry">
+          <span className="shrink-0 text-[10px] font-medium tabular-nums text-Eltext1">
             {formatTime(currentTime)}
           </span>
 
@@ -187,7 +295,7 @@ export default function AudioPlayer({
                     className={`flex-1 rounded-full transition-all duration-150 ${
                       isPassed
                         ? 'bg-amber-400 shadow-sm shadow-amber-400/30'
-                        : 'bg-card1/20 group-hover:bg-card1/40'
+                        : 'bg-Eltext1/60 group-hover:bg-card1/40'
                     } ${isPlaying && isPassed ? 'animate-pulse' : ''}`}
                     style={{ height: `${Math.max(20, height)}%` }}
                   />
@@ -196,17 +304,17 @@ export default function AudioPlayer({
             </div>
           </div>
 
-          <span className="shrink-0 text-[10px] font-medium tabular-nums text-secondry">
+          <span className="shrink-0 text-[10px] font-medium tabular-nums text-Eltext1">
             {formatTime(duration)}
           </span>
-        </div>
+    </div>
   );
 
   if (!hasArtistDetails) {
     return (
       <div onClick={handleRowClick} className="cursor-pointer">
         {audioTag}
-        {isExpanded ? player : <div className="text-white text-sm font-semibold">{title}</div>}
+        {isExpanded ? player : <div className="text-Eltext1 text-sm  font-semibold">{title}</div>}
       </div>
     );
   }
@@ -214,15 +322,15 @@ export default function AudioPlayer({
   return (
       <article
         onClick={handleRowClick}
-        className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-card1/20 bg-cardcl/70 px-4 py-3 transition hover:border-amber-400/45 cursor-pointer text-primary"
+      className="flex min-w-0 items-center justify-between gap-4 rounded-lg border border-card1/5
+        bg-mrow/60 px-4 py-3 transition hover:border-amber-400/45 cursor-pointer text-Eltext1"
       >
         {audioTag}
 
         {!isExpanded ? (
           <>
-            <div className="min-w-0 shrink-0 basis-52">
-              <h2 className="truncate text-base font-semibold text-primary">{title}</h2>
-              <p className="mt-1 truncate text-xs text-amber-400">{artistName} {artistGenre ? `• ${artistGenre}` : ''}</p>
+            <div className="min-w-0 shrink-0 basis-60 sm:basis-auto">
+              <h2 className="truncate text-xs sm:text-base font-semibold text-Eltext1">{title}</h2>
             </div>
             <div className="flex-1" />
           </>
@@ -235,19 +343,27 @@ export default function AudioPlayer({
         )}
 
         {downloadUrl && (
-          <a
-            href={downloadUrl}
-            download={fileName || `${title}.mp3`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDownload?.();
-            }}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-400 transition hover:border-amber-300 hover:bg-amber-400/20"
-            aria-label={`Download ${title}`}
-          >
-            <Download size={14} />
-            <span className="hidden sm:inline">Download</span>
-          </a>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <a
+              href={downloadUrl}
+              download={fileName || `${title}.mp3`}
+              onClick={handleDownloadClick}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30
+                bg-amber-400/10 px-3 py-2 text-xs font-semibold text-Eltext1 transition hover:border-amber-300 hover:bg-amber-400/20"
+              aria-label={`Download ${title}`}
+            >
+              <Download size={14} />
+              <span className="hidden sm:inline">{downloadStatus === 'downloading' ? 'Downloading…' : downloadStatus === 'done' ? 'Saved' : 'Download'}</span>
+            </a>
+            {downloadStatus === 'downloading' && (
+              <div className="w-[96px] sm:w-[120px]">
+                <div className="h-1.5 overflow-hidden rounded-full bg-black/10">
+                  <div className="h-full rounded-full bg-amber-400 transition-[width] duration-150" style={{ width: `${downloadProgress}%` }} />
+                </div>
+                <p className="mt-1 text-[10px] font-medium text-amber-400/85">{downloadProgress > 0 ? `${downloadProgress}%` : 'Preparing…'}</p>
+              </div>
+            )}
+          </div>
         )}
       </article>
     );

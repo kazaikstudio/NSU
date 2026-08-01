@@ -206,60 +206,59 @@ export default function PublicArtistDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-cardcl pb-24 text-primary selection:bg-amber-400 selection:text-cardcl">
-      {/* Background ambient lighting effects */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-amber-500/10 blur-[120px]" />
-        <div className="absolute right-0 top-1/4 h-96 w-96 rounded-full bg-yellow-600/10 blur-[150px]" />
-      </div>
-
+    <main className="min-h-screen pb-24 text-primary selection:bg-amber-400 selection:text-cardcl">
       {/* Hero Header Section */}
-      <section className="relative overflow-hidden border-b border-card1/20 bg-cardcl/40 backdrop-blur-xl">
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-25 filter blur-[1px]"
-          style={{ backgroundImage: artist.bannerUrl ? `url(${artist.bannerUrl})` : undefined }}
-        />
-        <div className="absolute inset-0 bg-linear-to-b from-cardcl/60 via-cardcl/85 to-cardcl" />
+      <section className="relative m-2 sm:m-4 overflow-hidden rounded-3xl border border-amber-400/20 bg-cardcl/40 shadow-2xl backdrop-blur-2xl">
+              {/* Banner Image placed completely behind with z-0 */}
+              <div
+                className="absolute inset-0 z-0 bg-cover bg-center opacity-40 scale-105"
+                style={{ backgroundImage: artist.bannerUrl ? `url(${artist.bannerUrl})` : undefined }}
+              />
+              <div className="absolute inset-0 z-0 bg-linear-to-r from-cardcl/95 via-cardcl/80 to-cardcl/60" />
 
-        <div className="relative mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
-          <Link href="/Audio" className="inline-flex items-center gap-2 text-sm font-medium text-secondry transition hover:text-amber-300 mb-8 cursor-pointer">
-            <ArrowLeft size={16} /> Back to Audio
-          </Link>
+              {/* Content Container */}
+              <div className="relative z-10 mx-auto max-w-8xl px-6 py-10 sm:px-10 sm:py-16">
+                <Link href="/Audio" className="inline-flex items-center gap-2 rounded-full border border-card1/10 bg-cardcl/60 px-4 py-1.5 text-xs font-semibold text-secondry shadow-sm transition hover:border-amber-400/40 hover:text-amber-400 mb-8 cursor-pointer backdrop-blur-md">
+                  <ArrowLeft size={14} /> Back to Audio
+                </Link>
 
-          <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-end sm:gap-8">
-            <div
-              className="flex h-36 w-36 shrink-0 items-center justify-center overflow-hidden rounded-3xl border-2 border-amber-400/30 bg-amber-400/10 text-5xl font-black text-amber-300 shadow-2xl shadow-black/50 sm:h-44 sm:w-44"
-              style={artist.profileUrl ? { backgroundImage: `url(${artist.profileUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
-              role={artist.profileUrl ? 'img' : undefined}
-              aria-label={artist.profileUrl ? `${artist.name} profile` : undefined}
-            >
-              {!artist.profileUrl && artist.name.charAt(0).toUpperCase()}
-            </div>
+                <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-10">
+                  {/* Profile Picture increased to take up roughly 98% width on mobile / expanded size */}
+                  <div
+                    className="relative flex w-[98%] max-w-sm aspect-square shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-amber-400/40 bg-amber-400/10 text-5xl font-black text-amber-300 shadow-xl shadow-amber-400/15 sm:h-56 sm:w-56 sm:max-w-none sm:aspect-auto"
+                    style={artist.profileUrl ? { backgroundImage: `url(${artist.profileUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+                    role={artist.profileUrl ? 'img' : undefined}
+                    aria-label={artist.profileUrl ? `${artist.name} profile` : undefined}
+                  >
+                    <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+                    {!artist.profileUrl && artist.name.charAt(0).toUpperCase()}
+                  </div>
 
-            <div className="flex flex-col items-center text-center sm:items-start sm:text-left">
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3.5 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-300 shadow-sm backdrop-blur-md mb-3">
-                <Sparkles size={12} />
-                <span>{artist.status} artist</span>
+                  {/* Other elements pushed down / aligned */}
+                  <div className="flex flex-col items-center text-center sm:items-start sm:text-left mt-2 sm:mt-0">
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3.5 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-300 shadow-sm backdrop-blur-md mb-3">
+                      <Sparkles size={12} />
+                      <span>{artist.status} artist</span>
+                    </div>
+                    <h1 className="text-3xl font-black tracking-tight text-primary sm:text-5xl lg:text-6xl bg-linear-to-r from-primary via-primary/90 to-amber-300 bg-clip-text">
+                      {artist.name}
+                    </h1>
+                    <p className="mt-2 text-sm sm:text-base font-medium text-amber-400/90 flex items-center gap-2">
+                      <Radio size={15} />
+                      {artist.genre}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void toggleFollow()}
+                      disabled={followLoading}
+                      className="mt-5 inline-flex items-center gap-2 rounded-xl bg-amber-400 px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-950 shadow-lg shadow-amber-400/25 transition hover:bg-amber-300 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {isFollowing ? <BellOff size={16} /> : <Bell size={16} />}
+                      {followLoading ? 'Saving...' : isFollowing ? 'Following' : 'Follow & notify'}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <h1 className="text-4xl font-black tracking-tight text-primary sm:text-6xl bg-linear-to-r from-primary via-primary/90 to-amber-200 bg-clip-text ">
-                {artist.name}
-              </h1>
-              <p className="mt-2 text-base font-medium text-amber-400/90 flex items-center gap-2">
-                <Radio size={15} />
-                {artist.genre}
-              </p>
-              <button
-                type="button"
-                onClick={() => void toggleFollow()}
-                disabled={followLoading}
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-cardcl transition hover:bg-amber-300 disabled:cursor-wait disabled:opacity-60"
-              >
-                {isFollowing ? <BellOff size={16} /> : <Bell size={16} />}
-                {followLoading ? 'Saving...' : isFollowing ? 'Following' : 'Follow & notify'}
-              </button>
-            </div>
-          </div>
-        </div>
       </section>
 
       {/* Main Single-Column Full-Width Content Layout */}
@@ -267,21 +266,21 @@ export default function PublicArtistDetailPage() {
 
         {/* Quick Metrics Bar - 3 Columns on both Mobile and Desktop */}
         <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-          <div className="rounded-lg border border-card1/20 bg-cardcl/60 p-3.5 sm:p-5 backdrop-blur-md transition hover:border-amber-400/30">
-            <p className="text-lg sm:text-2xl font-black text-primary">{artist.tracksCount || tracks.length}</p>
-            <p className="mt-1 text-[11px] sm:text-xs font-medium text-secondry flex items-center gap-1.5 truncate">
+          <div className="rounded-lg border border-card1/20 bg-mrow/60 p-3.5 sm:p-5 backdrop-blur-md transition hover:border-amber-400/30">
+            <p className="text-lg sm:text-2xl font-black text-Eltext1">{artist.tracksCount || tracks.length}</p>
+            <p className="mt-1 text-[11px] sm:text-xs font-medium text-Eltext1 flex items-center gap-1.5 truncate">
               <Disc size={13} className="shrink-0 text-amber-400" /> <span className="truncate">Total Tracks</span>
             </p>
           </div>
-          <div className="rounded-lg border border-card1/20 bg-cardcl/60 p-3.5 sm:p-5 backdrop-blur-md transition hover:border-amber-400/30">
-            <p className="text-lg sm:text-2xl font-black text-primary">{formatNumber(artist.followers)}</p>
-            <p className="mt-1 text-[11px] sm:text-xs font-medium text-secondry flex items-center gap-1.5 truncate">
+          <div className="rounded-lg border border-card1/20 bg-mrow/60 p-3.5 sm:p-5 backdrop-blur-md transition hover:border-amber-400/30">
+            <p className="text-lg sm:text-2xl font-black text-Eltext1">{formatNumber(artist.followers)}</p>
+            <p className="mt-1 text-[11px] sm:text-xs font-medium text-Eltext1 flex items-center gap-1.5 truncate">
               <Users size={13} className="shrink-0 text-amber-400" /> <span className="truncate">Followers</span>
             </p>
           </div>
-          <div className="rounded-lg border border-card1/20 bg-cardcl/60 p-3.5 sm:p-5 backdrop-blur-md transition hover:border-amber-400/30">
-            <p className="text-lg sm:text-2xl font-black text-primary">{activeTrackId ? formatNumber(activeTrackDownloads) : '—'}</p>
-            <p className="mt-1 text-[11px] sm:text-xs font-medium text-secondry flex items-center gap-1.5 truncate">
+          <div className="rounded-lg border border-card1/20 bg-mrow/60 p-3.5 sm:p-5 backdrop-blur-md transition hover:border-amber-400/30">
+            <p className="text-lg sm:text-2xl font-black text-Eltext1">{activeTrackId ? formatNumber(activeTrackDownloads) : '—'}</p>
+            <p className="mt-1 text-[11px] sm:text-xs font-medium text-Eltext1 flex items-center gap-1.5 truncate">
               <Download size={13} className="shrink-0 text-amber-400" /> <span className="truncate">Song Downloads</span>
             </p>
           </div>
@@ -326,7 +325,7 @@ export default function PublicArtistDetailPage() {
                     artistName={artist.name}
                     artistGenre={artist.genre}
                     onPlay={() => void refreshTrackDownloads(track.id, track.fileUrl || '')}
-                    onDownload={() => window.setTimeout(() => void refreshTrackDownloads(track.id, track.fileUrl || ''), 500)}
+                    onDownload={() => void refreshTrackDownloads(track.id, track.fileUrl || '')}
                   />
                 );
               })}
