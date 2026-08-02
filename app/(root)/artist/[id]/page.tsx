@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Bell, BellOff, Users, Disc, Radio, Sparkles, Download } from 'lucide-react';
+import { ArrowLeft, Bell, BellOff, Radio, Sparkles } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import AudioPlayer from '@/components/AudioPlayer';
@@ -72,33 +72,49 @@ export default function PublicArtistDetailPage() {
 
     const loadArtist = async () => {
       try {
-        const artistResponse = await fetch(`/api/dashboard/artists/${params.id}`);
-        const artistData = await artistResponse.json();
-        if (!artistResponse.ok || !artistData.artist) throw new Error('Artist not found');
+        const [artistResponseResult, mediaResponseResult] = await Promise.allSettled([
+          fetch(`/api/dashboard/artists/${params.id}`),
+          fetch(`/api/dashboard/artists/${params.id}/media`),
+        ]);
 
-        const mediaResponse = await fetch(`/api/dashboard/artists/${params.id}/media`);
-        const mediaData = mediaResponse.ok ? await mediaResponse.json() : { media: [] };
+        if (artistResponseResult.status !== 'fulfilled' || !artistResponseResult.value?.ok) {
+          throw new Error('Artist not found');
+        }
+
+        const artistData = await artistResponseResult.value.json();
+        if (!artistData.artist) throw new Error('Artist not found');
+
+        let mediaData: { media?: Track[] } = { media: [] };
+        if (mediaResponseResult.status === 'fulfilled' && mediaResponseResult.value.ok) {
+          mediaData = await mediaResponseResult.value.json();
+        }
 
         if (!cancelled) {
           setArtist(artistData.artist);
           const loadedTracks = (mediaData.media || []).filter((media: Track & { kind?: string }) => media.kind === 'track');
           latestTrackId.current = loadedTracks[0]?.id || null;
           setTracks(loadedTracks);
+        }
 
-          try {
-            const followResponse = await fetch(`/api/artists/${params.id}/follow`, {
-              headers: { 'x-subscriber-id': getSubscriberId() },
-            });
-            if (followResponse.ok) {
-              const followState = await followResponse.json();
-              setIsFollowing(followState.following === true);
-              setArtist((currentArtist) => currentArtist
-                ? { ...currentArtist, followers: Number(followState.followerCount || 0) }
-                : currentArtist);
+        if (!cancelled) {
+          void (async () => {
+            try {
+              const followResponse = await fetch(`/api/artists/${params.id}/follow`, {
+                headers: { 'x-subscriber-id': getSubscriberId() },
+              });
+              if (followResponse.ok) {
+                const followState = await followResponse.json();
+                if (!cancelled) {
+                  setIsFollowing(followState.following === true);
+                  setArtist((currentArtist) => currentArtist
+                    ? { ...currentArtist, followers: Number(followState.followerCount || 0) }
+                    : currentArtist);
+                }
+              }
+            } catch {
+              // Following is optional; keep the artist page usable if the database is unavailable.
             }
-          } catch {
-            // Following is optional; keep the artist page usable if the database is unavailable.
-          }
+          })();
         }
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to load artist');
@@ -207,84 +223,123 @@ export default function PublicArtistDetailPage() {
 
   return (
     <main className="min-h-screen pb-24 text-primary selection:bg-amber-400 selection:text-cardcl">
-      {/* Hero Header Section */}
-      <section className="relative m-2 sm:m-4 overflow-hidden rounded-3xl border border-amber-400/20 bg-cardcl/40 shadow-2xl backdrop-blur-2xl">
-              {/* Banner Image placed completely behind with z-0 */}
-              <div
-                className="absolute inset-0 z-0 bg-cover bg-center opacity-40 scale-105"
-                style={{ backgroundImage: artist.bannerUrl ? `url(${artist.bannerUrl})` : undefined }}
-              />
-              <div className="absolute inset-0 z-0 bg-linear-to-r from-cardcl/95 via-cardcl/80 to-cardcl/60" />
+    {/* Hero Header Section */}
+    <section className="relative m-2 sm:m-4 overflow-hidden rounded-3xl border border-card1/10 bg-cardcl/60 shadow-xl backdrop-blur-2xl transition-all">
+      {/* Top Cover / Banner Image */}
+      <div className="relative h-44 sm:h-56 w-full overflow-hidden bg-linear-to-r from-amber-400/20 via-amber-300/10 to-cardcl/80">
+        {/* Banner Image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-80"
+          style={{ backgroundImage: artist.bannerUrl ? `url(${artist.bannerUrl})` : undefined }}
+        />
 
-              {/* Content Container */}
-              <div className="relative z-10 mx-auto max-w-8xl px-6 py-10 sm:px-10 sm:py-16">
-                <Link href="/Audio" className="inline-flex items-center gap-2 rounded-full border border-card1/10 bg-cardcl/60 px-4 py-1.5 text-xs font-semibold text-secondry shadow-sm transition hover:border-amber-400/40 hover:text-amber-400 mb-8 cursor-pointer backdrop-blur-md">
-                  <ArrowLeft size={14} /> Back to Audio
-                </Link>
+        {/* Glassmorphic Backdrop Blur Overlay (Mobile Only) */}
+        <div className="absolute inset-0 bg-linear-to-b from-black/20 via-transparent to-cardcl/60 backdrop-blur-sm sm:backdrop-blur-none" />
 
-                <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:gap-10">
-                  {/* Profile Picture increased to take up roughly 98% width on mobile / expanded size */}
-                  <div
-                    className="relative flex w-[98%] max-w-sm aspect-square shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-amber-400/40 bg-amber-400/10 text-5xl font-black text-amber-300 shadow-xl shadow-amber-400/15 sm:h-56 sm:w-56 sm:max-w-none sm:aspect-auto"
-                    style={artist.profileUrl ? { backgroundImage: `url(${artist.profileUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
-                    role={artist.profileUrl ? 'img' : undefined}
-                    aria-label={artist.profileUrl ? `${artist.name} profile` : undefined}
-                  >
-                    <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
-                    {!artist.profileUrl && artist.name.charAt(0).toUpperCase()}
-                  </div>
+        {/* Back Navigation Button */}
+        <div className="relative z-10 p-4 sm:p-6">
+          <Link
+            href="/Audio"
+            className="inline-flex items-center gap-2 rounded-full border border-card1/10 bg-cardcl/80 px-4 py-1.5 text-xs font-semibold text-secondry shadow-sm transition hover:border-amber-400/40 hover:text-amber-400 cursor-pointer backdrop-blur-md"
+          >
+            <ArrowLeft size={14} /> Back to Audio
+          </Link>
+        </div>
+      </div>
 
-                  {/* Other elements pushed down / aligned */}
-                  <div className="flex flex-col items-center text-center sm:items-start sm:text-left mt-2 sm:mt-0">
-                    <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3.5 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-300 shadow-sm backdrop-blur-md mb-3">
-                      <Sparkles size={12} />
-                      <span>{artist.status} artist</span>
-                    </div>
-                    <h1 className="text-3xl font-black tracking-tight text-primary sm:text-5xl lg:text-6xl bg-linear-to-r from-primary via-primary/90 to-amber-300 bg-clip-text">
-                      {artist.name}
-                    </h1>
-                    <p className="mt-2 text-sm sm:text-base font-medium text-amber-400/90 flex items-center gap-2">
-                      <Radio size={15} />
-                      {artist.genre}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => void toggleFollow()}
-                      disabled={followLoading}
-                      className="mt-5 inline-flex items-center gap-2 rounded-xl bg-amber-400 px-5 py-2.5 text-xs sm:text-sm font-bold text-slate-950 shadow-lg shadow-amber-400/25 transition hover:bg-amber-300 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {isFollowing ? <BellOff size={16} /> : <Bell size={16} />}
-                      {followLoading ? 'Saving...' : isFollowing ? 'Following' : 'Follow & notify'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-      </section>
+      {/* Bottom Profile Details Container */}
+      <div className="relative z-10 px-4 xs:px-5 sm:px-10 pb-6 sm:pb-8">
+        {/* Avatar & Action Buttons Row */}
+        <div className="flex items-start justify-between gap-2 sm:items-end sm:gap-4 -mt-28 xs:-mt-24 sm:-mt-20 mb-4 sm:mb-6">
+          {/* Overlapping Circular Avatar (Pushed high up toward back button on mobile) */}
+          <div
+            className="relative flex h-32 w-32 xs:h-28 xs:w-28 sm:h-36 sm:w-36 shrink-0 items-center justify-center overflow-hidden rounded-full border-3 sm:border-4 border-cardcl bg-cardcl text-2xl xs:text-3xl sm:text-5xl font-black text-amber-400 shadow-xl"
+            style={
+              artist.profileUrl
+                ? { backgroundImage: `url(${artist.profileUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                : undefined
+            }
+            role={artist.profileUrl ? 'img' : undefined}
+            aria-label={artist.profileUrl ? `${artist.name} profile` : undefined}
+          >
+            {!artist.profileUrl && artist.name.charAt(0).toUpperCase()}
+          </div>
+
+          {/* Action Buttons (Right aligned at the top) */}
+          <div className="flex items-center gap-1.5 xs:gap-2 justify-end pt-17 xs:pt-8 sm:pt-0">
+            <button
+              type="button"
+              onClick={() => void toggleFollow()}
+              disabled={followLoading}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary text-cardcl px-3 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm font-bold shadow-md transition hover:opacity-90 active:scale-95 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+            >
+              {isFollowing ? <BellOff size={14} className="sm:w-4 sm:h-4" /> : <Bell size={14} className="sm:w-4 sm:h-4" />}
+              <span>{followLoading ? '...' : isFollowing ? 'Following' : '+ Follow'}</span>
+            </button>
+
+            <div className="inline-flex items-center gap-1 rounded-xl border border-card1/10 bg-cardcl/80 px-2.5 py-2 sm:px-3 sm:py-2.5 text-[11px] sm:text-xs font-semibold text-secondry shadow-sm backdrop-blur-md">
+              <Sparkles size={13} className="text-amber-400 shrink-0 sm:w-3.5 sm:h-3.5" />
+              <span className="capitalize">{artist.status || 'Verified'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Artist Info */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+            <h1
+              className="font-black tracking-tight text-primary leading-tight min-w-0 wrap-break-word"
+              style={{ fontSize: 'clamp(1.25rem, 5vw, 2.25rem)' }}
+            >
+              {artist.name}
+            </h1>
+            <Sparkles size={16} className="text-amber-400 fill-amber-400 shrink-0 sm:w-5 sm:h-5" />
+          </div>
+
+          {artist.genre && (
+            <p className="pt-0.5 text-xs sm:text-sm font-semibold text-amber-400 flex items-center gap-1.5">
+              <Radio size={13} className="sm:w-3.5 sm:h-3.5" />
+              {artist.genre}
+            </p>
+          )}
+        </div>
+
+        {/* About / Bio Section */}
+        <div className="mt-4 sm:mt-6 space-y-1 max-w-2xl">
+          <h3 className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-primary">About</h3>
+          <p className="text-xs sm:text-sm leading-relaxed text-secondry/90 line-clamp-3 xs:line-clamp-none">
+            {artist.bio ||
+              `Exploring the latest audio and visual creations emerging from ${artist.name}. Blending rhythm, performance, and creative craft.`}
+          </p>
+        </div>
+
+        {/* Stats Row */}
+        <div className="mt-5 mx-auto text-center sm:text-left sm:mx-0 sm:mt-8 grid grid-cols-3 gap-2 border-t border-card1/10 pt-4 sm:pt-6 max-w-lg">
+          <div className="min-w-0">
+            <span className="block text-base xs:text-lg sm:text-2xl font-black text-primary truncate">
+              {artist.tracksCount || tracks.length}
+            </span>
+            <span className="text-[10px] sm:text-xs font-medium text-secondry block truncate">Tracks</span>
+          </div>
+          <div className="min-w-0">
+            <span className="block text-base xs:text-lg sm:text-2xl font-black text-primary truncate">
+              {formatNumber(artist.followers)}
+            </span>
+            <span className="text-[10px] sm:text-xs font-medium text-secondry block truncate">Following</span>
+          </div>
+          <div className="min-w-0">
+            <span className="block text-base xs:text-lg sm:text-2xl font-black text-primary truncate">
+              {activeTrackId ? formatNumber(activeTrackDownloads) : '—'}
+            </span>
+            <span className="text-[10px] sm:text-xs font-medium text-secondry block truncate">Downloads</span>
+          </div>
+        </div>
+      </div>
+
+    </section>
 
       {/* Main Single-Column Full-Width Content Layout */}
       <div className="relative mx-auto max-w-8xl px-4 py-4 sm:px-6 space-y-3 ">
-
-        {/* Quick Metrics Bar - 3 Columns on both Mobile and Desktop */}
-        <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-          <div className="rounded-lg border border-card1/20 bg-mrow/60 p-3.5 sm:p-5 backdrop-blur-md transition hover:border-amber-400/30">
-            <p className="text-lg sm:text-2xl font-black text-Eltext1">{artist.tracksCount || tracks.length}</p>
-            <p className="mt-1 text-[11px] sm:text-xs font-medium text-Eltext1 flex items-center gap-1.5 truncate">
-              <Disc size={13} className="shrink-0 text-amber-400" /> <span className="truncate">Total Tracks</span>
-            </p>
-          </div>
-          <div className="rounded-lg border border-card1/20 bg-mrow/60 p-3.5 sm:p-5 backdrop-blur-md transition hover:border-amber-400/30">
-            <p className="text-lg sm:text-2xl font-black text-Eltext1">{formatNumber(artist.followers)}</p>
-            <p className="mt-1 text-[11px] sm:text-xs font-medium text-Eltext1 flex items-center gap-1.5 truncate">
-              <Users size={13} className="shrink-0 text-amber-400" /> <span className="truncate">Followers</span>
-            </p>
-          </div>
-          <div className="rounded-lg border border-card1/20 bg-mrow/60 p-3.5 sm:p-5 backdrop-blur-md transition hover:border-amber-400/30">
-            <p className="text-lg sm:text-2xl font-black text-Eltext1">{activeTrackId ? formatNumber(activeTrackDownloads) : '—'}</p>
-            <p className="mt-1 text-[11px] sm:text-xs font-medium text-Eltext1 flex items-center gap-1.5 truncate">
-              <Download size={13} className="shrink-0 text-amber-400" /> <span className="truncate">Song Downloads</span>
-            </p>
-          </div>
-        </div>
 
         {/* Released Tracks Section */}
         <div>
@@ -303,7 +358,7 @@ export default function PublicArtistDetailPage() {
               No uploaded tracks available yet.
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-1">
               {tracks.map((track) => {
                 if (!track.fileUrl) {
                   return (
@@ -332,7 +387,6 @@ export default function PublicArtistDetailPage() {
             </div>
           )}
         </div>
-
       </div>
     </main>
   );

@@ -1,24 +1,55 @@
 // lib/db.ts
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
+
+type DatabasePool = Pick<Pool, 'query' | 'connect' | 'end'>;
 
 const configuredConnectionString = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
 const connectionString = configuredConnectionString && !/USER|PASSWORD|your_railway_postgres_url/i.test(configuredConnectionString)
   ? configuredConnectionString
   : undefined;
+const hasConfiguredDatabase = Boolean(connectionString);
 
-const pool = new Pool({
-  connectionString,
-  ssl: connectionString && /railway|rlwy/i.test(connectionString)
-    ? { rejectUnauthorized: false }
-    : process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false }
-    : false,
+const pool = hasConfiguredDatabase
+  ? new Pool({
+      connectionString,
+      ssl: connectionString && /railway|rlwy/i.test(connectionString)
+        ? { rejectUnauthorized: false }
+        : process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : false,
+    })
+  : null;
+
+const createNoopPool = (): DatabasePool => ({
+  async query() {
+    throw new Error('Database is not configured');
+  },
+  async connect() {
+    throw new Error('Database is not configured');
+  },
+  async end() {},
 });
+
+const noopPool = createNoopPool();
+
+const connectWithTimeout = async (connectFn: () => Promise<PoolClient>) => {
+  const timeoutMs = 2000;
+  return Promise.race([
+    connectFn(),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Database connection timed out')), timeoutMs);
+    }),
+  ]);
+};
 
 // Automatically create tables on initialization
 const initDatabase = async () => {
+  if (!pool) {
+    return;
+  }
+
   try {
-    const client = await pool.connect();
+    const client = await connectWithTimeout(() => pool.connect());
     try {
       await client.query(`
         CREATE TABLE IF NOT EXISTS artists (
@@ -83,7 +114,7 @@ const initDatabase = async () => {
       client.release();
     }
   } catch (err) {
-    console.error('Error initializing database tables:', err);
+    console.warn('Database initialization skipped because PostgreSQL is unavailable.', err);
   }
 };
 
@@ -93,4 +124,4 @@ export async function ensureDatabaseReady() {
   await databaseReady;
 }
 
-export default pool;
+export default (pool ?? noopPool) as Pool;

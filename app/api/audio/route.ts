@@ -3,6 +3,21 @@ import pool, { ensureDatabaseReady } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
+const fallbackTracks = [
+  {
+    id: 'fallback-track-1',
+    title: 'Studio Demo',
+    album: 'Noll Studio',
+    fileName: 'studio-demo.mp3',
+    fileUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+    createdAt: new Date().toISOString(),
+    artistId: 'fallback-artist',
+    artistName: 'Noll Studio',
+    artistGenre: 'Creative',
+    artistProfileUrl: null,
+  },
+];
+
 async function ensureMediaTable() {
   await ensureDatabaseReady();
   await pool.query(`
@@ -42,8 +57,13 @@ export async function GET() {
       ORDER BY media.created_at DESC
     `);
 
-    return NextResponse.json({ tracks: rows });
+    if (!rows?.length) {
+      return NextResponse.json({ tracks: fallbackTracks, fallback: true });
+    }
+
+    return NextResponse.json({ tracks: rows, fallback: false });
   } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    console.error('Audio route failed, falling back to demo tracks.', error);
+    return NextResponse.json({ tracks: fallbackTracks, fallback: true });
   }
 }

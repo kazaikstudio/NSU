@@ -20,6 +20,19 @@ interface AudioCardProps {
 export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnded }: AudioCardProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  function normalizeImageUrl(url?: string | null) {
+    if (!url) return undefined;
+    try {
+      // If it's a Google Drive file link, convert to thumbnail endpoint
+      const driveFileMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
+      const fileId = driveFileMatch ? (driveFileMatch[1] || driveFileMatch[2]) : null;
+      if (fileId) return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+      return url;
+    } catch {
+      return url;
+    }
+  }
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -47,9 +60,9 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
       >
         <div
           className="group relative flex aspect-4/4 sm:aspect-3/3 w-full items-end justify-between overflow-hidden rounded-xl border border-card1/20 bg-cardcl bg-cover bg-center p-4 transition-all duration-300 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/10"
-          style={track.artistProfileUrl ? { backgroundImage: `url(${track.artistProfileUrl})` } : undefined}
-          role={track.artistProfileUrl ? 'img' : undefined}
-          aria-label={track.artistProfileUrl ? `${track.artistName} profile` : undefined}
+            style={track.artistProfileUrl ? { backgroundImage: `url(${normalizeImageUrl(track.artistProfileUrl)})` } : undefined}
+            role={track.artistProfileUrl ? 'img' : undefined}
+            aria-label={track.artistProfileUrl ? `${track.artistName} profile` : undefined}
         >
           {!track.artistProfileUrl && (
             <div className="absolute inset-0 flex items-center justify-center bg-linear-to-br from-cardcl to-card1/80">

@@ -12,7 +12,7 @@ interface SwitchbuttonProps {
 }
 
 const Switchbutton = ({ onScrollToSearch }: SwitchbuttonProps) => {
-  const pathname = usePathname()
+  const pathname = usePathname() ?? ''
   const isAudio = pathname === '/Audio'
   const isDownload = pathname === '/download'
   const isVideo = pathname === '/' || pathname.startsWith('/video/')

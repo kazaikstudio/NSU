@@ -78,6 +78,7 @@ export async function GET() {
         artists.name,
         artists.genre,
         COUNT(media.id) FILTER (WHERE media.kind = 'track')::int AS "tracksCount",
+        artists.total_downloads AS "totalDownloads",
         artists.status,
         artists.profile_url AS "profileUrl"
       FROM artists
@@ -92,6 +93,7 @@ export async function GET() {
         name: row.name,
         genre: row.genre,
         tracksCount: Number(row.tracksCount || 0),
+        totalDownloads: Number(row.totalDownloads || 0),
         status: row.status || 'Active',
         profileUrl: row.profileUrl || null,
       })),

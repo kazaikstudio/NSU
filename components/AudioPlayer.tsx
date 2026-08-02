@@ -178,7 +178,6 @@ export default function AudioPlayer({
           receivedLength += value.byteLength;
 
           if (Number.isFinite(contentLength) && contentLength > 0) {
-            // Keep the navbar notice responsive without showing a broken inline bar.
             void receivedLength;
             void contentLength;
           }
@@ -247,56 +246,56 @@ export default function AudioPlayer({
   );
 
   const player = (
-    <div className="flex w-full items-center gap-3 text-Eltext1">
-          <button
-            type="button"
-            onClick={togglePlay}
-            aria-label={isPlaying ? 'Pause track' : 'Play track'}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400 text-cardcl transition hover:bg-amber-300 focus:outline-none shadow-md shadow-amber-400/20"
-          >
-            {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
-          </button>
+    <div className="flex w-full items-center gap-2 xs:gap-3 text-Eltext1 min-w-0">
+      <button
+        type="button"
+        onClick={togglePlay}
+        aria-label={isPlaying ? 'Pause track' : 'Play track'}
+        className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-amber-400 text-cardcl transition hover:bg-amber-300 focus:outline-none shadow-md shadow-amber-400/20 cursor-pointer"
+      >
+        {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
+      </button>
 
-          <span className="shrink-0 text-[10px] font-medium tabular-nums text-Eltext1">
-            {formatTime(currentTime)}
-          </span>
+      <span className="shrink-0 text-[10px] font-medium tabular-nums text-Eltext1">
+        {formatTime(currentTime)}
+      </span>
 
-          {/* Interactive Waveform Bar Visualizer */}
-          <div className="relative min-w-0 flex-1 group py-2 cursor-pointer flex items-center" onClick={(e) => e.stopPropagation()}>
-            <input
-              type="range"
-              min="0"
-              max={duration || 0}
-              step="0.1"
-              value={Math.min(currentTime, duration || 0)}
-              onChange={(event) => seek(Number(event.target.value))}
-              aria-label="Track progress"
-              className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
-            />
+      {/* Interactive Waveform Bar Visualizer */}
+      <div className="relative min-w-0 flex-1 group py-2 cursor-pointer flex items-center" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="range"
+          min="0"
+          max={duration || 0}
+          step="0.1"
+          value={Math.min(currentTime, duration || 0)}
+          onChange={(event) => seek(Number(event.target.value))}
+          aria-label="Track progress"
+          className="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer"
+        />
 
-            <div className="flex w-full items-center gap-0.75 h-7">
-              {waveBars.map((height, index) => {
-                const barPosition = (index / waveBars.length) * 100;
-                const isPassed = barPosition <= progressPercent;
+        <div className="flex w-full items-center gap-0.5 sm:gap-0.75 h-7">
+          {waveBars.map((height, index) => {
+            const barPosition = (index / waveBars.length) * 100;
+            const isPassed = barPosition <= progressPercent;
 
-                return (
-                  <div
-                    key={`${waveId}-${index}`}
-                    className={`flex-1 rounded-full transition-all duration-150 ${
-                      isPassed
-                        ? 'bg-amber-400 shadow-sm shadow-amber-400/30'
-                        : 'bg-Eltext1/60 group-hover:bg-card1/40'
-                    } ${isPlaying && isPassed ? 'animate-pulse' : ''}`}
-                    style={{ height: `${Math.max(20, height)}%` }}
-                  />
-                );
-              })}
-            </div>
-          </div>
+            return (
+              <div
+                key={`${waveId}-${index}`}
+                className={`flex-1 rounded-full transition-all duration-150 ${
+                  isPassed
+                    ? 'bg-amber-400 shadow-sm shadow-amber-400/30'
+                    : 'bg-Eltext1/60 group-hover:bg-card1/40'
+                } ${isPlaying && isPassed ? 'animate-pulse' : ''}`}
+                style={{ height: `${Math.max(20, height)}%` }}
+              />
+            );
+          })}
+        </div>
+      </div>
 
-          <span className="shrink-0 text-[10px] font-medium tabular-nums text-Eltext1">
-            {formatTime(duration)}
-          </span>
+      <span className="shrink-0 text-[10px] font-medium tabular-nums text-Eltext1">
+        {formatTime(duration)}
+      </span>
     </div>
   );
 
@@ -304,47 +303,44 @@ export default function AudioPlayer({
     return (
       <div onClick={handleRowClick} className="cursor-pointer">
         {audioTag}
-        {isExpanded ? player : <div className="text-Eltext1 text-sm  font-semibold">{title}</div>}
+        {isExpanded ? player : <div className="text-Eltext1 text-sm font-semibold truncate">{title}</div>}
       </div>
     );
   }
 
   return (
-      <article
-        onClick={handleRowClick}
-      className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-card1/5
-        bg-mrow/60 px-3 py-2.5 transition hover:border-amber-400/45 cursor-pointer text-Eltext1 sm:gap-4 sm:px-4 sm:py-3"
-      >
-        {audioTag}
+    <article
+      onClick={handleRowClick}
+      className="flex min-w-0 items-center justify-between gap-2 sm:gap-4 rounded-lg border border-card1/5 bg-mrow/60 px-3 py-2.5 transition hover:border-amber-400/45 cursor-pointer text-Eltext1 sm:px-4 sm:py-3"
+    >
+      {audioTag}
 
-        {!isExpanded ? (
-          <>
-            <div className="min-w-0 shrink-0 basis-60 sm:basis-auto">
-              <h2 className="truncate text-[11px] font-semibold text-Eltext1 sm:text-sm">{title}</h2>
-            </div>
-            <div className="flex-1" />
-          </>
-        ) : (
-          <>
-            <div className="min-w-0 flex-1">
-              {player}
-            </div>
-          </>
-        )}
+      {!isExpanded ? (
+        <>
+          <div className="min-w-0 flex-1">
+            <span className="truncate text-xs font-semibold text-Eltext1 sm:text-sm">{title}</span>
+          </div>
+        </>
+      ) : (
+        <div className="min-w-0 flex-1">
+          {player}
+        </div>
+      )}
 
-        {downloadUrl && (
-          <a
-            href={downloadUrl}
-            download={fileName || `${title}.mp3`}
-            onClick={handleDownloadClick}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30
-              bg-amber-400/10 px-2.5 py-2 text-[11px] font-semibold text-Eltext1 transition hover:border-amber-300 hover:bg-amber-400/20 sm:px-3"
-            aria-label={`Download ${title}`}
-          >
-            <Download size={14} />
-            <span className="hidden sm:inline">{downloadStatus === 'downloading' ? 'Downloading…' : downloadStatus === 'done' ? 'Saved' : 'Download'}</span>
-          </a>
-        )}
-      </article>
-    );
+      {downloadUrl && (
+        <a
+          href={downloadUrl}
+          download={fileName || `${title}.mp3`}
+          onClick={handleDownloadClick}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-2 text-[11px] font-semibold text-Eltext1 transition hover:border-amber-300 hover:bg-amber-400/20 sm:px-3 cursor-pointer"
+          aria-label={`Download ${title}`}
+        >
+          <Download size={14} />
+          <span className="hidden sm:inline">
+            {downloadStatus === 'downloading' ? 'Downloading…' : downloadStatus === 'done' ? 'Saved' : 'Download'}
+          </span>
+        </a>
+      )}
+    </article>
+  );
 }

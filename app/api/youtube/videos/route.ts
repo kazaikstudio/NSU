@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ClientType, Innertube } from "youtubei.js";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,7 @@ type YouTubeVideo = {
   url: string;
   type: "short" | "official";
   durationSeconds: number;
+  views?: number;
 };
 
 type Cached = {
@@ -28,6 +30,87 @@ type Cached = {
 
 const cache = new Map<string, Cached>();
 const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+
+let youtubeClientPromise: Promise<Innertube> | undefined;
+function getYoutubeClient() {
+  youtubeClientPromise ??= Innertube.create({ client_type: ClientType.ANDROID_VR, retrieve_player: true });
+  return youtubeClientPromise;
+}
+
+async function fetchAllVideosWithInnertube(channelId: string): Promise<YouTubeVideo[]> {
+  try {
+    const youtube = await getYoutubeClient();
+
+    // Try uploads playlist (common pattern: uploads playlist id = 'UU' + channelId.slice(2) when channelId starts with 'UC')
+    const videos: Omit<YouTubeVideo, "type" | "durationSeconds">[] = [];
+    if (channelId.startsWith("UC")) {
+      const uploadPlaylistId = `UU${channelId.slice(2)}`;
+      try {
+        const pl = await (youtube as any).getPlaylist(uploadPlaylistId);
+        const items = pl?.contents?.items || pl?.playlist?.items || pl?.videos || [];
+        for (const it of items) {
+          const vid = it?.id || it?.videoId || it?.video?.id || (it?.navigationEndpoint?.watchEndpoint?.videoId);
+          const title = it?.title?.simpleText || it?.title || it?.video?.title || it?.snippet?.title || '';
+          const thumbnails = it?.thumbnail?.thumbnails || it?.thumbnails || it?.video?.thumbnail || it?.snippet?.thumbnails || {};
+          const thumb = (thumbnails?.maxres?.url) || (thumbnails?.high?.url) || (thumbnails?.default?.url) || '';
+          const published = it?.published || it?.video?.published || it?.snippet?.publishedAt || '';
+          if (!vid) continue;
+          videos.push({ id: String(vid), title: String(title || vid), subtitle: '', thumbnail: thumb, date: published, url: `https://www.youtube.com/watch?v=${vid}` });
+        }
+      } catch (e) {
+        // ignore and fallthrough to search
+      }
+    }
+
+    // If uploads not found or empty, fall back to searching the channel's name/id
+    if (videos.length === 0) {
+      const search = await (youtube as any).search(channelId);
+      const items = search?.contents || search?.results || search || [];
+      for (const it of items) {
+        const vid = it?.id || it?.videoId || it?.video?.id || (it?.navigationEndpoint?.watchEndpoint?.videoId) || (it?.id?.videoId);
+        const title = it?.title?.simpleText || it?.title || it?.video?.title || it?.snippet?.title || '';
+        const thumbnails = it?.thumbnail?.thumbnails || it?.thumbnails || it?.video?.thumbnail || it?.snippet?.thumbnails || {};
+        const thumb = (thumbnails?.maxres?.url) || (thumbnails?.high?.url) || (thumbnails?.default?.url) || '';
+        const published = it?.published || it?.video?.published || it?.snippet?.publishedAt || '';
+        if (!vid) continue;
+        videos.push({ id: String(vid), title: String(title || vid), subtitle: '', thumbnail: thumb, date: published, url: `https://www.youtube.com/watch?v=${vid}` });
+      }
+    }
+
+    // limit and normalize
+    return videos.slice(0, 200).map((v) => ({ ...v, type: 'official', durationSeconds: 0 }));
+  } catch (err) {
+    console.warn('Innertube fallback failed:', err);
+    return [];
+  }
+}
+
+function getFallbackVideos(): YouTubeVideo[] {
+  return [
+    {
+      id: "fallback-1",
+      title: "Noll Studio Uganda highlights",
+      subtitle: "A curated showcase while the YouTube API is unavailable.",
+      thumbnail:
+        "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=800&q=80",
+      date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
+      url: "https://www.youtube.com/@Nollvisuals",
+      type: "official",
+      durationSeconds: 180,
+    },
+    {
+      id: "fallback-2",
+      title: "Behind the scenes at Noll Studio",
+      subtitle: "Short clips and creative moments from the studio.",
+      thumbnail:
+        "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=800&q=80",
+      date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
+      url: "https://www.youtube.com/@Nollvisuals",
+      type: "short",
+      durationSeconds: 45,
+    },
+  ];
+}
 
 function getYoutubeApiKey(): string {
   return (
@@ -101,6 +184,48 @@ async function fetchVideoDurations(
   return durations;
 }
 
+async function fetchVideoDetails(videoIds: string[]) {
+  const details: Record<string, { duration: number; views: number; thumbnail?: string }> = {};
+  const apiKey = getYoutubeApiKey();
+  const uniqueIds = Array.from(new Set(videoIds.filter(Boolean)));
+
+  for (let i = 0; i < uniqueIds.length; i += 50) {
+    const batchIds = uniqueIds.slice(i, i + 50).join(',');
+    const params = new URLSearchParams({
+      key: apiKey,
+      id: batchIds,
+      part: 'contentDetails,statistics,snippet',
+      maxResults: '50',
+    });
+
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params.toString()}`);
+    const payload = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const msg = payload?.error?.message ?? 'YouTube API error fetching video details';
+      throw new Error(msg);
+    }
+
+    const items = payload?.items ?? [];
+    for (const item of items) {
+      const id = item?.id as string | undefined;
+      if (!id) continue;
+      const durationIso = item?.contentDetails?.duration as string | undefined;
+      const duration = durationIso ? parseISODuration(durationIso) : 0;
+      const views = Number(item?.statistics?.viewCount ?? 0);
+      const thumb =
+        (item?.snippet?.thumbnails?.maxres?.url as string) ??
+        (item?.snippet?.thumbnails?.high?.url as string) ??
+        (item?.snippet?.thumbnails?.default?.url as string) ??
+        undefined;
+
+      details[id] = { duration, views, thumbnail: thumb };
+    }
+  }
+
+  return details;
+}
+
 async function fetchAllVideos(channelId: string): Promise<YouTubeVideo[]> {
   const apiKey = getYoutubeApiKey();
   const videos: Omit<YouTubeVideo, "type" | "durationSeconds">[] = [];
@@ -154,13 +279,13 @@ async function fetchAllVideos(channelId: string): Promise<YouTubeVideo[]> {
     nextPageToken = payload?.nextPageToken as string | undefined;
   } while (nextPageToken);
 
-  const durationMap = await fetchVideoDurations(
-    videos.map((video) => video.id)
-  );
+  const durationMap = await fetchVideoDurations(videos.map((video) => video.id));
+  const detailsMap = await fetchVideoDetails(videos.map((video) => video.id));
   const shortTitlePattern = /(?:#shorts?\b|\bshorts?\b)/i;
 
   return videos.map((video) => {
-    const durationSeconds = durationMap[video.id] ?? 0;
+    const details = detailsMap[video.id] ?? { duration: durationMap[video.id] ?? 0, views: 0 };
+    const durationSeconds = details.duration ?? durationMap[video.id] ?? 0;
     const isShort =
       durationSeconds > 0
         ? durationSeconds <= 60
@@ -168,8 +293,10 @@ async function fetchAllVideos(channelId: string): Promise<YouTubeVideo[]> {
 
     return {
       ...video,
+      thumbnail: details.thumbnail ?? video.thumbnail,
       type: isShort ? "short" : "official",
       durationSeconds,
+      views: details.views ?? 0,
     };
   });
 }
@@ -179,38 +306,37 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const apiKey = getYoutubeApiKey();
-  if (!apiKey) {
-    return withCors(
-      NextResponse.json(
-        {
-          error:
-            "Server not configured with YouTube API key. Set YOUTUBE_API_KEY in Railway environment variables.",
-        },
-        { status: 500 }
-      ),
-      req
-    );
-  }
-
   const url = new URL(req.url);
   const channelId = url.searchParams.get("channelId") ?? DEFAULT_CHANNEL_ID;
 
   const cached = cache.get(channelId);
   const now = Date.now();
   if (cached && cached.expires > now) {
-    return withCors(NextResponse.json({ videos: cached.data }), req);
+    return withCors(NextResponse.json({ videos: cached.data, fallback: false }), req);
+  }
+
+  const apiKey = getYoutubeApiKey();
+  if (!apiKey) {
+    const fallbackVideos = cached?.data ?? getFallbackVideos();
+    cache.set(channelId, { expires: now + CACHE_TTL, data: fallbackVideos });
+    return withCors(
+      NextResponse.json({ videos: fallbackVideos, fallback: true }),
+      req
+    );
   }
 
   try {
     const videos = await fetchAllVideos(channelId);
     cache.set(channelId, { expires: now + CACHE_TTL, data: videos });
-    return withCors(NextResponse.json({ videos }), req);
+    return withCors(NextResponse.json({ videos, fallback: false }), req);
   } catch (err: unknown) {
+    const fallbackVideos = cached?.data ?? getFallbackVideos();
+    cache.set(channelId, { expires: now + CACHE_TTL, data: fallbackVideos });
     const errorMessage =
       err instanceof Error ? err.message : "Unknown error occurred";
+    console.warn(`YouTube videos fallback active: ${errorMessage}`);
     return withCors(
-      NextResponse.json({ error: errorMessage }, { status: 502 }),
+      NextResponse.json({ videos: fallbackVideos, fallback: true, error: errorMessage }),
       req
     );
   }

@@ -1,18 +1,86 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import AudioCard, { FeaturedAudioTrack } from './AudioCard';
+import { useEffect, useState, useRef } from 'react';
+import {
+  Heart,
+  Download,
+  Music,
+} from 'lucide-react';
+
+export interface FeaturedAudioTrack {
+  id: string;
+  title: string;
+  artist?: string;
+  fileUrl: string;
+  coverUrl?: string;
+  duration?: string;
+  likesCount?: number;
+}
 
 function getPlayableAudioUrl(url: string) {
   const match = url.match(/[?&]id=([^&]+)/);
   return match?.[1] ? `/api/dashboard/media/${match[1]}` : url;
 }
 
+function normalizeImageUrl(url?: string) {
+  if (!url) return undefined;
+  try {
+    const m = url.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
+    const fid = m ? (m[1] || m[2]) : null;
+    return fid ? `https://drive.google.com/thumbnail?id=${fid}&sz=w400` : url;
+  } catch {
+    return url;
+  }
+}
+
+function placeholderCoverDataUrl(title?: string) {
+  const text = (title || 'Music').slice(0, 2).toUpperCase();
+  const bg = '#0f172a';
+  const fg = '#fbbf24';
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><rect width='100%' height='100%' fill='${bg}'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, Roboto, Arial' font-size='160' fill='${fg}'>${text}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+// Waveform bar height matrix
+const WAVEFORM_HEIGHTS = [
+  40, 60, 80, 50, 70, 95, 55, 40, 75, 90, 100, 50, 80, 60,
+  90, 70, 40, 55, 90, 100, 75, 50, 85, 95, 60, 45, 70, 85,
+  55, 75, 95, 40, 60, 80, 50
+];
+
 export default function FeaturedAudioCards() {
   const [tracks, setTracks] = useState<FeaturedAudioTrack[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Like management states
+  const [likedTracks, setLikedTracks] = useState<Record<string, boolean>>({});
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const exampleTracks: FeaturedAudioTrack[] = [
+    {
+      id: '1',
+      title: 'Echoes of Midnight',
+      artist: 'Michael John, 1978 Mvc studio',
+      fileUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+          coverUrl: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?q=80&w=300&auto=format&fit=crop',
+      likesCount: 12,
+    },
+    {
+      id: '2',
+      title: 'Sample Track Two',
+      artist: 'Unknown Artist',
+      fileUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=300&auto=format&fit=crop',
+      likesCount: 5,
+    }
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -22,10 +90,32 @@ export default function FeaturedAudioCards() {
         const response = await fetch('/api/audio');
         const data = await response.json();
         if (!cancelled) {
-          setTracks((data.tracks || []).slice(0, 5).map((track: FeaturedAudioTrack) => ({
-            ...track,
-            fileUrl: getPlayableAudioUrl(track.fileUrl),
-          })));
+          const loadedTracks: FeaturedAudioTrack[] =
+            data.tracks && data.tracks.length > 0
+              ? (data.tracks || []).slice(0, 5).map((track: FeaturedAudioTrack) => ({
+                  ...track,
+                  fileUrl: getPlayableAudioUrl(track.fileUrl),
+                }))
+              : exampleTracks;
+
+          setTracks(loadedTracks);
+
+          // Initialize initial counts from track metadata
+          const initialCounts: Record<string, number> = {};
+          loadedTracks.forEach((t) => {
+            initialCounts[t.id] = t.likesCount || 0;
+          });
+          setLikeCounts(initialCounts);
+        }
+      } catch (error) {
+        console.error("Failed to load tracks, using example data:", error);
+        if (!cancelled) {
+          setTracks(exampleTracks);
+          const initialCounts: Record<string, number> = {};
+          exampleTracks.forEach((t) => {
+            initialCounts[t.id] = t.likesCount || 0;
+          });
+          setLikeCounts(initialCounts);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -33,41 +123,235 @@ export default function FeaturedAudioCards() {
     };
 
     void loadFeaturedTracks();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  if (loading) return <p className="py-12 text-center text-sm text-slate-400">Loading featured audio...</p>;
-  if (tracks.length === 0) return <p className="py-12 text-center text-sm text-slate-400">No uploaded audio available yet.</p>;
+  // Sync Audio HTML Element Events
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const handleLoadedMetadata = () => setDuration(audio.duration);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [activeTrackId]);
+
+  // Play / Pause Toggle Trigger
+  const handleTogglePlay = (track: FeaturedAudioTrack) => {
+    if (activeTrackId === track.id) {
+      if (isPlaying) {
+        audioRef.current?.pause();
+        setIsPlaying(false);
+      } else {
+        audioRef.current?.play();
+        setIsPlaying(true);
+      }
+    } else {
+      setActiveTrackId(track.id);
+      setIsPlaying(true);
+      setCurrentTime(0);
+
+      if (audioRef.current) {
+        audioRef.current.src = track.fileUrl;
+        audioRef.current.play().catch((err) => {
+          console.error("Error playing audio:", err);
+          setIsPlaying(false);
+        });
+      }
+    }
+  };
+
+  // Seek audio position by clicking on the waveform bar
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (!audioRef.current || duration === 0) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const width = rect.width;
+    const newTime = (clickX / width) * duration;
+
+    audioRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
+  };
+
+  // Handle Like Toggle
+  const handleLikeToggle = (e: React.MouseEvent, trackId: string) => {
+    e.stopPropagation(); // Stop card click from triggering play/pause
+
+    setLikedTracks((prevLiked) => {
+      const isCurrentlyLiked = !!prevLiked[trackId];
+
+      setLikeCounts((prevCounts) => ({
+        ...prevCounts,
+        [trackId]: (prevCounts[trackId] || 0) + (isCurrentlyLiked ? -1 : 1),
+      }));
+
+      return {
+        ...prevLiked,
+        [trackId]: !isCurrentlyLiked,
+      };
+    });
+  };
+
+  if (loading) {
+    return (
+      <p className="py-12 text-center text-sm text-slate-400">
+        Loading featured audio...
+      </p>
+    );
+  }
+
+  if (tracks.length === 0) {
+    return (
+      <p className="py-12 text-center text-sm text-slate-400">
+        No uploaded audio available yet.
+      </p>
+    );
+  }
 
   return (
-    <>
-      <div
-        className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-4"
-        onScroll={(event) => {
-          const cardWidth = event.currentTarget.firstElementChild?.clientWidth || event.currentTarget.clientWidth;
-          setCurrentIndex(Math.round(event.currentTarget.scrollLeft / cardWidth));
-        }}
-      >
-        <div className="flex gap-4">
-          {tracks.map((track, index) => (
-            <div key={track.id} className="w-full shrink-0 snap-start sm:w-[calc(50%-8px)] lg:w-[calc(20%-13px)]">
-              <AudioCard
-                track={track}
-                index={index}
-                isPlaying={activeTrackId === track.id}
-                onToggle={() => setActiveTrackId((currentId) => currentId === track.id ? null : track.id)}
-                onEnded={() => setActiveTrackId(null)}
-              />
-            </div>
-          ))}
-        </div>
+    <div className="w-full max-w-9xl mx-auto">
+      {/* Hidden Global Audio Element */}
+      <audio ref={audioRef} />
+
+      <div className="flex items-center gap-3 mb-2">
+        <span className="flex h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_10px_#fbbf24]" />
+        <span className="text-sm sm:text-lg md:text-xl font-bold uppercase font-mono text-zinc-400">
+          Latest Uploaded Tracks
+        </span>
       </div>
 
-      <div className="mb-2 mt-2 flex items-center justify-center gap-2 sm:hidden">
-        {tracks.map((track, index) => (
-          <span key={track.id} className={`h-2 rounded-full transition-all duration-300 ${currentIndex === index ? 'w-6 bg-amber-500' : 'w-2 bg-zinc-700'}`} />
-        ))}
+      {/* Cards Slider */}
+      <div
+        className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-1"
+        onScroll={(event) => {
+          const cardWidth =
+            event.currentTarget.firstElementChild?.clientWidth ||
+            event.currentTarget.clientWidth;
+          setCurrentIndex(
+            Math.round(event.currentTarget.scrollLeft / cardWidth)
+          );
+        }}
+      >
+        <div className="flex gap-6">
+          {tracks.map((track) => {
+            const isSelected = activeTrackId === track.id;
+            const progressRatio = isSelected && duration > 0 ? currentTime / duration : 0;
+
+            return (
+              <div
+                key={track.id}
+                onClick={() => handleTogglePlay(track)}
+                className={`w-full shrink-0 snap-center sm:w-87.5 border rounded-3xl p-6 shadow-xl flex flex-col gap-5 cursor-pointer transition-all duration-300 ${
+                  isSelected
+                    ? 'bg-[#151c65] border-amber-400/50 shadow-amber-500/10'
+                    : 'bg-[#1a237e] border-white/10 hover:border-white/20'
+                }`}
+              >
+                {/* Header Section: Cover Image, Title, Artist */}
+                <div className="flex items-center gap-4">
+                  {/* Thumbnail Image */}
+                  <div className="w-16 h-16 rounded-full bg-zinc-800 overflow-hidden shrink-0 border-2 border-white/20 shadow-md">
+                    <img
+                      src={normalizeImageUrl(track.coverUrl) || placeholderCoverDataUrl(track.title)}
+                      alt={track.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  {/* Track Info */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-white font-semibold text-lg truncate w-full">
+                      {track.title || 'Untitled Track'}
+                    </h3>
+                    <p className="text-zinc-300 text-sm truncate w-full">
+                      {track.artist || 'Unknown Artist'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Waveform Visualizer */}
+                <div className="py-1">
+                  <div
+                    onClick={handleSeek}
+                    className="flex items-center justify-between gap-1 h-8 px-1 cursor-pointer group"
+                    title="Click to seek position"
+                  >
+                    {WAVEFORM_HEIGHTS.map((height, i) => {
+                      const barRatio = i / WAVEFORM_HEIGHTS.length;
+                      const isPlayedBar = isSelected && barRatio <= progressRatio;
+
+                      return (
+                        <span
+                          key={i}
+                          className={`w-1 rounded-full transition-colors duration-150 ${
+                            isPlayedBar
+                              ? 'bg-[#fdd835]'
+                              : 'bg-white/40 group-hover:bg-white/60'
+                          }`}
+                          style={{ height: `${height}%` }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between pt-2 border-t border-white/10 text-zinc-300">
+                  <button
+                    type="button"
+                    onClick={(e) => handleLikeToggle(e, track.id)}
+                    className={`flex items-center gap-1.5 text-xs transition-colors ${
+                      likedTracks[track.id]
+                        ? 'text-red-500 hover:text-red-400'
+                        : 'text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <Heart
+                      className={`w-4 h-4 transition-transform active:scale-125 ${
+                        likedTracks[track.id] ? 'fill-red-500 text-red-500' : ''
+                      }`}
+                    />
+                    <span>
+                      {likedTracks[track.id] ? 'Liked' : 'Like'}
+                    </span>
+                    <span className="ml-0.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">
+                      {likeCounts[track.id] ?? 0}
+                    </span>
+                  </button>
+
+                  <a
+                    href={track.fileUrl}
+                    download
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1.5 text-xs hover:text-white transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download</span>
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
       </div>
-    </>
+    </div>
   );
 }

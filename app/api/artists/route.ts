@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { ensureDatabaseReady } from '@/lib/db';
+import { artistsSeed } from '@/lib/artists';
 
 export async function GET() {
   try {
@@ -32,18 +33,33 @@ export async function GET() {
       ORDER BY artists.created_at DESC
     `);
 
-    return NextResponse.json({
-      artists: rows.map((artist) => ({
-        id: artist.id,
-        name: artist.name,
-        genre: artist.genre,
-        tracksCount: Number(artist.tracksCount || 0),
-        status: artist.status || 'Active',
-        profileUrl: artist.profileUrl || null,
-      })),
-    });
+    const artists = rows.map((artist) => ({
+      id: artist.id,
+      name: artist.name,
+      genre: artist.genre,
+      tracksCount: Number(artist.tracksCount || 0),
+      status: artist.status || 'Active',
+      profileUrl: artist.profileUrl || null,
+    }));
+
+    return NextResponse.json({ artists: artists.length > 0 ? artists : artistsSeed.map((artist) => ({
+      id: artist.id,
+      name: artist.name,
+      genre: artist.genre,
+      tracksCount: artist.tracksCount,
+      status: artist.status,
+      profileUrl: artist.profileUrl || null,
+    })) });
   } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    console.error('Artist list route failed, returning seeded artists.', error);
+    return NextResponse.json({ artists: artistsSeed.map((artist) => ({
+      id: artist.id,
+      name: artist.name,
+      genre: artist.genre,
+      tracksCount: artist.tracksCount,
+      status: artist.status,
+      profileUrl: artist.profileUrl || null,
+    })) });
   }
 }
 
