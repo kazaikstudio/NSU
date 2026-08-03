@@ -359,9 +359,9 @@ const Home = () => {
                       <button
                         type="button"
                         onClick={(e) => openDownloadModal(e, video.id)}
-                        className="inline-flex h-9 items-center justify-center rounded-full bg-card1/20 px-3 text-secondry hover:bg-blue-600 hover:text-white transition-all cursor-pointer"
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-card1/20 px-3 text-secondry hover:bg-blue-600 hover:text-white transition-all cursor-pointer"
                       >
-                        <svg className="w-4 h-4 sm:hidden" fill="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9H13V5.5h-2V11H8.5l3.5 3.5 3.5-3.5z" />
                         </svg>
                         <span className="hidden text-xs font-semibold sm:inline">Download</span>

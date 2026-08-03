@@ -37,7 +37,6 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
   const [title, setTitle] = useState("");
   const [loadingFormats, setLoadingFormats] = useState(false);
   const [error, setError] = useState("");
-  const [downloadRequest, setDownloadRequest] = useState<{ format: DownloadFormat; options?: { skipReset?: boolean } } | null>(null);
   const [coords, setCoords] = useState<{ x: number; y: number; placeAbove: boolean }>({
     x: 0,
     y: 0,
@@ -56,6 +55,18 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
   const activeTitleRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isPausedRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const safeSetState = <T extends unknown>(callback: () => T) => {
+    if (isMountedRef.current) callback();
+  };
 
   useLayoutEffect(() => {
     if (!open || !videoId) return;
@@ -149,13 +160,13 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     activeTitleRef.current = historyTitle;
 
     if (!options?.skipReset) {
-      setLoadingFormat(formatKey);
+      safeSetState(() => setLoadingFormat(formatKey));
       downloadOffsetRef.current = 0;
-      setDownloadProgressValue(0);
+      safeSetState(() => setDownloadProgressValue(0));
       isPausedRef.current = false;
       emitDownloadHistory({ status: "downloading", title: historyTitle, progress: 0, paused: false });
     } else {
-      setLoadingFormat(formatKey);
+      safeSetState(() => setLoadingFormat(formatKey));
       emitDownloadHistory({ status: "downloading", title: historyTitle, progress: downloadProgressRef.current, paused: false });
     }
 
@@ -180,6 +191,7 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
       const reader = response.body?.getReader();
       const chunks: Uint8Array[] = [];
       let receivedLength = 0;
+      let heuristicProgress = downloadProgressRef.current;
 
       if (reader) {
         while (true) {
@@ -188,15 +200,20 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
           if (!value) continue;
           chunks.push(value);
           receivedLength += value.length;
-          if (Number.isFinite(contentLength) && contentLength > 0) {
-            const currentProgress = Math.round((receivedLength / contentLength) * 100);
-            const displayedProgress = Math.min(
-              100,
-              downloadOffsetRef.current + Math.round((currentProgress / 100) * (100 - downloadOffsetRef.current))
-            );
-            if (!isPausedRef.current) {
-              setDownloadProgressValue(displayedProgress);
+
+          if (!isPausedRef.current) {
+            if (Number.isFinite(contentLength) && contentLength > 0) {
+              const currentProgress = Math.round((receivedLength / contentLength) * 100);
+              const displayedProgress = Math.min(
+                100,
+                downloadOffsetRef.current + Math.round((currentProgress / 100) * (100 - downloadOffsetRef.current))
+              );
+              safeSetState(() => setDownloadProgressValue(displayedProgress));
               emitDownloadHistory({ status: "downloading", title: historyTitle, progress: displayedProgress, paused: false });
+            } else {
+              heuristicProgress = Math.min(98, heuristicProgress + Math.max(2, Math.round(value.length / 65536)));
+              safeSetState(() => setDownloadProgressValue(heuristicProgress));
+              emitDownloadHistory({ status: "downloading", title: historyTitle, progress: heuristicProgress, paused: false });
             }
           }
         }
@@ -234,19 +251,6 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     }
   }, [downloadProgress, emitDownloadHistory, title, videoId]);
 
-  useEffect(() => {
-    if (!downloadRequest) return;
-
-    const request = downloadRequest;
-    const timeoutId = window.setTimeout(() => {
-      setDownloadRequest(null);
-      void handleDownload(request.format, request.options);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [downloadRequest, handleDownload]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -340,7 +344,8 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
                         type="button"
                         onClick={(event) => {
                           event.preventDefault();
-                          setDownloadRequest({ format });
+                          void handleDownload(format);
+                          handleClose();
                         }}
                         disabled={loadingFormat !== null}
                         className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
@@ -348,17 +353,6 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
                         {loadingFormat === getFormatKey(format) ? "Preparing..." : "Download"}
                       </button>
                     </div>
-                    {loadingFormat === getFormatKey(format) && (
-                      <div className="mt-2" role="status" aria-label={downloadProgress ? `Download ${downloadProgress}% complete` : "Download in progress"}>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
-                          <div
-                            className={`h-full rounded-full bg-rose-500 transition-[width] duration-200 ${downloadProgress ? "" : "w-1/3 animate-pulse"}`}
-                            style={downloadProgress ? { width: `${downloadProgress}%` } : undefined}
-                          />
-                        </div>
-                        <p className="mt-1 text-right text-[10px] text-slate-500">{downloadProgress ? `${downloadProgress}%` : "Preparing download..."}</p>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
