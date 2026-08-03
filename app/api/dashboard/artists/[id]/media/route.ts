@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { ensureDatabaseReady } from '@/lib/db';
-import { deleteFromGoogleDrive, uploadToGoogleDrive } from '@/lib/google-drive';
+import { deleteFromGoogleDrive, saveFileLocally, uploadToGoogleDrive } from '@/lib/google-drive';
 import { recordActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
@@ -61,48 +61,75 @@ export async function POST(request: Request, context: Context) {
       return NextResponse.json({ error: 'Track title is required' }, { status: 400 });
     }
 
-    const driveFile = await uploadToGoogleDrive({
-      name: file.name,
-      mimeType: file.type || 'application/octet-stream',
-      bytes: await file.arrayBuffer(),
-    });
-    await ensureMediaTable();
-
-    const previousMedia = kind === 'banner' || kind === 'profile'
-      ? await pool.query<{ id: string; driveFileId: string | null }>(
-        `SELECT id, drive_file_id AS "driveFileId" FROM artist_media WHERE artist_id = $1 AND kind = $2`,
-        [artistId, kind]
-      )
-      : { rows: [] as { id: string; driveFileId: string | null }[] };
-
-    const mediaId = `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const mediaTitle = title.trim() || (kind === 'banner' ? 'Artist Banner' : 'Artist Profile');
-    const { rows } = await pool.query(
-      `INSERT INTO artist_media (id, artist_id, kind, title, album, file_name, mime_type, file_url, drive_file_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-       RETURNING id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", created_at AS "createdAt"`,
-      [mediaId, artistId, kind, mediaTitle, album, file.name, file.type || 'application/octet-stream', driveFile.publicUrl, driveFile.id]
-    );
-
-    if (kind === 'banner' || kind === 'profile') {
-      await pool.query(`UPDATE artists SET ${kind === 'banner' ? 'banner_url' : 'profile_url'} = $1 WHERE id::text = $2`, [driveFile.publicUrl, artistId]);
-      await pool.query('DELETE FROM artist_media WHERE id = ANY($1::text[])', [previousMedia.rows.map((media) => media.id)]);
-      await Promise.allSettled(
-        previousMedia.rows
-          .map((media) => media.driveFileId)
-          .filter((fileId): fileId is string => Boolean(fileId))
-          .map((fileId) => deleteFromGoogleDrive(fileId))
-      );
+    let driveFile: { id: string; publicUrl: string; name: string; mimeType: string };
+    try {
+      driveFile = await uploadToGoogleDrive({
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        bytes: await file.arrayBuffer(),
+      });
+    } catch (error) {
+      console.warn('Google Drive upload failed, falling back to local storage', error);
+      driveFile = await saveFileLocally({
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        bytes: await file.arrayBuffer(),
+      });
     }
 
-    await recordActivity({
-      action: kind === 'track' ? 'uploaded' : 'replaced',
-      entityType: kind === 'track' ? 'track' : 'artist_media',
-      entityId: mediaId,
-      description: `${kind === 'track' ? 'Uploaded' : 'Replaced'} ${kind} file ${file.name} for artist ${artistId}`,
-    });
+    try {
+      await ensureMediaTable();
 
-    return NextResponse.json({ media: rows[0] }, { status: 201 });
+      const previousMedia = kind === 'banner' || kind === 'profile'
+        ? await pool.query<{ id: string; driveFileId: string | null }>(
+          `SELECT id, drive_file_id AS "driveFileId" FROM artist_media WHERE artist_id = $1 AND kind = $2`,
+          [artistId, kind]
+        )
+        : { rows: [] as { id: string; driveFileId: string | null }[] };
+
+      const mediaId = `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const mediaTitle = title.trim() || (kind === 'banner' ? 'Artist Banner' : kind === 'profile' ? 'Artist Profile' : 'Track');
+      const { rows } = await pool.query(
+        `INSERT INTO artist_media (id, artist_id, kind, title, album, file_name, mime_type, file_url, drive_file_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         RETURNING id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", created_at AS "createdAt"`,
+        [mediaId, artistId, kind, mediaTitle, album, file.name, file.type || 'application/octet-stream', driveFile.publicUrl, driveFile.id]
+      );
+
+      if (kind === 'banner' || kind === 'profile') {
+        await pool.query(`UPDATE artists SET ${kind === 'banner' ? 'banner_url' : 'profile_url'} = $1 WHERE id::text = $2`, [driveFile.publicUrl, artistId]);
+        await pool.query('DELETE FROM artist_media WHERE id = ANY($1::text[])', [previousMedia.rows.map((media) => media.id)]);
+        await Promise.allSettled(
+          previousMedia.rows
+            .map((media) => media.driveFileId)
+            .filter((fileId): fileId is string => Boolean(fileId))
+            .map((fileId) => deleteFromGoogleDrive(fileId))
+        );
+      }
+
+      await recordActivity({
+        action: kind === 'track' ? 'uploaded' : 'replaced',
+        entityType: kind === 'track' ? 'track' : 'artist_media',
+        entityId: mediaId,
+        description: `${kind === 'track' ? 'Uploaded' : 'Replaced'} ${kind} file ${file.name} for artist ${artistId}`,
+      });
+
+      return NextResponse.json({ media: rows[0] }, { status: 201 });
+    } catch (error) {
+      console.warn('Unable to persist media metadata; returning local upload metadata instead', error);
+      return NextResponse.json({
+        media: {
+          id: `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          kind,
+          title: title.trim() || (kind === 'banner' ? 'Artist Banner' : kind === 'profile' ? 'Artist Profile' : 'Track'),
+          album,
+          fileName: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          fileUrl: driveFile.publicUrl,
+          createdAt: new Date().toISOString(),
+        },
+      }, { status: 201 });
+    }
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }

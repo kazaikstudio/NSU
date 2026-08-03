@@ -1,3 +1,7 @@
+import { promises as fs } from 'fs';
+import path from 'path';
+import { randomUUID } from 'crypto';
+
 type DriveUpload = {
   name: string;
   mimeType: string;
@@ -51,6 +55,34 @@ function getGoogleConfig() {
   }
 
   return { clientId, clientSecret, refreshToken };
+}
+
+function sanitizeLocalFileName(name: string) {
+  return name
+    .replace(/\\/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80) || 'upload';
+}
+
+export async function saveFileLocally(upload: DriveUpload) {
+  const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+  await fs.mkdir(uploadDir, { recursive: true });
+
+  const extension = path.extname(upload.name) || '';
+  const baseName = sanitizeLocalFileName(path.basename(upload.name, extension));
+  const fileName = `${Date.now()}-${randomUUID().slice(0, 8)}-${baseName}${extension}`;
+  const filePath = path.join(uploadDir, fileName);
+  await fs.writeFile(filePath, Buffer.from(upload.bytes));
+
+  return {
+    id: fileName,
+    name: upload.name,
+    mimeType: upload.mimeType,
+    publicUrl: `/uploads/${fileName}`,
+  };
 }
 
 async function getAccessToken() {
