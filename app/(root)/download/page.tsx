@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, Suspense, useEffect, useState } from 'react'
+import { FormEvent, Suspense, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Download, Link as LinkIcon } from 'lucide-react'
 import Switchbutton from '../../../components/Switchbutton'
@@ -40,6 +40,12 @@ function DownloadForm() {
   const [loadingFormats, setLoadingFormats] = useState(false)
   const [loadingFormat, setLoadingFormat] = useState<number | null>(null)
   const [downloadProgress, setDownloadProgress] = useState(0)
+  const progressRef = useRef(0)
+
+  const emitDownloadHistory = (payload: { status: 'downloading' | 'done' | 'error'; title: string; progress?: number; paused?: boolean }) => {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new CustomEvent('nsu-download-status', { detail: payload }))
+  }
 
   const fetchFormats = async (videoId: string) => {
     setLoadingFormats(true)
@@ -81,57 +87,68 @@ function DownloadForm() {
   const handleDownload = async (format: DownloadFormat) => {
     const videoId = getVideoId(source)
     if (!videoId) return
+
+    const historyTitle = title || `youtube-${videoId}`
     setLoadingFormat(format.itag)
     setDownloadProgress(0)
+    progressRef.current = 0
+    emitDownloadHistory({ status: 'downloading', title: historyTitle, progress: 0, paused: false })
+
     try {
-      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}&bitrate=${format.outputBitrate || ''}`)
+      const downloadUrl = `/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}&bitrate=${format.outputBitrate || ''}`
+      const filename = `${historyTitle}.${format.extension || 'mp4'}`
+
+      const response = await fetch(downloadUrl)
       if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { error?: string } | null
-        throw new Error(payload?.error || 'Unable to download this video.')
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(payload.error || response.statusText || 'Unable to download this video.')
       }
 
-      const filenameHeader = response.headers.get('Content-Disposition') || ''
-      const encodedFilename = filenameHeader.match(/filename\*=UTF-8''([^;]+)/)?.[1]
-      const filename = encodedFilename ? decodeURIComponent(encodedFilename) : `${title || `youtube-${videoId}`}.mp4`
-      const contentLength = Number(response.headers.get('Content-Length'))
+      const total = Number(response.headers.get('content-length'))
       const reader = response.body?.getReader()
-      const chunks: Uint8Array[] = []
-      let receivedLength = 0
+      if (!reader) throw new Error('Unable to start download.')
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          if (!value) continue
+      const chunks: Uint8Array[] = []
+      let loaded = 0
+      let lastProgress = 0
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        if (value) {
           chunks.push(value)
-          receivedLength += value.length
-          if (Number.isFinite(contentLength) && contentLength > 0) {
-            setDownloadProgress(Math.round((receivedLength / contentLength) * 100))
+          loaded += value.length
+          if (total && total > 0) {
+            const nextProgress = Math.min(100, Math.round((loaded / total) * 100))
+            if (nextProgress !== lastProgress) {
+              lastProgress = nextProgress
+              progressRef.current = nextProgress
+              setDownloadProgress(nextProgress)
+              emitDownloadHistory({ status: 'downloading', title: historyTitle, progress: nextProgress, paused: false })
+            }
           }
         }
-      } else {
-        chunks.push(new Uint8Array(await response.arrayBuffer()))
       }
 
-      setDownloadProgress(100)
-      const blobParts = chunks.map((chunk) => {
-        const copy = new Uint8Array(chunk.byteLength)
-        copy.set(chunk)
-        return copy.buffer
-      })
-      const blobUrl = URL.createObjectURL(new Blob(blobParts))
+      const blob = new Blob(chunks)
       const anchor = document.createElement('a')
-      anchor.href = blobUrl
+      anchor.href = URL.createObjectURL(blob)
       anchor.download = filename
+      anchor.style.display = 'none'
       document.body.appendChild(anchor)
       anchor.click()
       anchor.remove()
-      URL.revokeObjectURL(blobUrl)
+      URL.revokeObjectURL(anchor.href)
+
+      setDownloadProgress(100)
+      progressRef.current = 100
+      emitDownloadHistory({ status: 'done', title: historyTitle, progress: 100 })
     } catch (downloadError) {
+      const currentProgress = progressRef.current
       setError(downloadError instanceof Error ? downloadError.message : 'Unable to download this video.')
+      emitDownloadHistory({ status: 'error', title: historyTitle, progress: currentProgress })
     } finally {
       setLoadingFormat(null)
-      setDownloadProgress(0)
     }
   }
 

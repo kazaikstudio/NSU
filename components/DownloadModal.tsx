@@ -32,7 +32,6 @@ type DownloadHistoryPayload = {
 
 const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: DownloadModalProps) => {
   const [loadingFormat, setLoadingFormat] = useState<string | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState(0);
   const [formats, setFormats] = useState<DownloadFormat[]>([]);
   const [title, setTitle] = useState("");
   const [loadingFormats, setLoadingFormats] = useState(false);
@@ -42,6 +41,7 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     y: 0,
     placeAbove: false,
   });
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   const downloadProgressRef = useRef(0);
   const downloadOffsetRef = useRef(0);
@@ -174,68 +174,17 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
       abortControllerRef.current.abort();
     }
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
     try {
-      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(videoId || "")}&itag=${format.itag}&output=${format.extension}&bitrate=${format.outputBitrate || ""}`, { signal: controller.signal });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        throw new Error(payload?.error || "Unable to download this format.");
-      }
-
-      const disposition = response.headers.get("Content-Disposition") || "";
-      const encodedFilename = disposition.match(/filename\*=UTF-8''([^;]+)/)?.[1];
-      const filename = encodedFilename ? decodeURIComponent(encodedFilename) : `${title || videoId}.mp4`;
-      const contentLength = Number(response.headers.get("Content-Length"));
-      const reader = response.body?.getReader();
-      const chunks: Uint8Array[] = [];
-      let receivedLength = 0;
-      let heuristicProgress = downloadProgressRef.current;
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (!value) continue;
-          chunks.push(value);
-          receivedLength += value.length;
-
-          if (!isPausedRef.current) {
-            if (Number.isFinite(contentLength) && contentLength > 0) {
-              const currentProgress = Math.round((receivedLength / contentLength) * 100);
-              const displayedProgress = Math.min(
-                100,
-                downloadOffsetRef.current + Math.round((currentProgress / 100) * (100 - downloadOffsetRef.current))
-              );
-              safeSetState(() => setDownloadProgressValue(displayedProgress));
-              emitDownloadHistory({ status: "downloading", title: historyTitle, progress: displayedProgress, paused: false });
-            } else {
-              heuristicProgress = Math.min(98, heuristicProgress + Math.max(2, Math.round(value.length / 65536)));
-              safeSetState(() => setDownloadProgressValue(heuristicProgress));
-              emitDownloadHistory({ status: "downloading", title: historyTitle, progress: heuristicProgress, paused: false });
-            }
-          }
-        }
-      } else {
-        chunks.push(new Uint8Array(await response.arrayBuffer()));
-      }
-
-      setDownloadProgress(100);
-      emitDownloadHistory({ status: "done", title: historyTitle, progress: 100, paused: false });
-      const blobParts = chunks.map((chunk) => {
-        const copy = new Uint8Array(chunk.byteLength);
-        copy.set(chunk);
-        return copy.buffer;
-      });
-      const blobUrl = URL.createObjectURL(new Blob(blobParts, { type: format.mimeType }));
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = getDownloadPath(filename, inferDownloadCategoryFromFilename(filename));
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(blobUrl);
+      const downloadUrl = `/api/youtube/download?id=${encodeURIComponent(videoId || "")}&itag=${format.itag}&output=${format.extension}&bitrate=${format.outputBitrate || ""}`;
+      const filename = `${title || videoId}.${format.extension || "mp4"}`;
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = getDownloadPath(filename, inferDownloadCategoryFromFilename(filename));
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      emitDownloadHistory({ status: "downloading", title: historyTitle, progress: 0, paused: false });
     } catch (downloadError: unknown) {
       if (downloadError instanceof Error && downloadError.name === "AbortError") {
         return;
@@ -252,39 +201,6 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
   }, [downloadProgress, emitDownloadHistory, title, videoId]);
 
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handleDownloadControl = (event: Event) => {
-      const detail = (event as CustomEvent<DownloadHistoryPayload>).detail;
-      if (!detail?.action || !detail.title || !videoId) return;
-
-      const currentTitle = activeTitleRef.current || title || videoId;
-      if (detail.title !== currentTitle) return;
-
-      if (detail.action === "pause") {
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-        }
-        isPausedRef.current = true;
-        downloadOffsetRef.current = downloadProgressRef.current;
-        emitDownloadHistory({ status: "downloading", title: currentTitle, progress: downloadProgressRef.current, paused: true });
-      }
-
-      if (detail.action === "resume") {
-        isPausedRef.current = false;
-        if (activeFormatRef.current) {
-          setDownloadProgressValue(downloadOffsetRef.current);
-          setDownloadRequest({ format: activeFormatRef.current, options: { skipReset: true } });
-        }
-      }
-    };
-
-    window.addEventListener("nsu-download-control", handleDownloadControl as EventListener);
-    return () => {
-      window.removeEventListener("nsu-download-control", handleDownloadControl as EventListener);
-    };
-  }, [downloadProgress, emitDownloadHistory, title, videoId]);
 
   if (!open || !videoId) return null;
 

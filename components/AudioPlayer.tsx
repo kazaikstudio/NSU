@@ -159,53 +159,14 @@ export default function AudioPlayer({
     onDownload?.();
 
     try {
-      const response = await fetch(downloadUrl, { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(`Download failed with status ${response.status}`);
-      }
-
-      const contentLength = Number(response.headers.get('Content-Length'));
-      const reader = response.body?.getReader();
-      const chunks: Uint8Array[] = [];
-      let receivedLength = 0;
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (!value) continue;
-
-          chunks.push(value);
-          receivedLength += value.byteLength;
-
-          if (Number.isFinite(contentLength) && contentLength > 0) {
-            void receivedLength;
-            void contentLength;
-          }
-        }
-      } else {
-        const buffer = await response.arrayBuffer();
-        chunks.push(new Uint8Array(buffer));
-      }
-
-      if (!chunks.length) {
-        throw new Error('The download stream was empty.');
-      }
-
-      const blobParts = chunks.map((chunk) => {
-        const copiedChunk = new Uint8Array(chunk.byteLength);
-        copiedChunk.set(chunk);
-        return copiedChunk;
-      });
-      const blob = new Blob(blobParts, { type: response.headers.get('Content-Type') || 'application/octet-stream' });
-      const blobUrl = URL.createObjectURL(blob);
+      const filename = getDownloadPath(fileName || `${title}.mp3`, 'audio');
       const anchor = document.createElement('a');
-      anchor.href = blobUrl;
-      anchor.download = getDownloadPath(fileName || `${title}.mp3`, 'audio');
+      anchor.href = downloadUrl;
+      anchor.download = filename;
+      anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      URL.revokeObjectURL(blobUrl);
       setDownloadStatus('done');
       window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
         detail: { status: 'done', title },
