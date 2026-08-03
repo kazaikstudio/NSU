@@ -35,6 +35,7 @@ const Home = () => {
   const router = useRouter();
   const mainSearchRef = useRef<HTMLDivElement>(null);
   const gridSectionRef = useRef<HTMLDivElement>(null);
+  const marqueeRef = useRef<HTMLDivElement>(null);
 
   const scrollToMainSearch = () => {
     if (mainSearchRef.current) {
@@ -105,6 +106,30 @@ const Home = () => {
   const officialVideos = videos.filter((video) => video.type === "official");
   const marqueeItems = officialVideos.slice(0, 5);
 
+  // Auto-slide effect for mobile screens (< 640px)
+  useEffect(() => {
+    const container = marqueeRef.current;
+    if (!container) return;
+
+    const interval = setInterval(() => {
+      if (window.innerWidth >= 640) return;
+
+      const totalItems = marqueeItems.length || 5;
+      if (totalItems <= 1) return;
+
+      const cardWidth = container.firstElementChild?.clientWidth || container.clientWidth;
+      const currentIndex = Math.round(container.scrollLeft / cardWidth);
+      const nextIndex = (currentIndex + 1) % totalItems;
+
+      container.scrollTo({
+        left: nextIndex * cardWidth,
+        behavior: "smooth",
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [marqueeItems.length]);
+
   const openPlayer = (videoId: string) => {
     router.push(`/video/${encodeURIComponent(videoId)}`);
   };
@@ -128,7 +153,7 @@ const Home = () => {
       <Switchbutton onScrollToSearch={scrollToMainSearch} />
 
       <div className="p-2 text-start text-primary">
-        <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-cardcl via-cardcl/90 to-rose-950/40 p-3 shadow-xl border border-card1/20 backdrop-blur-md">
+        <div className="relative overflow-hidden rounded-lg bg-linear-to-r from-cardcl via-cardcl/90 to-rose-950/40 p-3 shadow-xl border border-card1/20 backdrop-blur-md">
           <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-rose-500/20 blur-2xl pointer-events-none" />
           <div className="relative z-10 flex flex-col items-center sm:items-start text-center sm:text-left gap-1">
             <span className="font-bold text-Eltext tracking-tight text-xs sm:text-sm leading-tight">
@@ -140,7 +165,10 @@ const Home = () => {
 
       <div className="text-primary space-y-6">
         <div className="w-full px-2">
-          <div className="flex sm:grid overflow-x-auto sm:overflow-visible snap-x snap-mandatory scrollbar-none sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
+          <div
+            ref={marqueeRef}
+            className="flex sm:grid overflow-x-auto sm:overflow-visible snap-x snap-mandatory scrollbar-none sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full"
+          >
             {marqueeItems.length
               ? marqueeItems.map((v, idx) => (
                   <div
@@ -153,7 +181,7 @@ const Home = () => {
                       alt={v.title}
                       className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-90 transition-opacity group-hover:opacity-80" />
+                    <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/40 to-transparent opacity-90 transition-opacity group-hover:opacity-80" />
                     <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3">
                       <div className="flex flex-col min-w-0 pr-1">
                         <h3 className="text-white font-semibold text-base truncate leading-snug tracking-tight group-hover:text-violet-200 transition-colors">
@@ -212,7 +240,7 @@ const Home = () => {
                 <div
                   key={video.id || index}
                   onClick={() => openPlayer(video.id)}
-                  className="group relative w-36 sm:w-40 h-[170px] shrink-0 rounded-2xl overflow-hidden cursor-pointer snap-start border border-white/10 bg-cardcl/60 shadow-lg transition-all duration-300 hover:scale-[1.02] hover:border-rose-500/50 hover:shadow-rose-950/30"
+                  className="group relative w-36 sm:w-40 h-42.5 shrink-0 rounded-2xl overflow-hidden cursor-pointer snap-start border border-white/10 bg-cardcl/60 shadow-lg transition-all duration-300 hover:scale-[1.02] hover:border-rose-500/50 hover:shadow-rose-950/30"
                 >
                   {/* Thumbnail Image */}
                   <Image
@@ -223,7 +251,7 @@ const Home = () => {
                   />
 
                   {/* Gradient Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+                  <div className="absolute inset-0 bg-linear-to-t from-black/90 via-black/30 to-transparent" />
 
                   {/* Top Badge: Rank or Short */}
                   <div className="absolute top-2.5 left-2.5">

@@ -226,61 +226,71 @@ async function fetchVideoDetails(videoIds: string[]) {
   return details;
 }
 
+async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchAllVideos(channelId: string): Promise<YouTubeVideo[]> {
   const apiKey = getYoutubeApiKey();
   const videos: Omit<YouTubeVideo, "type" | "durationSeconds">[] = [];
-  let nextPageToken: string | undefined = undefined;
 
-  do {
-    const params = new URLSearchParams({
-      key: apiKey,
-      channelId,
-      part: "snippet,id",
-      order: "date",
-      maxResults: "50",
-      type: "video",
+  const params = new URLSearchParams({
+    key: apiKey,
+    channelId,
+    part: "snippet,id",
+    order: "date",
+    maxResults: "24",
+    type: "video",
+  });
+
+  const res = await fetchWithTimeout(
+    `https://www.googleapis.com/youtube/v3/search?${params.toString()}`,
+    {},
+    10000
+  );
+  const payload = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const msg = payload?.error?.message ?? "YouTube API error";
+    throw new Error(msg);
+  }
+
+  const items = payload?.items ?? [];
+  for (const item of items) {
+    const videoId = (item?.id?.videoId as string) ?? "";
+    const snippet = item?.snippet ?? {};
+    const thumbnail =
+      (snippet?.thumbnails?.high?.url as string) ??
+      (snippet?.thumbnails?.default?.url as string) ??
+      "";
+
+    if (!videoId) continue;
+
+    videos.push({
+      id: videoId,
+      title: (snippet.title as string) ?? "",
+      subtitle: (snippet.description as string) ?? "",
+      thumbnail,
+      date: snippet.publishedAt
+        ? new Date(snippet.publishedAt as string).toISOString()
+        : "",
+      url: `https://www.youtube.com/watch?v=${videoId}`,
     });
+  }
 
-    if (nextPageToken) params.set("pageToken", nextPageToken);
+  const ids = videos.map((video) => video.id);
+  const [detailsMap, durationMap] = await Promise.all([
+    fetchVideoDetails(ids).catch(() => ({} as Record<string, { duration: number; views: number; thumbnail?: string }>)),
+    fetchVideoDurations(ids).catch(() => ({} as Record<string, number>)),
+  ]);
 
-    const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?${params.toString()}`
-    );
-    const payload = await res.json().catch(() => null);
-
-    if (!res.ok) {
-      const msg = payload?.error?.message ?? "YouTube API error";
-      throw new Error(msg);
-    }
-
-    const items = payload?.items ?? [];
-    for (const item of items) {
-      const videoId = (item?.id?.videoId as string) ?? "";
-      const snippet = item?.snippet ?? {};
-      const thumbnail =
-        (snippet?.thumbnails?.high?.url as string) ??
-        (snippet?.thumbnails?.default?.url as string) ??
-        "";
-
-      if (!videoId) continue;
-
-      videos.push({
-        id: videoId,
-        title: (snippet.title as string) ?? "",
-        subtitle: (snippet.description as string) ?? "",
-        thumbnail,
-        date: snippet.publishedAt
-          ? new Date(snippet.publishedAt as string).toISOString()
-          : "",
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-      });
-    }
-
-    nextPageToken = payload?.nextPageToken as string | undefined;
-  } while (nextPageToken);
-
-  const durationMap = await fetchVideoDurations(videos.map((video) => video.id));
-  const detailsMap = await fetchVideoDetails(videos.map((video) => video.id));
   const shortTitlePattern = /(?:#shorts?\b|\bshorts?\b)/i;
 
   return videos.map((video) => {

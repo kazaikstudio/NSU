@@ -45,6 +45,13 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     placeAbove: false,
   });
 
+  const downloadProgressRef = useRef(0);
+  const downloadOffsetRef = useRef(0);
+  const setDownloadProgressValue = (value: number) => {
+    downloadProgressRef.current = value;
+    setDownloadProgress(value);
+  };
+
   const modalRef = useRef<HTMLDivElement>(null);
   const activeFormatRef = useRef<DownloadFormat | null>(null);
   const activeTitleRef = useRef<string | null>(null);
@@ -123,7 +130,9 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     setLoadingFormats(false);
     setLoadingFormat(null);
     isPausedRef.current = false;
+    downloadProgressRef.current = 0;
     setDownloadProgress(0);
+    downloadOffsetRef.current = 0;
     onClose?.();
   }, [onClose]);
 
@@ -142,9 +151,13 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
 
     if (!options?.skipReset) {
       setLoadingFormat(formatKey);
-      setDownloadProgress(0);
+      downloadOffsetRef.current = 0;
+      setDownloadProgressValue(0);
       isPausedRef.current = false;
       emitDownloadHistory({ status: "downloading", title: historyTitle, progress: 0, paused: false });
+    } else {
+      setLoadingFormat(formatKey);
+      emitDownloadHistory({ status: "downloading", title: historyTitle, progress: downloadProgressRef.current, paused: false });
     }
 
     if (abortControllerRef.current) {
@@ -177,10 +190,14 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
           chunks.push(value);
           receivedLength += value.length;
           if (Number.isFinite(contentLength) && contentLength > 0) {
-            const progressValue = Math.round((receivedLength / contentLength) * 100);
+            const currentProgress = Math.round((receivedLength / contentLength) * 100);
+            const displayedProgress = Math.min(
+              100,
+              downloadOffsetRef.current + Math.round((currentProgress / 100) * (100 - downloadOffsetRef.current))
+            );
             if (!isPausedRef.current) {
-              setDownloadProgress(progressValue);
-              emitDownloadHistory({ status: "downloading", title: historyTitle, progress: progressValue, paused: false });
+              setDownloadProgressValue(displayedProgress);
+              emitDownloadHistory({ status: "downloading", title: historyTitle, progress: displayedProgress, paused: false });
             }
           }
         }
@@ -207,12 +224,12 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
       if (downloadError instanceof Error && downloadError.name === "AbortError") {
         return;
       }
-      emitDownloadHistory({ status: "error", title: historyTitle, progress: downloadProgress, paused: false });
+      emitDownloadHistory({ status: "error", title: historyTitle, progress: downloadProgressRef.current, paused: false });
       setError(downloadError instanceof Error ? downloadError.message : "Unable to download this format.");
     } finally {
       if (!isPausedRef.current) {
         setLoadingFormat(null);
-        setDownloadProgress(0);
+        setDownloadProgressValue(0);
       }
       abortControllerRef.current = null;
     }
@@ -224,14 +241,13 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     const request = downloadRequest;
     const timeoutId = window.setTimeout(() => {
       setDownloadRequest(null);
-      handleClose();
       void handleDownload(request.format, request.options);
     }, 0);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [downloadRequest, handleClose, handleDownload]);
+  }, [downloadRequest, handleDownload]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -248,12 +264,14 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
           abortControllerRef.current.abort();
         }
         isPausedRef.current = true;
-        emitDownloadHistory({ status: "downloading", title: currentTitle, progress: downloadProgress, paused: true });
+        downloadOffsetRef.current = downloadProgressRef.current;
+        emitDownloadHistory({ status: "downloading", title: currentTitle, progress: downloadProgressRef.current, paused: true });
       }
 
       if (detail.action === "resume") {
         isPausedRef.current = false;
         if (activeFormatRef.current) {
+          setDownloadProgressValue(downloadOffsetRef.current);
           setDownloadRequest({ format: activeFormatRef.current, options: { skipReset: true } });
         }
       }

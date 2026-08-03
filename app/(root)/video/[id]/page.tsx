@@ -1,13 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
-import DownloadModal from "@/components/DownloadModal"; // Adjust path as needed
+import DownloadModal from "@/components/DownloadModal";
 
-export default function VideoPlayerPage({ params }: { params: { id: string } }) {
-  const { id } = params;
+function parseYouTubeId(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname.includes("youtu.be")) {
+      return url.pathname.slice(1);
+    }
+    if (url.hostname.includes("youtube.com")) {
+      return url.searchParams.get("v") ?? url.pathname.split("/").pop() ?? "";
+    }
+  } catch {
+    // not a URL, fall back to raw value
+  }
+
+  return trimmed.replace(/[^A-Za-z0-9_-]/g, "");
+}
+
+export default function VideoPlayerPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  const { id } = resolvedParams;
   const decodedId = decodeURIComponent(id);
+  const videoId = parseYouTubeId(decodedId);
 
+  const [origin] = useState(() =>
+    typeof window !== "undefined" ? window.location.origin : ""
+  );
   const [activeDownloadVideoId, setActiveDownloadVideoId] = useState<string | null>(null);
   const [downloadPosition, setDownloadPosition] = useState<{ x: number; y: number } | null>(null);
   const [downloadAnchor, setDownloadAnchor] = useState<HTMLElement | null>(null);
@@ -31,13 +55,21 @@ export default function VideoPlayerPage({ params }: { params: { id: string } }) 
       {/* Full-Width Auto-Sizing Video Container */}
       <div className="w-full bg-black shadow-2xl">
         <div className="relative aspect-video w-full max-w-7xl mx-auto bg-slate-900">
-          <iframe
-            className="absolute inset-0 h-full w-full border-0 object-cover"
-            src={`https://www.youtube.com/embed/${decodedId}?autoplay=1&mute=1&playsinline=1&enablejsapi=1`}
-            title="YouTube Video Player"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
+          {videoId ? (
+            <iframe
+              className="absolute inset-0 h-full w-full border-0 object-cover"
+              src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(
+                origin || ""
+              )}`}
+              title="YouTube Video Player"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-slate-900 text-center text-sm text-slate-400">
+              Invalid video ID. Please check the link and try again.
+            </div>
+          )}
         </div>
       </div>
 
@@ -56,7 +88,7 @@ export default function VideoPlayerPage({ params }: { params: { id: string } }) 
 
         {/* Title & Metadata Header */}
         <div className="space-y-2">
-          <span className="text-xl sm:text-3xl font-extrabold text-white tracking-tight break-words">
+          <span className="text-xl sm:text-3xl font-extrabold text-white tracking-tight">
             Video Playback Experience
           </span>
 
@@ -65,7 +97,7 @@ export default function VideoPlayerPage({ params }: { params: { id: string } }) 
             <span>•</span>
             <span>High Definition</span>
             <span>•</span>
-            <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-slate-200 truncate max-w-[200px] sm:max-w-none">
+            <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-slate-200 truncate max-w-50 sm:max-w-none">
               ID: {id}
             </span>
           </div>
@@ -85,7 +117,7 @@ export default function VideoPlayerPage({ params }: { params: { id: string } }) 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
           {/* Watch / Play Stream Button */}
           <a
-            href={`https://www.youtube.com/watch?v=${decodedId}`}
+            href={videoId ? `https://www.youtube.com/watch?v=${videoId}` : `https://www.youtube.com/`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#10b981] hover:bg-[#059669] px-5 py-3 text-sm font-bold text-white transition shadow-lg shadow-emerald-950/40"
@@ -137,7 +169,7 @@ export default function VideoPlayerPage({ params }: { params: { id: string } }) 
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-1">
             <div className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 p-2.5 shadow-sm">
-              <div className="h-11 w-11 shrink-0 rounded-lg bg-gradient-to-br from-indigo-500 to-rose-500 flex items-center justify-center text-white font-bold text-sm">
+              <div className="h-11 w-11 shrink-0 rounded-lg bg-linear-to-br from-indigo-500 to-rose-500 flex items-center justify-center text-white font-bold text-sm">
                 NS
               </div>
               <div className="min-w-0 flex-1">
@@ -147,7 +179,7 @@ export default function VideoPlayerPage({ params }: { params: { id: string } }) 
             </div>
 
             <div className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 p-2.5 shadow-sm">
-              <div className="h-11 w-11 shrink-0 rounded-lg bg-gradient-to-br from-purple-600 to-indigo-700 flex items-center justify-center text-white font-bold text-sm">
+              <div className="h-11 w-11 shrink-0 rounded-lg bg-linear-to-br from-purple-600 to-indigo-700 flex items-center justify-center text-white font-bold text-sm">
                 YT
               </div>
               <div className="min-w-0 flex-1">

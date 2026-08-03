@@ -17,6 +17,9 @@
   /* Card content */
   --color-mrow: #00072d;
 
+   --color-Audicard: #6a5ae7;
+   --color-Audicard1: #263b65;
+
 }
 .dark{
     --color-backnav:#00072d;
@@ -33,6 +36,9 @@
 
     /* Card content */
     --color-mrow: #B9D9EB;
+
+    --color-Audicard: #250075;
+    --color-Audicard1: #00072d;
 }
 
 body {

@@ -32,14 +32,15 @@ const TrendingCard: React.FC<TrendingCardProps> = ({ artist, isTop }) => {
   }
 
   return (
-    <div className="relative flex flex-col items-center gap-1 w-full max-w-[120px] mx-auto shrink-0 text-center">
+    <div className="relative flex flex-col items-center gap-1.5 w-24 sm:w-28 shrink-0 text-center">
       {isTop && (
-        <div className="absolute -top-2 left-1 bg-amber-400 text-black text-[10px] px-2 py-0.5 rounded-full font-semibold shadow">
+        <div className="absolute -top-1 left-1 z-10 bg-amber-400 text-black text-[10px] px-2 py-0.5 rounded-full font-semibold shadow">
           Top Artist
         </div>
       )}
+
       {/* Circular Avatar */}
-      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border border-white/10 shadow-lg hover:scale-105 transition-transform duration-300 bg-zinc-800">
+      <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full overflow-hidden border border-white/10 shadow-lg hover:scale-105 transition-transform duration-300 bg-zinc-800 shrink-0">
         {artist.avatarUrl ? (
           <img
             src={normalizeImageUrl(artist.avatarUrl)}
@@ -47,20 +48,23 @@ const TrendingCard: React.FC<TrendingCardProps> = ({ artist, isTop }) => {
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-zinc-400 text-2xl font-semibold">
+          <div className="w-full h-full flex items-center justify-center text-zinc-400 text-xl sm:text-2xl font-semibold">
             {artist.name?.[0]?.toUpperCase() || '?'}
           </div>
         )}
       </div>
 
       {/* Artist Name */}
-      <span className="text-white font-medium text-sm sm:text-base truncate w-full">
+      <span className="text-primary font-medium text-xs sm:text-base truncate w-full px-1">
         {artist.name || 'Unknown Artist'}
       </span>
 
       {/* Downloads count */}
       {typeof artist.downloads === 'number' && (
-        <p className="text-zinc-400 text-xs w-full">{artist.downloads.toLocaleString()} downloads</p>
+        <p
+          className="text-secondary text-[11px] sm:text-xs w-full truncate">
+          {artist.downloads.toLocaleString()} downloads
+        </p>
       )}
     </div>
   );

@@ -4,7 +4,8 @@ import { useEffect, useState, useRef } from 'react';
 import {
   Heart,
   Download,
-  Music,
+  Play,
+  Pause,
 } from 'lucide-react';
 
 export interface FeaturedAudioTrack {
@@ -56,12 +57,14 @@ export default function FeaturedAudioCards() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isHovered, setIsHovered] = useState(false);
 
   // Like management states
   const [likedTracks, setLikedTracks] = useState<Record<string, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const sliderRef = useRef<HTMLDivElement | null>(null);
 
   const exampleTracks: FeaturedAudioTrack[] = [
     {
@@ -69,7 +72,7 @@ export default function FeaturedAudioCards() {
       title: 'Echoes of Midnight',
       artist: 'Michael John, 1978 Mvc studio',
       fileUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-          coverUrl: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?q=80&w=300&auto=format&fit=crop',
+      coverUrl: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?q=80&w=300&auto=format&fit=crop',
       likesCount: 12,
     },
     {
@@ -100,7 +103,6 @@ export default function FeaturedAudioCards() {
 
           setTracks(loadedTracks);
 
-          // Initialize initial counts from track metadata
           const initialCounts: Record<string, number> = {};
           loadedTracks.forEach((t) => {
             initialCounts[t.id] = t.likesCount || 0;
@@ -151,6 +153,28 @@ export default function FeaturedAudioCards() {
     };
   }, [activeTrackId]);
 
+  // Auto-slide effect every 5 seconds
+  useEffect(() => {
+    if (tracks.length <= 1 || isHovered) return;
+
+    const interval = setInterval(() => {
+      const container = sliderRef.current;
+      if (!container) return;
+
+      const nextIndex = (currentIndex + 1) % tracks.length;
+      const cardWidth = container.firstElementChild?.clientWidth || container.clientWidth;
+
+      container.scrollTo({
+        left: nextIndex * cardWidth,
+        behavior: 'smooth',
+      });
+
+      setCurrentIndex(nextIndex);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [currentIndex, tracks.length, isHovered]);
+
   // Play / Pause Toggle Trigger
   const handleTogglePlay = (track: FeaturedAudioTrack) => {
     if (activeTrackId === track.id) {
@@ -176,7 +200,7 @@ export default function FeaturedAudioCards() {
     }
   };
 
-  // Seek audio position by clicking on the waveform bar
+  // Seek audio position
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!audioRef.current || duration === 0) return;
@@ -192,7 +216,7 @@ export default function FeaturedAudioCards() {
 
   // Handle Like Toggle
   const handleLikeToggle = (e: React.MouseEvent, trackId: string) => {
-    e.stopPropagation(); // Stop card click from triggering play/pause
+    e.stopPropagation();
 
     setLikedTracks((prevLiked) => {
       const isCurrentlyLiked = !!prevLiked[trackId];
@@ -237,8 +261,13 @@ export default function FeaturedAudioCards() {
         </span>
       </div>
 
-      {/* Cards Slider */}
+      {/* Cards Slider Container */}
       <div
+        ref={sliderRef}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onTouchStart={() => setIsHovered(true)}
+        onTouchEnd={() => setIsHovered(false)}
         className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-1"
         onScroll={(event) => {
           const cardWidth =
@@ -252,6 +281,7 @@ export default function FeaturedAudioCards() {
         <div className="flex gap-6">
           {tracks.map((track) => {
             const isSelected = activeTrackId === track.id;
+            const isCurrentlyPlaying = isSelected && isPlaying;
             const progressRatio = isSelected && duration > 0 ? currentTime / duration : 0;
 
             return (
@@ -260,22 +290,44 @@ export default function FeaturedAudioCards() {
                 onClick={() => handleTogglePlay(track)}
                 className={`w-full shrink-0 snap-center sm:w-87.5 border rounded-3xl p-6 shadow-xl flex flex-col gap-5 cursor-pointer transition-all duration-300 ${
                   isSelected
-                    ? 'bg-[#151c65] border-amber-400/50 shadow-amber-500/10'
-                    : 'bg-[#1a237e] border-white/10 hover:border-white/20'
+                    ? 'bg-Audicard border-amber-400/50 shadow-amber-500/10'
+                    : 'bg-Audicard1 border-white/10 hover:border-white/20'
                 }`}
               >
-                {/* Header Section: Cover Image, Title, Artist */}
+                {/* Header Section */}
                 <div className="flex items-center gap-4">
-                  {/* Thumbnail Image */}
-                  <div className="w-16 h-16 rounded-full bg-zinc-800 overflow-hidden shrink-0 border-2 border-white/20 shadow-md">
+                  <button
+                    type="button"
+                    aria-label={isCurrentlyPlaying ? "Pause track" : "Play track"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTogglePlay(track);
+                    }}
+                    className="relative group/btn w-16 h-16 rounded-full bg-zinc-800 overflow-hidden shrink-0 border-2 border-white/20 shadow-md focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  >
                     <img
                       src={normalizeImageUrl(track.coverUrl) || placeholderCoverDataUrl(track.title)}
                       alt={track.title}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover/btn:scale-110"
                     />
-                  </div>
 
-                  {/* Track Info */}
+                    <div
+                      className={`absolute inset-0 flex items-center justify-center transition-all duration-200 ${
+                        isCurrentlyPlaying
+                          ? 'bg-black/50 opacity-100'
+                          : 'bg-black/40 opacity-0 group-hover/btn:opacity-100'
+                      }`}
+                    >
+                      <div className="p-2 rounded-full bg-amber-400 text-slate-950 shadow-md">
+                        {isCurrentlyPlaying ? (
+                          <Pause className="w-4 h-4 fill-current" />
+                        ) : (
+                          <Play className="w-4 h-4 fill-current ml-0.5" />
+                        )}
+                      </div>
+                    </div>
+                  </button>
+
                   <div className="flex-1 min-w-0">
                     <h3 className="text-white font-semibold text-lg truncate w-full">
                       {track.title || 'Untitled Track'}
@@ -350,7 +402,6 @@ export default function FeaturedAudioCards() {
             );
           })}
         </div>
-
       </div>
     </div>
   );

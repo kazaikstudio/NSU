@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { AlertCircle, ArrowLeft, CheckCircle2, Clock3, Download } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Download, Trash2, Inbox, Sparkles } from 'lucide-react';
+import DownloadRow, { DownloadEntry } from '../../../components/DownloadRow';
 
 interface DownloadNotice {
   status: 'downloading' | 'done' | 'error';
@@ -11,20 +10,9 @@ interface DownloadNotice {
   progress?: number;
 }
 
-interface DownloadEntry {
-  id: string;
-  title: string;
-  status: 'downloading' | 'done' | 'error';
-  progress?: number;
-  paused?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export default function DownloadsPage() {
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
   const [downloadNotice, setDownloadNotice] = useState<DownloadNotice | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -105,154 +93,123 @@ export default function DownloadsPage() {
   };
 
   return (
-    <main className="min-h-screen px-3 pb-20 pt-16 text-primary sm:px-6 sm:pb-24 sm:pt-24">
-      <div className="mx-auto flex max-w-4xl flex-col gap-4 sm:gap-6">
-        {/* Top Bar Navigation */}
-        <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="inline-flex items-center gap-1.5 rounded-full border border-card1/20 bg-cardcl/80 px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-semibold text-primary transition hover:border-amber-400/40 hover:text-amber-300"
-          >
-            <ArrowLeft size={16} />
-            Back
-          </button>
-          <Link
-            href="/"
-            className="text-xs sm:text-sm font-semibold text-amber-300 transition hover:text-amber-200"
-          >
-            Go home
-          </Link>
-        </div>
+    <main className="min-h-screen px-1 mt-2 text-slate-100 sm:px-6 sm:pb-24 sm:pt-20">
+      <div className="mx-auto flex max-w-4xl flex-col gap-6">
 
-        {/* Main Section */}
-        <section className="rounded-2xl sm:rounded-3xl border border-card1/20 bg-slate-600 p-4 sm:p-8 shadow-2xl shadow-black/30">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl border border-amber-400/30 bg-amber-400/10 text-amber-300">
-              <Download size={20} className="sm:hidden" />
-              <Download size={22} className="hidden sm:block" />
+        {/* Main Glass Section */}
+        <section className="relative overflow-hidden rounded-3xl border border-slate-800/80 bg-slate-900/60 p-5 backdrop-blur-xl shadow-2xl shadow-black/50 sm:p-8">
+
+          {/* Subtle Background Glow Accent */}
+          <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-rose-500/10 blur-3xl" />
+
+          {/* Header */}
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/10 text-amber-400 shadow-inner sm:h-13 sm:w-13">
+                <Download size={22} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-amber-400">
+                  <Sparkles size={12} />
+                  <span>Downloads</span>
+                </div>
+                <span className="truncate text-xl font-extrabold tracking-tight text-white sm:text-3xl">
+                  Download History
+                </span>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-sm font-semibold uppercase tracking-[0.15em] sm:tracking-[0.2em] text-amber-300">
-                Downloads
-              </p>
-              <h1 className="truncate text-xl font-bold text-primary sm:text-3xl">
-                Your download history
-              </h1>
-            </div>
+
+            {downloadEntries.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearHistory}
+                className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition-all hover:border-rose-500/40 hover:bg-rose-500/20 hover:text-rose-200"
+              >
+                <Trash2 size={14} />
+                <span className="hidden sm:inline">Clear history</span>
+              </button>
+            )}
           </div>
 
           {/* Download Notice Banner */}
-          {downloadNotice ? (
-            <div className="mt-4 sm:mt-6 rounded-xl sm:rounded-2xl border border-amber-400/20 bg-amber-400/10 px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-amber-200">
-              {downloadNotice.status === 'downloading'
-                ? `Downloading ${downloadNotice.title}`
-                : downloadNotice.status === 'done'
+          {downloadNotice && (
+            <div className="mt-5 flex items-center gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200 backdrop-blur-md sm:text-sm">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
+              </span>
+              <span>
+                {downloadNotice.status === 'downloading'
+                  ? `Downloading ${downloadNotice.title}`
+                  : downloadNotice.status === 'done'
                   ? `Downloaded ${downloadNotice.title}`
                   : 'Download failed'}
+              </span>
             </div>
-          ) : null}
+          )}
 
-          {/* Download Entries List */}
+          {/* Empty State */}
           {downloadEntries.length === 0 ? (
-            <div className="mt-6 sm:mt-8 rounded-xl sm:rounded-2xl border border-dashed border-card1/20 px-4 py-6 sm:px-5 sm:py-8 text-center text-xs sm:text-sm text-secondry">
-              No downloads have been started yet.
+            <div className="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-950/30 px-6 py-12 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-800/50 text-slate-500">
+                <Inbox size={24} />
+              </div>
+              <p className="text-sm font-medium text-slate-400">No downloads yet</p>
+              <p className="mt-1 text-xs text-slate-500">Your downloaded files will appear here.</p>
             </div>
           ) : (
-            <div className="mt-6 sm:mt-8 space-y-4 sm:space-y-5">
-              <div className="flex items-center justify-end">
-                <button
-                  type="button"
-                  onClick={handleClearHistory}
-                  className="rounded-full border border-rose-400/20 bg-rose-400/10 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.15em] sm:tracking-[0.2em] text-rose-200 transition hover:bg-rose-400/20"
-                >
-                  Clear history
-                </button>
-              </div>
+            <div className="mt-8 space-y-6">
 
               {/* Active Downloads Section */}
-              {activeDownloads.length > 0 ? (
-                <div>
-                  <div className="mb-2.5 sm:mb-3 flex items-center justify-between gap-2">
-                    <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.15em] sm:tracking-[0.2em] text-amber-300">
-                      Active downloads
-                    </p>
-                    <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
-                      {activeDownloads.length} / {downloadEntries.length}
+              {activeDownloads.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                      Active Downloads
+                    </h2>
+                    <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
+                      {activeDownloads.length} active
                     </span>
                   </div>
 
-                  <div className="space-y-2">
-                    {activeDownloads.map((entry, index) => {
-                      const progressValue = typeof entry.progress === 'number' ? Math.max(0, Math.min(100, entry.progress)) : undefined;
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                        Active Downloads
+                      </h2>
+                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
+                        {activeDownloads.length} active
+                      </span>
+                    </div>
 
-                      return (
-                        <div key={entry.id} className="rounded-xl sm:rounded-2xl border border-amber-400/20 bg-amber-400/10 px-3.5 py-3 sm:px-4 sm:py-3">
-                          <div className="flex items-start justify-between gap-2 sm:gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 sm:gap-2">
-                                <Download size={14} className="shrink-0 text-amber-300" />
-                                <p className="truncate text-xs sm:text-sm font-semibold text-white">{entry.title}</p>
-                              </div>
-
-                              <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-medium text-amber-100">
-                                <span>#{index + 1}</span>
-                                <span>
-                                  {typeof progressValue === 'number' ? `${Math.round(progressValue)}%` : 'Preparing...'}
-                                </span>
-                              </div>
-
-                              <div className="mt-1.5 space-y-1">
-                                <div className="h-1.5 overflow-hidden rounded-full bg-amber-400/20">
-                                  <div
-                                    className="h-full rounded-full bg-amber-300 transition-[width] duration-200"
-                                    style={{ width: `${progressValue ?? 8}%` }}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => handleTogglePause(entry)}
-                              className="shrink-0 rounded-full border border-amber-300/30 bg-cardcl/70 px-2 py-1 sm:px-2.5 text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider text-amber-200 transition hover:bg-cardcl"
-                            >
-                              {entry.paused ? 'Resume' : 'Pause'}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div className="space-y-3">
+                      {activeDownloads.map((entry, index) => (
+                        <DownloadRow
+                          key={entry.id}
+                          entry={entry}
+                          index={index}
+                          onTogglePause={handleTogglePause}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
-              ) : null}
+              )}
 
               {/* Recent Downloads Section */}
-              {previousDownloads.length > 0 ? (
-                <div>
-                  <p className="mb-2.5 sm:mb-3 text-[11px] sm:text-xs font-semibold uppercase tracking-[0.15em] sm:tracking-[0.2em] text-secondry">
-                    Recent
-                  </p>
+              {previousDownloads.length > 0 && (
+                <div className="space-y-3">
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Recent Activity
+                  </h2>
                   <div className="space-y-2">
                     {previousDownloads.map((entry) => (
-                      <div key={entry.id} className="flex items-center gap-2.5 sm:gap-3 rounded-xl sm:rounded-2xl border border-card1/20 bg-cardcl/70 px-3.5 py-2.5 sm:px-4 sm:py-3">
-                        {entry.status === 'done' ? (
-                          <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
-                        ) : (
-                          <AlertCircle size={16} className="shrink-0 text-rose-400" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs sm:text-sm font-semibold text-primary">{entry.title}</p>
-                          <p className="mt-0.5 flex items-center gap-1 text-[10px] sm:text-xs text-secondry">
-                            <Clock3 size={11} />
-                            {entry.status === 'done' ? 'Saved' : 'Failed'}
-                          </p>
-                        </div>
-                      </div>
+                      <DownloadRow key={entry.id} entry={entry} />
                     ))}
                   </div>
                 </div>
-              ) : null}
+              )}
             </div>
           )}
         </section>

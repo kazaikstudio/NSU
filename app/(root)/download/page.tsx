@@ -136,22 +136,22 @@ function DownloadForm() {
   }
 
   return (
-    <main className="min-h-screen px-4 pb-32 pt-24 text-primary">
+    <main className="min-h-screen pt-2 text-primary">
           <Switchbutton />
 
-          <section className="mx-auto max-w-3xl">
+          <section className="mx-auto max-w-5xl px-1">
             <div className="rounded-3xl border border-card1/20 bg-linear-to-br from-cardcl via-cardcl to-rose-950/30 p-6 shadow-2xl shadow-black/30 sm:p-10">
-              <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-400">
-                <Download size={28} aria-hidden="true" />
+              <div className="mb-8 flex h-[clamp(2.75rem,8vw,3.5rem)] w-[clamp(2.75rem,8vw,3.5rem)] items-center justify-center rounded-[clamp(0.75rem,2vw,1rem)] border border-rose-500/30 bg-rose-500/10 text-rose-400">
+                <Download className="h-[50%] w-[50%]" aria-hidden="true" />
               </div>
 
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-rose-400">Noll Studio Downloads</p>
-              <h1 className="mt-3 text-3xl font-bold text-primary sm:text-5xl">Download your media</h1>
-              <p className="mt-4 max-w-xl text-sm leading-6 text-secondry sm:text-base">
+              <span className="mt-3 text-2xl font-bold text-primary sm:text-5xl">Download your media</span>
+              <p className="mt-4 w-full max-w-xl text-balance text-xs leading-relaxed text-secondry sm:text-sm md:text-base">
                 Paste a YouTube video link or ID to see the formats YouTube makes available.
               </p>
 
-              <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+              <form onSubmit={handleSubmit} className="mt-4 space-y-6">
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-primary">YouTube video</span>
                   <span className="flex items-center gap-3 rounded-xl border border-card1/20 bg-cardcl/80 px-4 transition focus-within:border-rose-500">

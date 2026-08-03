@@ -305,15 +305,15 @@ const Navbar = () => {
       {isOpen && (
         <div
           id="mobile-menu"
-          className="absolute top-full left-4 right-4 mt-2 rounded-2xl border border-zinc-800 bg-zinc-900/95 p-3 shadow-2xl backdrop-blur-xl md:hidden space-y-1 z-50"
+          className="absolute top-full left-4 right-4 mt-2 rounded-2xl border border-zinc-800 bg-backnav p-3 shadow-2xl backdrop-blur-xl md:hidden space-y-1 z-50"
         >
           <Link
             href="/"
             onClick={() => setIsOpen(false)}
             className={`block px-4 py-3 rounded-xl text-base font-medium transition-colors ${
               pathname === '/'
-                ? 'text-amber-400 bg-amber-500/10 font-semibold'
-                : 'text-zinc-200 hover:text-amber-400 hover:bg-zinc-800/80'
+                ? 'text-navlink bg-amber-500/10 font-semibold'
+                : 'text-primary hover:text-amber-400 hover:bg-zinc-800/80'
             }`}
           >
             Home
@@ -323,8 +323,8 @@ const Navbar = () => {
             onClick={() => setIsOpen(false)}
             className={`block px-4 py-3 rounded-xl text-base font-medium transition-colors ${
               pathname === '/Feature'
-                ? 'text-amber-400 bg-amber-500/10 font-semibold'
-                : 'text-zinc-200 hover:text-amber-400 hover:bg-zinc-800/80'
+                ? 'text-navlink bg-amber-500/10 font-semibold'
+                : 'text-primary hover:text-amber-400 hover:bg-zinc-800/80'
             }`}
           >
             Features
@@ -334,8 +334,8 @@ const Navbar = () => {
             onClick={() => setIsOpen(false)}
             className={`block px-4 py-3 rounded-xl text-base font-medium transition-colors ${
               pathname === '/about'
-                ? 'text-amber-400 bg-amber-500/10 font-semibold'
-                : 'text-zinc-200 hover:text-amber-400 hover:bg-zinc-800/80'
+                ? 'text-navlink bg-amber-500/10 font-semibold'
+                : 'text-primary hover:text-amber-400 hover:bg-zinc-800/80'
             }`}
           >
             About NSU

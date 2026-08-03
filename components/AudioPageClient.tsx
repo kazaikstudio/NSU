@@ -247,13 +247,17 @@ export default function AudioPageClient() {
         </span>
       </p>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
+      <div className="mt-4 flex gap-3 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none [-ms-overflow-style:none][&::-webkit-scrollbar]:hidden">
         {topArtists.length > 0 ? (
           topArtists.map((artist, index) => (
-            <TrendingCard key={artist.id} artist={artist} isTop={index === 0} />
+            <div key={artist.id} className="snap-start shrink-0">
+              <TrendingCard artist={artist} isTop={index === 0} />
+            </div>
           ))
         ) : (
-          <TrendingCard />
+          <div className="snap-start shrink-0">
+            <TrendingCard />
+          </div>
         )}
       </div>
 
