@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
 import { Search, Mic, MicOff } from 'lucide-react';
 import Switchbutton from './Switchbutton';
 
@@ -252,9 +251,7 @@ export default function AudioPageClient() {
         {topArtists.length > 0 ? (
           topArtists.map((artist, index) => (
             <div key={artist.id} className="snap-start shrink-0">
-              <Link href={`/artist/${encodeURIComponent(artist.id)}`} className="block">
-                <TrendingCard artist={artist} isTop={index === 0} />
-              </Link>
+              <TrendingCard artist={artist} isTop={index === 0} />
             </div>
           ))
         ) : (

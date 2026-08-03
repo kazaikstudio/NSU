@@ -130,7 +130,7 @@ function DownloadForm() {
         }
       }
 
-      const blob = new Blob(chunks)
+      const blob = new Blob(chunks as BlobPart[])
       const anchor = document.createElement('a')
       anchor.href = URL.createObjectURL(blob)
       anchor.download = filename

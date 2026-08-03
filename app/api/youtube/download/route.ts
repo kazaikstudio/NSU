@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { spawn } from "node:child_process";
+import { ensureDownloadStoragePath, teeStreamToFile } from "@/lib/download-storage";
 
 export const maxDuration = 60; // Extend serverless limit
 export const dynamic = "force-dynamic";
@@ -88,6 +89,9 @@ export async function GET(req: Request) {
     const mimeType = output === "mp3" ? "audio/mpeg" : output === "wav" ? "audio/wav" : output === "m4a" ? "audio/mp4" : selectedFormat?.mime_type?.split(';')[0] || "video/mp4";
     const encodedFilename = encodeURIComponent(`${safeTitle}.${extension}`);
     const fallbackFilename = output === "mp3" ? "audio.mp3" : output === "wav" ? "audio.wav" : output === "m4a" ? "audio.m4a" : "video.mp4";
+    const downloadCategory = audioOutput ? "audio" : "video";
+    const downloadFilename = `${safeTitle}.${extension}`;
+    const downloadPath = await ensureDownloadStoragePath(downloadFilename, downloadCategory);
 
     if (audioOutput) {
       const executable = getFfmpegPath();
@@ -101,7 +105,8 @@ export async function GET(req: Request) {
       const converter = spawn(executable, ["-loglevel", "error", "-i", "pipe:0", "-vn", ...codecArgs, "pipe:1"], { stdio: ["pipe", "pipe", "pipe"] });
       converter.once("error", (error) => console.error("FFmpeg audio conversion failed:", error));
       input.pipe(converter.stdin);
-      const response = new Response(Readable.toWeb(converter.stdout) as unknown as ReadableStream<Uint8Array>, {
+      const outputStream = teeStreamToFile(converter.stdout, downloadPath);
+      const response = new Response(Readable.toWeb(outputStream as unknown as Readable) as unknown as BodyInit, {
         status: 200,
         headers: {
           "Content-Type": mimeType,
@@ -131,7 +136,8 @@ export async function GET(req: Request) {
       videoInput.pipe(merger.stdio[3] as NodeJS.WritableStream);
       audioInput.pipe(merger.stdio[4] as NodeJS.WritableStream);
 
-      const response = new Response(Readable.toWeb(merger.stdout!) as unknown as ReadableStream<Uint8Array>, {
+      const outputStream = teeStreamToFile(merger.stdout!, downloadPath);
+      const response = new Response(Readable.toWeb(outputStream as unknown as Readable) as unknown as BodyInit, {
         status: 200,
         headers: {
           "Content-Type": "video/mp4",
@@ -142,7 +148,8 @@ export async function GET(req: Request) {
       return withCors(response, req);
     }
 
-    const response = new Response(stream, {
+    const outputStream = teeStreamToFile(stream as unknown as Readable, downloadPath);
+    const response = new Response(Readable.toWeb(outputStream as unknown as Readable) as unknown as BodyInit, {
       status: 200,
       headers: {
         "Content-Type": mimeType,
