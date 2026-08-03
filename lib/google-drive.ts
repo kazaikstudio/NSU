@@ -42,16 +42,20 @@ async function fetchGoogle(input: string, init: RequestInit) {
 }
 
 function getGoogleConfig() {
-  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  const clientId = (process.env.GOOGLE_CLIENT_ID || process.env.CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID)?.trim();
+  const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || process.env.CLIENT_SECRET)?.trim();
   const refreshToken = [
     process.env.GOOGLE_REFRESH_TOKEN,
     process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
     process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
-  ].map((value) => value?.trim()).find(Boolean);
+    process.env.REFRESH_TOKEN,
+    process.env.CLIENT_REFRESH_TOKEN,
+  ]
+    .map((value) => value?.trim().replace(/^['"]|['"]$/g, ''))
+    .find(Boolean);
 
   if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('Google Drive is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN on the server.');
+    throw new Error('Google Drive is not configured. Set GOOGLE_CLIENT_ID/CLIENT_ID, GOOGLE_CLIENT_SECRET/CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN/REFRESH_TOKEN on the server.');
   }
 
   if (/your_|example|placeholder/i.test(`${clientId} ${clientSecret} ${refreshToken}`)) {
