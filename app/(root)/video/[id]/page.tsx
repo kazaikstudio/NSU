@@ -58,7 +58,7 @@ export default function VideoPlayerPage({ params }: { params: Promise<{ id: stri
           {videoId ? (
             <iframe
               className="absolute inset-0 h-full w-full border-0 object-cover"
-              src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(
+              src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(
                 origin || ""
               )}`}
               title="YouTube Video Player"

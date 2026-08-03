@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
-
+import { X } from "lucide-react";import { getDownloadPath, inferDownloadCategoryFromFilename } from '@/lib/download'
 type DownloadFormat = {
   itag: number;
   label: string;
@@ -215,7 +214,7 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
       const blobUrl = URL.createObjectURL(new Blob(blobParts, { type: format.mimeType }));
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = filename;
+      link.download = getDownloadPath(filename, inferDownloadCategoryFromFilename(filename));
       document.body.appendChild(link);
       link.click();
       link.remove();

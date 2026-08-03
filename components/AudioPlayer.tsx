@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useId } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
+import { getDownloadPath } from '@/lib/download';
 
 interface DownloadNoticePayload {
   status: 'downloading' | 'done' | 'error';
@@ -200,7 +201,7 @@ export default function AudioPlayer({
       const blobUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = blobUrl;
-      anchor.download = fileName || `${title}.mp3`;
+      anchor.download = getDownloadPath(fileName || `${title}.mp3`, 'audio');
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
