@@ -37,7 +37,7 @@ export default function Player({ videoId, onClose }: PlayerProps) {
 
         <iframe
           className="w-full h-full border-0"
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&origin=${origin}`}
+          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&enablejsapi=1&origin=${origin}`}
           title="YouTube Video Player"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen

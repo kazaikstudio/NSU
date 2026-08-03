@@ -33,7 +33,7 @@ export default function VideoPlayerPage({ params }: { params: { id: string } }) 
         <div className="relative aspect-video w-full max-w-7xl mx-auto bg-slate-900">
           <iframe
             className="absolute inset-0 h-full w-full border-0 object-cover"
-            src={`https://www.youtube.com/embed/${decodedId}?autoplay=1&enablejsapi=1`}
+            src={`https://www.youtube.com/embed/${decodedId}?autoplay=1&mute=1&playsinline=1&enablejsapi=1`}
             title="YouTube Video Player"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen

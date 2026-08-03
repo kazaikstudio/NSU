@@ -44,7 +44,11 @@ async function fetchGoogle(input: string, init: RequestInit) {
 function getGoogleConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN?.trim();
+  const refreshToken = [
+    process.env.GOOGLE_REFRESH_TOKEN,
+    process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
+    process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
+  ].map((value) => value?.trim()).find(Boolean);
 
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error('Google Drive is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN on the server.');
@@ -114,17 +118,21 @@ async function getAccessToken() {
 export async function uploadToGoogleDrive(upload: DriveUpload) {
   const accessToken = await getAccessToken();
   const boundary = `noll-drive-${Date.now()}`;
-  const metadata = JSON.stringify({ name: upload.name });
+  const metadata = JSON.stringify({
+    name: upload.name,
+    mimeType: upload.mimeType,
+  });
   const encoder = new TextEncoder();
   const prefix = encoder.encode(
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
-    `--${boundary}\r\nContent-Type: ${upload.mimeType}\r\n\r\n`
+    `--${boundary}\r\nContent-Type: ${upload.mimeType || 'application/octet-stream'}\r\n\r\n`
   );
   const suffix = encoder.encode(`\r\n--${boundary}--\r\n`);
-  const body = new Uint8Array(prefix.byteLength + upload.bytes.byteLength + suffix.byteLength);
+  const buffer = new Uint8Array(upload.bytes);
+  const body = new Uint8Array(prefix.byteLength + buffer.byteLength + suffix.byteLength);
   body.set(prefix, 0);
-  body.set(new Uint8Array(upload.bytes), prefix.byteLength);
-  body.set(suffix, prefix.byteLength + upload.bytes.byteLength);
+  body.set(buffer, prefix.byteLength);
+  body.set(suffix, prefix.byteLength + buffer.byteLength);
 
   const response = await fetchGoogle(
     'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink,webContentLink,thumbnailLink',
@@ -137,9 +145,10 @@ export async function uploadToGoogleDrive(upload: DriveUpload) {
       body,
     }
   );
-  const file = (await response.json()) as DriveFile & { error?: { message?: string } };
+  const file = (await response.json()) as DriveFile & { error?: { message?: string; errors?: Array<{ message?: string }> } };
   if (!response.ok || !file.id) {
-    throw new Error(file.error?.message || 'Unable to upload file to Google Drive');
+    const detail = file.error?.errors?.[0]?.message || file.error?.message;
+    throw new Error(detail || 'Unable to upload file to Google Drive');
   }
 
   const permissionResponse = await fetchGoogle(`https://www.googleapis.com/drive/v3/files/${file.id}/permissions`, {
@@ -148,7 +157,7 @@ export async function uploadToGoogleDrive(upload: DriveUpload) {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+    body: JSON.stringify({ role: 'reader', type: 'anyone', allowFileDiscovery: false }),
   });
 
   if (!permissionResponse.ok) {
