@@ -193,8 +193,19 @@ export async function getGoogleDriveStorageUsage(): Promise<DriveStorageUsage> {
     storageQuota?: { usage?: string; limit?: string; usageInDrive?: string; usageInDriveTrash?: string };
   };
 
-  if (!response.ok || !data.storageQuota) {
-    throw new Error('Unable to read Google Drive storage usage');
+  if (!response.ok) {
+    const apiError = (data as any)?.error;
+    if (response.status === 401) {
+      throw new Error(apiError?.message || 'Unauthorized: Google Drive access denied. Check OAuth credentials and refresh token.');
+    }
+    if (response.status === 403) {
+      throw new Error(apiError?.message || 'Forbidden: Google Drive API refused the request. Ensure the refresh token has Drive scopes.');
+    }
+    throw new Error(apiError?.message || 'Unable to read Google Drive storage usage');
+  }
+
+  if (!data.storageQuota) {
+    throw new Error('Google Drive did not return storage information');
   }
 
   return {
