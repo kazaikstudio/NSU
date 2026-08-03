@@ -10,28 +10,16 @@ async function fetchGoogleDriveFile(id: string, range?: string) {
     ...(range ? { Range: range } : {}),
   };
 
-  const tryFetch = async (url: string) => fetch(url, { headers, redirect: 'manual' as RequestRedirect });
-
-  let response = await tryFetch(baseUrl);
-  let redirectCount = 0;
-
-  while (redirectCount < 5) {
-    const location = response.headers.get('location');
-    if (response.status < 300 || response.status >= 400 || !location) break;
-
-    response = await tryFetch(new URL(location, 'https://drive.google.com').toString());
-    redirectCount += 1;
-  }
+  const response = await fetch(baseUrl, { headers, redirect: 'follow' });
 
   if (response.status === 200 && response.headers.get('content-type')?.includes('text/html')) {
     const bodyText = await response.text();
     const confirmMatch = bodyText.match(/https?:\/\/drive\.google\.com\/uc\?export=download[^"'\s]+/i);
     const fallbackUrl = confirmMatch?.[0] ?? `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}&confirm=t`;
+    const fallbackResponse = await fetch(fallbackUrl, { headers, redirect: 'follow' });
 
-    response = await tryFetch(fallbackUrl);
-
-    if (response.status === 200 && response.headers.get('content-type')?.includes('text/html')) {
-      const fallbackBody = await response.text();
+    if (fallbackResponse.status === 200 && fallbackResponse.headers.get('content-type')?.includes('text/html')) {
+      const fallbackBody = await fallbackResponse.text();
       if (fallbackBody.includes('virus') || fallbackBody.includes('download warning')) {
         return new Response(fallbackBody, {
           status: 502,
@@ -39,6 +27,8 @@ async function fetchGoogleDriveFile(id: string, range?: string) {
         });
       }
     }
+
+    return fallbackResponse;
   }
 
   return response;

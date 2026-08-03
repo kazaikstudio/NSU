@@ -24,43 +24,49 @@ export default function DownloadRow({ entry, index, onTogglePause }: DownloadRow
 
   if (isActive) {
     return (
-      <div className="group relative overflow-hidden rounded-2xl border border-amber-500/20 bg-slate-950/40 p-4 transition-all hover:border-amber-500/40">
-        <div className="flex items-start justify-between gap-3">
+      <div className="group relative overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/40 p-4 transition-all duration-300 hover:border-amber-500/30 hover:bg-slate-950/60 shadow-lg shadow-black/20">
+        <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <Download size={15} className="shrink-0 text-amber-400 animate-pulse" />
+              <Download size={15} className={`shrink-0 text-amber-400 ${entry.paused ? '' : 'animate-pulse'}`} />
               <p className="truncate text-sm font-semibold text-slate-100">{entry.title}</p>
             </div>
 
-            <div className="mt-3 flex items-center justify-between text-xs font-medium text-amber-200/80">
-              <span>Task #{index != null ? index + 1 : 1}</span>
-              <span>{typeof progressValue === 'number' ? `${Math.round(progressValue)}%` : 'Preparing...'}</span>
+            <div className="mt-2.5 flex items-center justify-between text-xs font-medium text-amber-200/80">
+              <span className="text-[11px] font-bold tracking-wider text-slate-400">
+                TASK #{index != null ? index + 1 : 1}
+              </span>
+              <span className="font-mono text-[11px] text-amber-300">
+                {entry.paused ? 'Paused' : typeof progressValue === 'number' ? `${Math.round(progressValue)}%` : 'Preparing...'}
+              </span>
             </div>
 
-            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-800/80">
+            {/* Progress Bar */}
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800/90 p-[1px]">
               <div
-                className="h-full rounded-full bg-linear-to-r from-amber-500 to-amber-300 transition-all duration-300"
+                className={`h-full rounded-full transition-all duration-300 ${
+                  entry.paused 
+                    ? 'bg-slate-500' 
+                    : 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.5)]'
+                }`}
                 style={{ width: `${progressValue ?? 8}%` }}
               />
             </div>
           </div>
 
+          {/* Icon-Only Action Button */}
           {onTogglePause && (
             <button
               type="button"
               onClick={() => onTogglePause(entry)}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs font-medium text-amber-300 transition-all hover:bg-amber-400/20"
+              aria-label={entry.paused ? 'Resume download' : 'Pause download'}
+              title={entry.paused ? 'Resume' : 'Pause'}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-400/20 bg-amber-400/10 text-amber-300 transition-all duration-200 hover:scale-105 hover:border-amber-400/40 hover:bg-amber-400/20 hover:text-amber-200 active:scale-95"
             >
               {entry.paused ? (
-                <>
-                  <Play size={12} fill="currentColor" />
-                  <span>Resume</span>
-                </>
+                <Play size={14} fill="currentColor" className="ml-0.5" />
               ) : (
-                <>
-                  <Pause size={12} fill="currentColor" />
-                  <span>Pause</span>
-                </>
+                <Pause size={14} fill="currentColor" />
               )}
             </button>
           )}
@@ -70,20 +76,20 @@ export default function DownloadRow({ entry, index, onTogglePause }: DownloadRow
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-800/80 bg-slate-950/30 px-4 py-3 transition-colors hover:bg-slate-800/30">
+    <div className="flex items-center gap-3 rounded-2xl border border-slate-800/60 bg-slate-950/20 px-4 py-3 transition-all duration-200 hover:border-slate-700/80 hover:bg-slate-900/40">
       <div
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${
           entry.status === 'done'
-            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-            : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+            ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+            : 'border-rose-500/20 bg-rose-500/10 text-rose-400'
         }`}
       >
         {entry.status === 'done' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-slate-200">{entry.title}</p>
-        <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
-          <Clock3 size={12} />
+        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-400">
+          <Clock3 size={12} className="text-slate-500" />
           {entry.status === 'done' ? 'Completed & Saved' : 'Download Failed'}
         </p>
       </div>

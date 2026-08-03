@@ -175,12 +175,6 @@ export default function DownloadsPage() {
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h2 className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                        Active Downloads
-                      </h2>
-                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
-                        {activeDownloads.length} active
-                      </span>
                     </div>
 
                     <div className="space-y-3">
