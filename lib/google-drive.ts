@@ -119,6 +119,15 @@ async function getAccessToken() {
   return data.access_token as string;
 }
 
+export async function testDriveAuth(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await getAccessToken();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function uploadToGoogleDrive(upload: DriveUpload) {
   const accessToken = await getAccessToken();
   const boundary = `noll-drive-${Date.now()}`;

@@ -102,6 +102,7 @@ export async function POST(request: Request, context: Context) {
     }
 
     let driveFile: { id: string; publicUrl: string; name: string; mimeType: string };
+    let uploadError: string | null = null;
     try {
       driveFile = await uploadToGoogleDrive({
         name: file.name,
@@ -109,7 +110,8 @@ export async function POST(request: Request, context: Context) {
         bytes: await file.arrayBuffer(),
       });
     } catch (error) {
-      console.warn('Google Drive upload failed, falling back to local storage', error);
+      uploadError = error instanceof Error ? error.message : String(error);
+      console.warn('Google Drive upload failed, falling back to local storage', uploadError);
       driveFile = await saveFileLocally({
         name: file.name,
         mimeType: file.type || 'application/octet-stream',
@@ -154,7 +156,7 @@ export async function POST(request: Request, context: Context) {
         description: `${kind === 'track' ? 'Uploaded' : 'Replaced'} ${kind} file ${file.name} for artist ${artistId}`,
       });
 
-      return NextResponse.json({ media: rows[0] }, { status: 201 });
+      return NextResponse.json({ media: rows[0], uploadError }, { status: 201 });
     } catch (error) {
       console.warn('Unable to persist media metadata; returning local upload metadata instead', error);
       return NextResponse.json({
@@ -168,6 +170,7 @@ export async function POST(request: Request, context: Context) {
           fileUrl: driveFile.publicUrl,
           createdAt: new Date().toISOString(),
         },
+        uploadError,
       }, { status: 201 });
     }
   } catch (error) {
