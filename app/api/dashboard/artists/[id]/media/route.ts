@@ -45,6 +45,46 @@ export async function GET(_request: Request, context: Context) {
   }
 }
 
+export async function DELETE(request: Request, context: Context) {
+  const { id: artistId } = await context.params;
+  try {
+    const { searchParams } = new URL(request.url);
+    const mediaId = searchParams.get('mediaId');
+
+    if (!mediaId) {
+      return NextResponse.json({ error: 'A media id is required' }, { status: 400 });
+    }
+
+    await ensureMediaTable();
+    const { rows } = await pool.query<{ id: string; driveFileId: string | null; kind: string }>(
+      `SELECT id, kind, drive_file_id AS "driveFileId" FROM artist_media WHERE id = $1 AND artist_id = $2`,
+      [mediaId, artistId]
+    );
+
+    if (rows.length === 0) {
+      return NextResponse.json({ error: 'Media not found' }, { status: 404 });
+    }
+
+    const media = rows[0];
+    if (media.driveFileId) {
+      await Promise.allSettled([deleteFromGoogleDrive(media.driveFileId)]);
+    }
+
+    await pool.query(`DELETE FROM artist_media WHERE id = $1 AND artist_id = $2`, [mediaId, artistId]);
+
+    await recordActivity({
+      action: 'deleted',
+      entityType: 'track',
+      entityId: mediaId,
+      description: `Deleted media ${mediaId} for artist ${artistId}`,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request, context: Context) {
   const { id: artistId } = await context.params;
   try {

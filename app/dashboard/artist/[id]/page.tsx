@@ -311,10 +311,26 @@ export default function ArtistDetailPage() {
     }
   };
 
-  const handleDeleteTrack = (id: string) => {
-    setTracks((prevTracks) => prevTracks.filter((track) => track.id !== id));
-    setIsDirty(true);
-    setSaveSuccess(false);
+  const handleDeleteTrack = async (id: string) => {
+    try {
+      const response = await fetch(`/api/dashboard/artists/${params.id}/media?mediaId=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to delete track');
+      }
+
+      setTracks((prevTracks) => prevTracks.filter((track) => track.id !== id));
+      setIsDirty(true);
+      setSaveSuccess(false);
+      setProcessMessage('Track removed successfully.');
+      setTimeout(() => setProcessMessage(''), 3000);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Unable to delete track');
+      setProcessMessage('Track deletion failed.');
+      setTimeout(() => setProcessMessage(''), 3000);
+    }
   };
 
   // Save All Changes to Server

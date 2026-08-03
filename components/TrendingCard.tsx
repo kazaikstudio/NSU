@@ -32,7 +32,7 @@ const TrendingCard: React.FC<TrendingCardProps> = ({ artist, isTop }) => {
   }
 
   return (
-    <div className="mt-6 relative flex flex-col items-center gap-1 w-28 sm:w-32 shrink-0 text-center">
+    <div className="relative flex flex-col items-center gap-1 w-full max-w-[120px] mx-auto shrink-0 text-center">
       {isTop && (
         <div className="absolute -top-2 left-1 bg-amber-400 text-black text-[10px] px-2 py-0.5 rounded-full font-semibold shadow">
           Top Artist

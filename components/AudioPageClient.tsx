@@ -183,7 +183,7 @@ export default function AudioPageClient() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'music' | 'artist'>('music');
   const [dashboardArtists, setDashboardArtists] = useState<Array<any>>([]);
-  const [topArtist, setTopArtist] = useState<any | null>(null);
+  const [topArtists, setTopArtists] = useState<Array<any>>([]);
 
   const filterTracks = (query: string) => {
     setSearchTerm(query);
@@ -204,8 +204,10 @@ export default function AudioPageClient() {
         }));
         if (!cancelled) setDashboardArtists(mapped);
         if (mapped.length > 0) {
-          const top = mapped.reduce((best: any, cur: any) => (cur.downloads || 0) > (best.downloads || 0) ? cur : best, mapped[0]);
-          if (!cancelled) setTopArtist(top);
+          const ranked = [...mapped].sort((a: any, b: any) => (b.downloads || 0) - (a.downloads || 0));
+          if (!cancelled) setTopArtists(ranked.slice(0, 5));
+        } else {
+          if (!cancelled) setTopArtists([]);
         }
       } catch (err) {
         console.warn('Unable to load dashboard artists', err);
@@ -245,11 +247,15 @@ export default function AudioPageClient() {
         </span>
       </p>
 
-      {topArtist ? (
-        <TrendingCard artist={topArtist} isTop />
-      ) : (
-        <TrendingCard />
-      )}
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
+        {topArtists.length > 0 ? (
+          topArtists.map((artist, index) => (
+            <TrendingCard key={artist.id} artist={artist} isTop={index === 0} />
+          ))
+        ) : (
+          <TrendingCard />
+        )}
+      </div>
 
       <div className="flex items-center w-full mt-2 bg-cardcl/80 p-1.5 rounded-2xl border border-card1/20">
         <button
