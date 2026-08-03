@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { Search, Mic, MicOff } from 'lucide-react';
 import Switchbutton from './Switchbutton';
 
@@ -122,15 +123,15 @@ export function VoiceSearchBar({
   return (
     <div className="flex items-center gap-3 w-full max-w-xl my-4">
       {/* Search Input Box */}
-      <div className="relative flex-1">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-secondary/70 pointer-events-none transition-colors" />
+      <div className="relative w-full flex-1">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary/70 transition-colors sm:left-4 sm:h-5 sm:w-5" />
         <input
           ref={searchRef}
           type="text"
           id="trackSearchInput"
           placeholder="Search here ..."
           value={searchTerm}
-          className="w-full rounded-full border border-card1/15 bg-cardcl/60 dark:bg-cardcl/40 backdrop-blur-md pl-11 pr-4 py-3 text-primary placeholder:text-secondary/60 focus:border-navlink focus:ring-1 focus:ring-navlink focus:bg-cardcl/80 transition-all duration-300 text-sm shadow-sm hover:border-card1/25"
+          className="w-full rounded-full border border-card1/15 bg-cardcl/60 dark:bg-cardcl/40 backdrop-blur-md pl-9 pr-3 py-2 text-base sm:text-sm text-primary placeholder:text-secondary/60 focus:border-navlink focus:ring-1 focus:ring-navlink focus:bg-cardcl/80 transition-all duration-300 shadow-sm hover:border-card1/25 sm:pl-11 sm:pr-4 sm:py-2.5"
           onChange={(e) => {
             setSearchTerm(e.target.value);
             filterTracks(e.target.value);
@@ -251,7 +252,9 @@ export default function AudioPageClient() {
         {topArtists.length > 0 ? (
           topArtists.map((artist, index) => (
             <div key={artist.id} className="snap-start shrink-0">
-              <TrendingCard artist={artist} isTop={index === 0} />
+              <Link href={`/artist/${encodeURIComponent(artist.id)}`} className="block">
+                <TrendingCard artist={artist} isTop={index === 0} />
+              </Link>
             </div>
           ))
         ) : (

@@ -176,7 +176,7 @@ const Home = () => {
                     onClick={() => openPlayer(v.id)}
                     className="group relative w-full shrink-0 snap-center h-52 sm:h-52 rounded-2xl overflow-hidden cursor-pointer bg-zinc-900 border border-zinc-800/80 shadow-md transition-all duration-300 hover:border-violet-500/50 hover:shadow-xl hover:shadow-violet-950/20"
                   >
-                    <img
+                    <Image
                       src={v.thumbnail}
                       alt={v.title}
                       className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
@@ -247,6 +247,7 @@ const Home = () => {
                     src={video.thumbnail}
                     alt={video.title}
                     fill
+                    sizes="(max-width: 640px) 100vw, 160px"
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                   />
 
@@ -299,8 +300,10 @@ const Home = () => {
                     : "text-secondry hover:text-primary hover:bg-white/5"
                 }`}
               >
-                <span>🎥</span>
-                <span>Official Videos</span>
+                <span>💥</span>
+                <span>
+                  <span className="hidden sm:inline">Official </span>Videos
+                </span>
                 <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${selectedCategory === "official" ? "bg-white/20 text-white" : "bg-white/10 text-secondry"}`}>
                   {videos.filter((v) => v.type === "official").length}
                 </span>
@@ -344,6 +347,7 @@ const Home = () => {
                         src={video.thumbnail}
                         alt={video.title}
                         fill
+                        sizes="(max-width: 640px) 100vw, 80px"
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     </div>

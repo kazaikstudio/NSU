@@ -214,7 +214,7 @@ export default function AudioPlayer({
         onClick={togglePlay}
         aria-label={isPlaying ? 'Pause track' : 'Play track'}
         className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-amber-400 text-cardcl transition hover:bg-amber-300 focus:outline-none shadow-md shadow-amber-400/20 cursor-pointer"
-      >
+        >
         {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
       </button>
 
@@ -280,7 +280,12 @@ export default function AudioPlayer({
       {!isExpanded ? (
         <>
           <div className="min-w-0 flex-1">
-            <span className="truncate text-xs font-semibold text-Eltext1 sm:text-sm">{title}</span>
+            <div className="flex items-center min-w-0">
+              <span className="truncate text-xs font-semibold text-Eltext1 sm:text-sm">
+                {title}
+              </span>
+            </div>
+
           </div>
         </>
       ) : (
