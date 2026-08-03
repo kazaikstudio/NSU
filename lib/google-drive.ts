@@ -68,7 +68,7 @@ function sanitizeLocalFileName(name: string) {
 }
 
 export async function saveFileLocally(upload: DriveUpload) {
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+  const uploadDir = path.join(process.cwd(), 'uploads');
   await fs.mkdir(uploadDir, { recursive: true });
 
   const extension = path.extname(upload.name) || '';
@@ -81,7 +81,7 @@ export async function saveFileLocally(upload: DriveUpload) {
     id: fileName,
     name: upload.name,
     mimeType: upload.mimeType,
-    publicUrl: `/uploads/${fileName}`,
+    publicUrl: `/api/uploads/${fileName}`,
   };
 }
 
