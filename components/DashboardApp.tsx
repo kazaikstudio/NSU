@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LayoutDashboard, Users, History, HardDrive, LogOut, Video } from 'lucide-react';
+import { clampUploadProgress, formatUploadStatusMessage, shouldAutoUploadOnSelection } from '@/lib/talk-show-upload';
+import { updateStorageItemTitle } from '@/lib/storage-items';
 
 type NavPage = 'dashboard' | 'artists' | 'videos' | 'histories' | 'storage' | 'members';
 
@@ -49,6 +50,13 @@ interface HistoryItem {
   createdAt: string;
 }
 
+interface UploadResponsePayload {
+  item?: StorageItem;
+  error?: string;
+  message?: string;
+  uploadError?: string;
+}
+
 interface DriveStorage {
   used: number;
   limit: number | null;
@@ -71,19 +79,17 @@ function formatBytes(bytes: number) {
 export default function DashboardApp({ user }: { user?: User | null }) {
   const router = useRouter();
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [mounted, setMounted] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window === 'undefined') {
+      return true;
+    }
+
+    const savedMode = window.localStorage.getItem('nsu-theme') || window.localStorage.getItem('theme_mode');
+    return savedMode === 'dark';
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isMegaUploadOpen, setIsMegaUploadOpen] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const savedMode = window.localStorage.getItem('nsu-theme') || window.localStorage.getItem('theme_mode');
-    if (savedMode !== null) {
-      setIsDarkMode(savedMode === 'dark');
-    }
-  }, []);
 
   const [artists, setArtists] = useState<Artist[]>([]);
 
@@ -105,10 +111,14 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [driveStorage, setDriveStorage] = useState<DriveStorage | null>(null);
   const [driveStorageError, setDriveStorageError] = useState('');
+  const [driveStorageEntries, setDriveStorageEntries] = useState<Array<{ label: string; used: number; limit: number | null; usedInDrive: number; usedInTrash: number; error?: string }>>([]);
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadType, setUploadType] = useState('music');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [editingStorageItemId, setEditingStorageItemId] = useState<string | null>(null);
+  const [editingStorageTitle, setEditingStorageTitle] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadMessage, setUploadMessage] = useState('');
   const [artistMessage, setArtistMessage] = useState('');
   const [memberMessage, setMemberMessage] = useState('');
@@ -144,6 +154,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
         setStorageItems(storageData.items || []);
         setDriveStorage(storageData.driveStorage || null);
         setDriveStorageError(storageData.driveStorageError || '');
+        setDriveStorageEntries(storageData.driveStorageEntries || []);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to load dashboard data';
         setArtistMessage(message);
@@ -262,44 +273,139 @@ export default function DashboardApp({ user }: { user?: User | null }) {
     return members.filter((m) => m.category === memberCategoryFilter);
   }, [members, memberCategoryFilter]);
 
-  const handleUpload = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!uploadTitle || !uploadFile) {
+  const submitUpload = useCallback(async (fileToUpload: File | null, titleToUse = uploadTitle, typeToUse = uploadType) => {
+    if (!titleToUse.trim() || !fileToUpload) {
       setUploadMessage('Please provide a title and select a file.');
       return;
     }
 
     setUploading(true);
-    setUploadMessage('');
+    setUploadProgress(0);
+    setUploadMessage('Uploading file…');
 
     try {
-      const response = await fetch('/api/dashboard/storage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: uploadTitle,
-          type: uploadType,
-          fileUrl: megaUploadUrl,
-        }),
+      const formData = new FormData();
+      formData.append('title', titleToUse.trim());
+      formData.append('type', typeToUse);
+      formData.append('file', fileToUpload as File);
+      formData.append('source', 'talk-show');
+
+      const uploadUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/dashboard/storage` : '/api/dashboard/storage';
+
+      const response = await new Promise<{ ok: boolean; status: number; data: UploadResponsePayload; errorMessage?: string }>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', uploadUrl);
+        request.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            setUploadProgress(clampUploadProgress((event.loaded / event.total) * 100));
+          }
+        };
+        request.onload = () => {
+          try {
+            const payload = request.responseText ? (JSON.parse(request.responseText) as UploadResponsePayload) : {};
+            resolve({ ok: request.status >= 200 && request.status < 300, status: request.status, data: payload });
+          } catch {
+            resolve({ ok: false, status: request.status, data: {}, errorMessage: 'Invalid server response' });
+          }
+        };
+        request.onerror = () => reject(new Error('Unable to reach the upload server.'));
+        request.onabort = () => reject(new Error('Upload cancelled.'));
+        request.send(formData);
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || 'Unable to save upload');
+        throw new Error(response.data.error || response.data.message || response.errorMessage || `Upload failed with status ${response.status}`);
       }
 
-      const newItem: StorageItem = data.item;
+      const newItem = response.data.item;
+      if (!newItem) {
+        throw new Error('Upload completed but no storage item was returned.');
+      }
       setStorageItems((prev) => [newItem, ...prev]);
       setUploadTitle('');
       setUploadFile(null);
-      setUploadMessage('Saved to storage and linked to Mega.');
+      setUploadProgress(100);
+      setUploadMessage(formatUploadStatusMessage(response.data.uploadError || null));
     } catch (error) {
+      setUploadProgress(0);
       setUploadMessage(error instanceof Error ? error.message : 'Unable to save upload.');
     } finally {
       setUploading(false);
     }
-  }, [megaUploadUrl, uploadTitle, uploadFile, uploadType]);
+  }, [uploadTitle, uploadType]);
+
+  const handleUpload = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingStorageItemId) {
+      const itemToUpdate = storageItems.find((item) => item.id === editingStorageItemId);
+      if (!itemToUpdate) {
+        setUploadMessage('Selected item could not be found.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/dashboard/storage/${editingStorageItemId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: editingStorageTitle.trim() || itemToUpdate.title }),
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Unable to update title');
+        }
+
+        setStorageItems((prev) => updateStorageItemTitle(prev, editingStorageItemId, editingStorageTitle.trim() || itemToUpdate.title));
+        setEditingStorageItemId(null);
+        setEditingStorageTitle('');
+        setUploadTitle('');
+        setUploadFile(null);
+        setUploadProgress(100);
+        setUploadMessage('Updated title successfully.');
+      } catch (error) {
+        setUploadProgress(0);
+        setUploadMessage(error instanceof Error ? error.message : 'Unable to update title.');
+      }
+      return;
+    }
+
+    await submitUpload(uploadFile);
+  }, [submitUpload, uploadFile, editingStorageItemId, editingStorageTitle, storageItems]);
+
+  const handleFileSelection = useCallback((file: File | null) => {
+    setUploadFile(file);
+
+    if (shouldAutoUploadOnSelection(file, uploadTitle, uploading)) {
+      void submitUpload(file, uploadTitle, uploadType);
+    }
+  }, [submitUpload, uploadTitle, uploadType, uploading]);
+
+  const startEditingStorageItem = useCallback((item: StorageItem) => {
+    setEditingStorageItemId(item.id);
+    setEditingStorageTitle(item.title);
+    setUploadTitle(item.title);
+    setUploadFile(null);
+    setUploadMessage('');
+  }, []);
+
+  const handleDeleteStorageItem = useCallback(async (id: string) => {
+    try {
+      const response = await fetch(`/api/dashboard/storage/${id}`, { method: 'DELETE' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to delete Talk Show upload');
+      }
+
+      setStorageItems((prev) => prev.filter((item) => item.id !== id));
+      if (editingStorageItemId === id) {
+        setEditingStorageItemId(null);
+        setEditingStorageTitle('');
+      }
+      setUploadMessage('Talk Show upload removed.');
+    } catch (error) {
+      setUploadMessage(error instanceof Error ? error.message : 'Unable to delete Talk Show upload.');
+    }
+  }, [editingStorageItemId]);
 
   const handleLogout = useCallback(() => {
     if (typeof window !== 'undefined') {
@@ -624,12 +730,115 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                 <h2 className="mb-2 text-xl font-semibold">Video Library</h2>
                 <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Manage music videos and video media catalog.</p>
               </div>
-              <div className={`flex items-center justify-between gap-4 rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <div>
-                  <h3 className="text-lg font-semibold">Mega Upload</h3>
-                  <p className={isDarkMode ? 'mt-1 text-sm text-slate-400' : 'mt-1 text-sm text-slate-600'}>Send video files through the Mega file request.</p>
+              <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+                <h3 className="text-lg font-semibold">Talk Show Uploads</h3>
+                <p className={isDarkMode ? 'mt-1 text-sm text-slate-400' : 'mt-1 text-sm text-slate-600'}>Drag & drop video files here or click to choose a file to upload to the Talk Show Drive.</p>
+
+                <form onSubmit={handleUpload} className="mt-4">
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const f = e.dataTransfer?.files?.[0] || null;
+                      handleFileSelection(f);
+                    }}
+                    className={`mt-3 flex h-40 items-center justify-center rounded-md border-2 border-dashed px-4 ${isDarkMode ? 'border-slate-700 bg-slate-950' : 'border-slate-300 bg-slate-50'}`}
+                  >
+                    <div className="text-center">
+                      <p className="text-sm text-slate-400">Drop a file here</p>
+                      <p className="mt-2 text-xs text-slate-500">or</p>
+                      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-md bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-500">
+                        <input type="file" accept="video/*,audio/*" onChange={(ev) => handleFileSelection(ev.target.files?.[0] || null)} className="hidden" />
+                        Choose file
+                      </label>
+                      {uploadFile ? <div className="mt-3 text-sm text-slate-300">Selected: {uploadFile.name}</div> : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <input type="text" placeholder="Title" value={uploadTitle} onChange={(e) => {
+                      setUploadTitle(e.target.value);
+                      if (editingStorageItemId) {
+                        setEditingStorageTitle(e.target.value);
+                      }
+                    }} className={`col-span-2 rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} />
+                    <button type="submit" disabled={uploading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500 disabled:opacity-50">{uploading ? 'Uploading…' : editingStorageItemId ? 'Update' : 'Upload to Talk Show'}</button>
+                  </div>
+
+                  {uploading || uploadProgress > 0 ? (
+                    <div className="mt-3">
+                      <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
+                        <span>{uploading ? 'Uploading file...' : 'Upload complete'}</span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+                        <div className="h-full rounded-full bg-indigo-500 transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {uploadMessage && <p className={`mt-2 text-sm ${uploadMessage.includes('Unable') ? 'text-rose-400' : 'text-emerald-400'}`}>{uploadMessage}</p>}
+                </form>
+
+                <div className="mt-6 rounded-xl border border-slate-800/70 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-semibold">Talk Show Uploads</h4>
+                      <p className={isDarkMode ? 'mt-1 text-xs text-slate-400' : 'mt-1 text-xs text-slate-600'}>Click the arrow to edit the title of an uploaded item.</p>
+                    </div>
+                    <span className="rounded-full bg-indigo-500/10 px-2.5 py-1 text-xs font-medium text-indigo-400">{storageItems.length}</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {storageItems.length === 0 ? (
+                      <div className={`rounded-lg border border-dashed px-3 py-4 text-sm ${isDarkMode ? 'border-slate-700 text-slate-400' : 'border-slate-300 text-slate-500'}`}>No Talk Show uploads yet.</div>
+                    ) : storageItems.map((item) => (
+                      <div key={item.id} className={`flex items-center justify-between rounded-lg border px-3 py-3 ${isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-200 bg-slate-50'}`}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs uppercase tracking-[0.2em] text-indigo-400">{item.type}</span>
+                            {editingStorageItemId === item.id ? (
+                              <input
+                                value={editingStorageTitle}
+                                onChange={(e) => setEditingStorageTitle(e.target.value)}
+                                className={`w-full rounded-md border px-2 py-1 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-900'}`}
+                              />
+                            ) : (
+                              <span className="truncate text-sm font-medium">{item.title}</span>
+                            )}
+                          </div>
+                          <p className={`mt-1 truncate text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>{item.file_url}</p>
+                        </div>
+                        <div className="ml-3 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (editingStorageItemId === item.id) {
+                                setEditingStorageItemId(null);
+                                setEditingStorageTitle('');
+                                setUploadTitle('');
+                                setUploadFile(null);
+                              } else {
+                                startEditingStorageItem(item);
+                              }
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                            aria-label={editingStorageItemId === item.id ? 'Cancel edit' : 'Edit title'}
+                          >
+                            {editingStorageItemId === item.id ? '×' : '↺'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteStorageItem(item.id)}
+                            className="rounded-md border border-rose-500/30 px-2.5 py-1 text-xs font-medium text-rose-400 transition hover:bg-rose-500/10"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <button type="button" onClick={() => setIsMegaUploadOpen(true)} className="shrink-0 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-sm font-medium text-indigo-400 transition hover:bg-indigo-500/20">Open Mega Upload</button>
               </div>
             </div>
           )}
@@ -678,7 +887,28 @@ export default function DashboardApp({ user }: { user?: User | null }) {
               <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
                 <h2 className="mb-2 text-xl font-semibold">Storage Overview</h2>
                 <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Google Drive capacity used by your uploaded media.</p>
-                {driveStorage ? (
+                {driveStorageEntries && driveStorageEntries.length > 0 ? (
+                  <div className="mt-5 space-y-3">
+                    {driveStorageEntries.map((entry) => (
+                      <div key={entry.label} className="rounded-md border p-3">
+                        <div className="flex items-end justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-medium">{entry.label}</p>
+                            <p className="text-2xl font-semibold">{formatBytes(entry.used)}</p>
+                            <p className="text-xs text-slate-400">used</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-slate-400">{entry.limit ? `${formatBytes(entry.limit)} total` : 'No storage limit'}</p>
+                            <div className="mt-2 text-xs text-slate-400">My Drive: {formatBytes(entry.usedInDrive)}</div>
+                            <div className="text-xs text-slate-400">Trash: {formatBytes(entry.usedInTrash)}</div>
+                          </div>
+                        </div>
+                        {entry.limit ? <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min((entry.used / (entry.limit || 1)) * 100, 100)}%` }} /></div> : null}
+                        {entry.error ? <p className="mt-2 text-xs text-rose-400">{entry.error}</p> : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : driveStorage ? (
                   <div className="mt-5 space-y-3">
                     <div className="flex items-end justify-between gap-4">
                       <div><p className="text-2xl font-semibold">{formatBytes(driveStorage.used)}</p><p className="text-xs text-slate-400">used across Drive</p></div>
@@ -832,7 +1062,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
               </div>
               <div>
                 <label className="mb-1.5 block text-sm">Category</label>
-                <select value={newMemberCategory} onChange={(e) => setNewMemberCategory(e.target.value as any)} className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}>
+                <select value={newMemberCategory} onChange={(e) => setNewMemberCategory(e.target.value as Member['category'])} className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}>
                   <option value="Board Members">Board Members</option>
                   <option value="Artists">Artists</option>
                   <option value="Dancers">Dancers</option>

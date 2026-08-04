@@ -1,17 +1,19 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import type { Dispatch, SetStateAction } from 'react'
 
 interface SwitchbuttonProps {
   onScrollToSearch?: () => void
+  searchHref?: string
   showSearch?: boolean
   searchQuery?: string
   setSearchQuery?: Dispatch<SetStateAction<string>>
 }
 
-const Switchbutton = ({ onScrollToSearch }: SwitchbuttonProps) => {
+const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
+  const router = useRouter()
   const pathname = usePathname() ?? ''
   const isAudio = pathname === '/Audio'
   const isDownload = pathname === '/download'
@@ -54,11 +56,17 @@ const Switchbutton = ({ onScrollToSearch }: SwitchbuttonProps) => {
       </div>
 
       {/* Quick Jump & Focus Search Icon Button */}
-      {onScrollToSearch && (
+      {(searchHref || onScrollToSearch) && (
         <button
           type="button"
-          onClick={onScrollToSearch}
-          title="Focus search input"
+          onClick={() => {
+            if (searchHref) {
+              router.push(searchHref)
+            } else {
+              onScrollToSearch?.()
+            }
+          }}
+          title={searchHref ? 'Open search page' : 'Focus search input'}
           className="pointer-events-auto shrink-0 flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full border border-card1/20 bg-cardcl/95 text-secondry hover:text-primary hover:bg-card1/10 active:bg-rose-600 shadow-xl shadow-black/40 backdrop-blur transition-all cursor-pointer"
         >
           <svg

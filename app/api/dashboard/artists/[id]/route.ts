@@ -178,6 +178,57 @@ export async function GET(
   }
 }
 
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+
+  if (!pool) {
+    return NextResponse.json({ error: 'Database is not configured' }, { status: 500 });
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    const genre = typeof body?.genre === 'string' ? body.genre.trim() : '';
+
+    if (!name || !genre) {
+      return NextResponse.json({ error: 'Artist name and genre are required' }, { status: 400 });
+    }
+
+    await ensureArtistsTable();
+    const { rows } = await pool.query(
+      `UPDATE artists
+       SET name = $1, genre = $2, updated_at = NOW()
+       WHERE id::text = $3
+       RETURNING id, name, genre, tracks_count AS "tracksCount", status, bio, followers, total_downloads AS "totalDownloads", featured_track AS "featuredTrack", monthly_listeners AS "monthlyListeners", banner_url AS "bannerUrl", profile_url AS "profileUrl"`,
+      [name, genre, id]
+    );
+
+    if (rows.length === 0) {
+      return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
+    }
+
+    const artist = rows[0];
+    return NextResponse.json({
+      artist: {
+        id: artist.id,
+        name: artist.name,
+        genre: artist.genre,
+        tracksCount: Number(artist.tracksCount || 0),
+        status: artist.status || 'Active',
+        bio: artist.bio || '',
+        followers: Number(artist.followers || 0),
+        totalDownloads: Number(artist.totalDownloads || 0),
+        featuredTrack: artist.featuredTrack || '',
+        monthlyListeners: Number(artist.monthlyListeners || 0),
+        bannerUrl: artist.bannerUrl || null,
+        profileUrl: artist.profileUrl || null,
+      },
+    });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   _request: Request,
   context: { params: Promise<{ id: string }> }

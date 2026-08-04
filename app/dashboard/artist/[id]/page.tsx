@@ -80,6 +80,13 @@ export default function ArtistDetailPage() {
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isEditingArtistName, setIsEditingArtistName] = useState(false);
+  const [artistNameDraft, setArtistNameDraft] = useState('');
+  const [isEditingGenre, setIsEditingGenre] = useState(false);
+  const [artistGenreDraft, setArtistGenreDraft] = useState('');
+  const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
+  const [trackTitleDraft, setTrackTitleDraft] = useState('');
+  const [trackAlbumDraft, setTrackAlbumDraft] = useState('');
 
   useEffect(() => {
     let ignore = false;
@@ -101,6 +108,8 @@ export default function ArtistDetailPage() {
           if (response.ok && data.artist) {
             const fetchedArtist = data.artist as Artist;
             setArtist(fetchedArtist);
+            setArtistNameDraft(fetchedArtist.name);
+            setArtistGenreDraft(fetchedArtist.genre);
             setBannerUrl(fetchedArtist.bannerUrl || null);
             setProfileUrl(fetchedArtist.profileUrl || null);
             const mediaResponse = await fetch(`/api/dashboard/artists/${params.id}/media`);
@@ -311,6 +320,76 @@ export default function ArtistDetailPage() {
     }
   };
 
+  const handleSaveArtistIdentity = async () => {
+    if (!artist) return;
+
+    const trimmedName = artistNameDraft.trim();
+    const trimmedGenre = artistGenreDraft.trim();
+    if (!trimmedName || !trimmedGenre) {
+      setProcessMessage('Artist name and genre cannot be empty.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/dashboard/artists/${artist.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedName, genre: trimmedGenre }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Unable to update artist information');
+
+      setArtist((currentArtist) => currentArtist ? { ...currentArtist, name: trimmedName, genre: trimmedGenre } : currentArtist);
+      setArtistNameDraft(trimmedName);
+      setArtistGenreDraft(trimmedGenre);
+      setIsEditingArtistName(false);
+      setIsEditingGenre(false);
+      setProcessMessage('Artist details updated successfully.');
+      setTimeout(() => setProcessMessage(''), 3000);
+    } catch (error) {
+      setProcessMessage(error instanceof Error ? error.message : 'Unable to update artist information.');
+      setTimeout(() => setProcessMessage(''), 3000);
+    }
+  };
+
+  const startEditingTrack = (track: Track) => {
+    setEditingTrackId(track.id);
+    setTrackTitleDraft(track.title);
+    setTrackAlbumDraft(track.album || '');
+  };
+
+  const handleSaveTrackEdit = async () => {
+    if (!editingTrackId || !artist) return;
+
+    const trimmedTitle = trackTitleDraft.trim();
+    if (!trimmedTitle) {
+      setProcessMessage('Track title cannot be empty.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/dashboard/artists/${artist.id}/media?mediaId=${encodeURIComponent(editingTrackId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: trimmedTitle, album: trackAlbumDraft.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Unable to update track information');
+
+      setTracks((prevTracks) => prevTracks.map((track) => track.id === editingTrackId
+        ? { ...track, title: trimmedTitle, album: trackAlbumDraft.trim() || 'Single' }
+        : track));
+      setEditingTrackId(null);
+      setTrackTitleDraft('');
+      setTrackAlbumDraft('');
+      setProcessMessage('Track updated successfully.');
+      setTimeout(() => setProcessMessage(''), 3000);
+    } catch (error) {
+      setProcessMessage(error instanceof Error ? error.message : 'Unable to update track information.');
+      setTimeout(() => setProcessMessage(''), 3000);
+    }
+  };
+
   const handleDeleteTrack = async (id: string) => {
     try {
       const response = await fetch(`/api/dashboard/artists/${params.id}/media?mediaId=${encodeURIComponent(id)}`, {
@@ -453,9 +532,33 @@ export default function ArtistDetailPage() {
         {/* ARTIST INFO HEADER */}
         <div className="px-8 pb-8 pt-14">
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-            <div>
+            <div className="flex-1">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-400">Artist Profile</p>
-              <h1 className="mt-1 text-3xl font-semibold">{artist.name}</h1>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {isEditingArtistName ? (
+                  <input
+                    value={artistNameDraft}
+                    onChange={(e) => setArtistNameDraft(e.target.value)}
+                    className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-2xl font-semibold text-white outline-none focus:border-indigo-500 sm:text-3xl"
+                  />
+                ) : (
+                  <h1 className="text-3xl font-semibold">{artist.name}</h1>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEditingArtistName) {
+                      void handleSaveArtistIdentity();
+                    } else {
+                      setArtistNameDraft(artist.name);
+                      setIsEditingArtistName(true);
+                    }
+                  }}
+                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:bg-slate-800"
+                >
+                  {isEditingArtistName ? 'Save Name' : 'Edit Name'}
+                </button>
+              </div>
               <p className="mt-2 max-w-2xl text-sm text-slate-400">{artist.bio}</p>
             </div>
 
@@ -470,8 +573,32 @@ export default function ArtistDetailPage() {
           {/* STATS GRID */}
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-5">
-              <p className="text-xs text-slate-400">Genre</p>
-              <p className="mt-1 text-lg font-medium">{artist.genre}</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-slate-400">Genre</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEditingGenre) {
+                      void handleSaveArtistIdentity();
+                    } else {
+                      setArtistGenreDraft(artist.genre);
+                      setIsEditingGenre(true);
+                    }
+                  }}
+                  className="text-xs font-medium text-indigo-400 transition hover:text-indigo-300"
+                >
+                  {isEditingGenre ? 'Save Genre' : 'Edit'}
+                </button>
+              </div>
+              {isEditingGenre ? (
+                <input
+                  value={artistGenreDraft}
+                  onChange={(e) => setArtistGenreDraft(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                />
+              ) : (
+                <p className="mt-1 text-lg font-medium">{artist.genre}</p>
+              )}
             </div>
             <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-5">
               <p className="text-xs text-slate-400">Total Tracks</p>
@@ -671,14 +798,33 @@ export default function ArtistDetailPage() {
                       tracks.map((track) => (
                         <tr key={track.id} className="transition hover:bg-slate-900/40">
                           <td className="px-6 py-4 font-medium text-white">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600/20 text-indigo-400">
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
-                                </svg>
+                            {editingTrackId === track.id ? (
+                              <div className="flex flex-col gap-2">
+                                <input
+                                  value={trackTitleDraft}
+                                  onChange={(e) => setTrackTitleDraft(e.target.value)}
+                                  className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                                />
+                                <input
+                                  value={trackAlbumDraft}
+                                  onChange={(e) => setTrackAlbumDraft(e.target.value)}
+                                  placeholder="Album / Project"
+                                  className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                                />
                               </div>
-                              {track.title}
-                            </div>
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600/20 text-indigo-400">
+                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                  </svg>
+                                </div>
+                                <div>
+                                  <div>{track.title}</div>
+                                  <div className="text-xs text-slate-500">{track.album}</div>
+                                </div>
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             {track.fileUrl ? (
@@ -694,12 +840,41 @@ export default function ArtistDetailPage() {
                           <td className="px-6 py-4 text-xs font-mono text-slate-500">{track.fileName}</td>
                           <td className="px-6 py-4 text-slate-400">{track.uploadedAt}</td>
                           <td className="px-6 py-4 text-right">
-                            <button
-                              onClick={() => handleDeleteTrack(track.id)}
-                              className="text-xs font-medium text-red-400 transition hover:text-red-300"
-                            >
-                              Remove
-                            </button>
+                            {editingTrackId === track.id ? (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => void handleSaveTrackEdit()}
+                                  className="text-xs font-medium text-emerald-400 transition hover:text-emerald-300"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingTrackId(null);
+                                    setTrackTitleDraft('');
+                                    setTrackAlbumDraft('');
+                                  }}
+                                  className="text-xs font-medium text-slate-400 transition hover:text-slate-300"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  onClick={() => startEditingTrack(track)}
+                                  className="text-xs font-medium text-indigo-400 transition hover:text-indigo-300"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => void handleDeleteTrack(track.id)}
+                                  className="text-xs font-medium text-red-400 transition hover:text-red-300"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ))

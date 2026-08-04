@@ -118,6 +118,20 @@ html.dark body {
   box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
 }
 
+@keyframes spin-soft {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loader-ring {
+  animation: spin-soft 1s linear infinite;
+}
+
+.loader-shell {
+  min-height: 100vh;
+}
+
 @media (max-width: 639px) {
   body h1 {
     font-size: 2.25rem;

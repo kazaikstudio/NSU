@@ -1,11 +1,20 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 import { randomUUID } from 'crypto';
 
 type DriveUpload = {
   name: string;
   mimeType: string;
   bytes: ArrayBuffer;
+};
+
+type DriveConfig = {
+  label: string;
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  redirectUri?: string;
 };
 
 type DriveFile = {
@@ -24,13 +33,31 @@ export type DriveStorageUsage = {
   usedInTrash: number;
 };
 
+function normalizeDriveNetworkError(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes('fetch failed') || normalized.includes('network request failed')) {
+    return 'network access to Google Drive is unavailable';
+  }
+  return message;
+}
+
 async function fetchGoogle(input: string, init: RequestInit) {
   let lastError: unknown;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await fetch(input, init);
+      const response = await fetch(input, init);
+      if (!response.ok) {
+        const data = await response.clone().json().catch(() => null);
+        const apiError = data?.error?.message || data?.error?.errors?.[0]?.message || 'Google Drive rejected the request';
+        throw new Error(apiError);
+      }
+      return response;
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith('Google Drive')) {
+        throw error;
+      }
+
       lastError = error;
       if (attempt < 2) {
         await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
@@ -38,32 +65,52 @@ async function fetchGoogle(input: string, init: RequestInit) {
     }
   }
 
-  throw new Error(`Unable to reach Google Drive: ${lastError instanceof Error ? lastError.message : 'network request failed'}`);
+  const detail = lastError instanceof Error ? normalizeDriveNetworkError(lastError.message) : 'network request failed';
+  throw new Error(`Unable to reach Google Drive: ${detail}`);
 }
 
-function getGoogleConfig() {
-  const clientId = (process.env.GOOGLE_CLIENT_ID || process.env.CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID)?.trim();
-  const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || process.env.CLIENT_SECRET)?.trim();
-  const refreshToken = [
-    process.env.GOOGLE_REFRESH_TOKEN,
-    process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
-    process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
-    process.env.REFRESH_TOKEN,
-    process.env.CLIENT_REFRESH_TOKEN,
-  ]
-    .map((value) => value?.trim().replace(/^['"]|['"]$/g, ''))
+const TALK_SHOW_DEFAULTS = {
+  redirectUri: 'https://developers.google.com/oauthplayground',
+};
+
+function readFirstEnvValue(names: string[]) {
+  return names
+    .map((name) => process.env[name]?.trim().replace(/^['"]|['"]$/g, ''))
     .find(Boolean);
+}
+
+function getGoogleConfig(label = 'Primary Drive', clientIdNames = ['GOOGLE_CLIENT_ID', 'CLIENT_ID', 'NEXT_PUBLIC_GOOGLE_CLIENT_ID'], clientSecretNames = ['GOOGLE_CLIENT_SECRET', 'CLIENT_SECRET'], refreshTokenNames = ['GOOGLE_REFRESH_TOKEN', 'GOOGLE_DRIVE_REFRESH_TOKEN', 'GOOGLE_OAUTH_REFRESH_TOKEN', 'REFRESH_TOKEN', 'CLIENT_REFRESH_TOKEN'], redirectUriNames = ['REDIRECT_URI', 'GOOGLE_REDIRECT_URI']) {
+  const talkShowClientIdNames = ['TALK_SHOW_CLIENT_ID', 'GOOGLE_CLIENT_ID', 'CLIENT_ID', 'NEXT_PUBLIC_GOOGLE_CLIENT_ID'];
+  const talkShowClientSecretNames = ['TALK_SHOW_CLIENT_SECRET', 'GOOGLE_CLIENT_SECRET', 'CLIENT_SECRET'];
+  const talkShowRefreshTokenNames = ['TALK_SHOW_REFRESH_TOKEN', 'GOOGLE_REFRESH_TOKEN', 'GOOGLE_DRIVE_REFRESH_TOKEN', 'GOOGLE_OAUTH_REFRESH_TOKEN', 'REFRESH_TOKEN', 'CLIENT_REFRESH_TOKEN'];
+  const talkShowRedirectUriNames = ['TALK_SHOW_REDIRECT_URI', 'REDIRECT_URI', 'GOOGLE_REDIRECT_URI'];
+
+  const resolvedClientIdNames = label === 'Talk Show' ? talkShowClientIdNames : clientIdNames;
+  const resolvedClientSecretNames = label === 'Talk Show' ? talkShowClientSecretNames : clientSecretNames;
+  const resolvedRefreshTokenNames = label === 'Talk Show' ? talkShowRefreshTokenNames : refreshTokenNames;
+  const resolvedRedirectUriNames = label === 'Talk Show' ? talkShowRedirectUriNames : redirectUriNames;
+
+  const clientId = readFirstEnvValue(resolvedClientIdNames);
+  const clientSecret = readFirstEnvValue(resolvedClientSecretNames);
+  const refreshToken = readFirstEnvValue(resolvedRefreshTokenNames);
+  const redirectUri = readFirstEnvValue(resolvedRedirectUriNames) || (label === 'Talk Show' ? TALK_SHOW_DEFAULTS.redirectUri : undefined);
 
   if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('Google Drive is not configured. Set GOOGLE_CLIENT_ID/CLIENT_ID, GOOGLE_CLIENT_SECRET/CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN/REFRESH_TOKEN on the server.');
+    throw new Error(`Google Drive is not configured for ${label}. Set ${resolvedClientIdNames.join('/')}, ${resolvedClientSecretNames.join('/')}, and ${resolvedRefreshTokenNames.join('/')} on the server.`);
   }
 
   if (/your_|example|placeholder/i.test(`${clientId} ${clientSecret} ${refreshToken}`)) {
-    throw new Error('Google Drive is using placeholder credentials. Replace the Google OAuth environment variables with real server-side values.');
+    throw new Error(`Google Drive is using placeholder credentials for ${label}. Replace the Google OAuth environment variables with real server-side values.`);
   }
 
-  return { clientId, clientSecret, refreshToken };
+  return { label, clientId, clientSecret, refreshToken, redirectUri } as DriveConfig;
 }
+
+export function getTalkShowGoogleConfig() {
+  return getGoogleConfig('Talk Show');
+}
+
+export { getGoogleConfig };
 
 function sanitizeLocalFileName(name: string) {
   return name
@@ -76,7 +123,8 @@ function sanitizeLocalFileName(name: string) {
 }
 
 export async function saveFileLocally(upload: DriveUpload) {
-  const uploadDir = path.join(process.cwd(), 'uploads');
+  const configured = process.env.LOCAL_UPLOAD_DIR && process.env.LOCAL_UPLOAD_DIR.trim();
+  const uploadDir = configured || path.join(os.tmpdir(), 'nsu-uploads');
   await fs.mkdir(uploadDir, { recursive: true });
 
   const extension = path.extname(upload.name) || '';
@@ -93,16 +141,22 @@ export async function saveFileLocally(upload: DriveUpload) {
   };
 }
 
-async function getAccessToken() {
+async function getAccessToken(config: DriveConfig = getGoogleConfig()) {
+  const params = new URLSearchParams({
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    refresh_token: config.refreshToken,
+    grant_type: 'refresh_token',
+  });
+
+  if (config.redirectUri) {
+    params.set('redirect_uri', config.redirectUri);
+  }
+
   const response = await fetchGoogle('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: getGoogleConfig().clientId,
-      client_secret: getGoogleConfig().clientSecret,
-      refresh_token: getGoogleConfig().refreshToken,
-      grant_type: 'refresh_token',
-    }),
+    body: params,
   });
 
   const data = await response.json();
@@ -128,8 +182,8 @@ export async function testDriveAuth(): Promise<{ ok: boolean; error?: string }> 
   }
 }
 
-export async function uploadToGoogleDrive(upload: DriveUpload) {
-  const accessToken = await getAccessToken();
+export async function uploadToGoogleDrive(upload: DriveUpload, config: DriveConfig = getGoogleConfig()) {
+  const accessToken = await getAccessToken(config);
   const boundary = `noll-drive-${Date.now()}`;
   const metadata = JSON.stringify({
     name: upload.name,
@@ -159,22 +213,28 @@ export async function uploadToGoogleDrive(upload: DriveUpload) {
     }
   );
   const file = (await response.json()) as DriveFile & { error?: { message?: string; errors?: Array<{ message?: string }> } };
-  if (!response.ok || !file.id) {
+  if (!file.id) {
     const detail = file.error?.errors?.[0]?.message || file.error?.message;
     throw new Error(detail || 'Unable to upload file to Google Drive');
   }
 
-  const permissionResponse = await fetchGoogle(`https://www.googleapis.com/drive/v3/files/${file.id}/permissions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ role: 'reader', type: 'anyone', allowFileDiscovery: false }),
-  });
+  try {
+    const permissionResponse = await fetchGoogle(`https://www.googleapis.com/drive/v3/files/${file.id}/permissions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ role: 'reader', type: 'anyone', allowFileDiscovery: false }),
+    });
 
-  if (!permissionResponse.ok) {
-    throw new Error('File uploaded, but Google Drive sharing could not be enabled');
+    if (!permissionResponse.ok) {
+      throw new Error('File uploaded, but Google Drive sharing could not be enabled');
+    }
+  } catch (permissionError) {
+    if (permissionError instanceof Error && permissionError.message.includes('Unable to reach Google Drive')) {
+      throw permissionError;
+    }
   }
 
   return {
@@ -197,17 +257,18 @@ export async function deleteFromGoogleDrive(fileId: string) {
   }
 }
 
-export async function getGoogleDriveStorageUsage(): Promise<DriveStorageUsage> {
-  const accessToken = await getAccessToken();
+export async function getGoogleDriveStorageUsage(config: DriveConfig = getGoogleConfig()): Promise<DriveStorageUsage> {
+  const accessToken = await getAccessToken(config);
   const response = await fetchGoogle('https://www.googleapis.com/drive/v3/about?fields=storageQuota', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const data = await response.json() as {
+    error?: { message?: string };
     storageQuota?: { usage?: string; limit?: string; usageInDrive?: string; usageInDriveTrash?: string };
   };
 
   if (!response.ok) {
-    const apiError = (data as any)?.error;
+    const apiError = data.error;
     if (response.status === 401) {
       throw new Error(apiError?.message || 'Unauthorized: Google Drive access denied. Check OAuth credentials and refresh token.');
     }
@@ -227,4 +288,46 @@ export async function getGoogleDriveStorageUsage(): Promise<DriveStorageUsage> {
     usedInDrive: Number(data.storageQuota.usageInDrive || 0),
     usedInTrash: Number(data.storageQuota.usageInDriveTrash || 0),
   };
+}
+
+export async function getConfiguredDriveStorageEntries() {
+  const entries: Array<{ label: string; clientId: string; clientSecret: string; refreshToken: string; redirectUri?: string; storage: DriveStorageUsage | null; error?: string }> = [];
+
+  const addEntry = async (label: string, clientIdNames: string[], clientSecretNames: string[], refreshTokenNames: string[], redirectUriNames: string[]) => {
+    const hasConfiguredValues = label === 'Talk Show'
+      ? true
+      : [clientIdNames, clientSecretNames, refreshTokenNames].some((names) => readFirstEnvValue(names));
+
+    if (!hasConfiguredValues) {
+      return;
+    }
+
+    try {
+      const config = getGoogleConfig(label, clientIdNames, clientSecretNames, refreshTokenNames, redirectUriNames);
+      const storage = await getGoogleDriveStorageUsage(config);
+      entries.push({
+        label: config.label,
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+        refreshToken: config.refreshToken,
+        redirectUri: config.redirectUri,
+        storage,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      entries.push({
+        label,
+        clientId: '',
+        clientSecret: '',
+        refreshToken: '',
+        error: message,
+        storage: null,
+      });
+    }
+  };
+
+  await addEntry('Primary Drive', ['GOOGLE_CLIENT_ID', 'CLIENT_ID', 'NEXT_PUBLIC_GOOGLE_CLIENT_ID'], ['GOOGLE_CLIENT_SECRET', 'CLIENT_SECRET'], ['GOOGLE_REFRESH_TOKEN', 'GOOGLE_DRIVE_REFRESH_TOKEN', 'GOOGLE_OAUTH_REFRESH_TOKEN', 'REFRESH_TOKEN', 'CLIENT_REFRESH_TOKEN'], ['REDIRECT_URI', 'GOOGLE_REDIRECT_URI']);
+  await addEntry('Talk Show', ['TALK_SHOW_CLIENT_ID', 'GOOGLE_CLIENT_ID', 'CLIENT_ID', 'NEXT_PUBLIC_GOOGLE_CLIENT_ID'], ['TALK_SHOW_CLIENT_SECRET', 'GOOGLE_CLIENT_SECRET', 'CLIENT_SECRET'], ['TALK_SHOW_REFRESH_TOKEN', 'GOOGLE_REFRESH_TOKEN', 'GOOGLE_DRIVE_REFRESH_TOKEN', 'GOOGLE_OAUTH_REFRESH_TOKEN', 'REFRESH_TOKEN', 'CLIENT_REFRESH_TOKEN'], ['TALK_SHOW_REDIRECT_URI', 'REDIRECT_URI', 'GOOGLE_REDIRECT_URI']);
+
+  return entries;
 }

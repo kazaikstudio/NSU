@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ClientType, Innertube } from "youtubei.js";
+import { buildMegaShorts } from "@/lib/video-feed";
 
 export const runtime = "nodejs";
 
@@ -25,7 +26,10 @@ type YouTubeVideo = {
 
 type Cached = {
   expires: number;
-  data: YouTubeVideo[];
+  data: {
+    videos: YouTubeVideo[];
+    shorts: YouTubeVideo[];
+  };
 };
 
 const cache = new Map<string, Cached>();
@@ -85,8 +89,8 @@ async function fetchAllVideosWithInnertube(channelId: string): Promise<YouTubeVi
   }
 }
 
-function getFallbackVideos(): YouTubeVideo[] {
-  return [
+function getFallbackFeed() {
+  const fallbackVideos: YouTubeVideo[] = [
     {
       id: "fallback-1",
       title: "Noll Studio Uganda highlights",
@@ -98,18 +102,12 @@ function getFallbackVideos(): YouTubeVideo[] {
       type: "official",
       durationSeconds: 180,
     },
-    {
-      id: "fallback-2",
-      title: "Behind the scenes at Noll Studio",
-      subtitle: "Short clips and creative moments from the studio.",
-      thumbnail:
-        "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=800&q=80",
-      date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-      url: "https://www.youtube.com/@Nollvisuals",
-      type: "short",
-      durationSeconds: 45,
-    },
   ];
+
+  return {
+    videos: fallbackVideos,
+    shorts: buildMegaShorts() as YouTubeVideo[],
+  };
 }
 
 function getYoutubeApiKey(): string {
@@ -240,49 +238,61 @@ async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs
 async function fetchAllVideos(channelId: string): Promise<YouTubeVideo[]> {
   const apiKey = getYoutubeApiKey();
   const videos: Omit<YouTubeVideo, "type" | "durationSeconds">[] = [];
+  let nextPageToken: string | undefined;
+  let pageCount = 0;
 
-  const params = new URLSearchParams({
-    key: apiKey,
-    channelId,
-    part: "snippet,id",
-    order: "date",
-    maxResults: "24",
-    type: "video",
-  });
-
-  const res = await fetchWithTimeout(
-    `https://www.googleapis.com/youtube/v3/search?${params.toString()}`,
-    {},
-    10000
-  );
-  const payload = await res.json().catch(() => null);
-
-  if (!res.ok) {
-    const msg = payload?.error?.message ?? "YouTube API error";
-    throw new Error(msg);
-  }
-
-  const items = payload?.items ?? [];
-  for (const item of items) {
-    const videoId = (item?.id?.videoId as string) ?? "";
-    const snippet = item?.snippet ?? {};
-    const thumbnail =
-      (snippet?.thumbnails?.high?.url as string) ??
-      (snippet?.thumbnails?.default?.url as string) ??
-      "";
-
-    if (!videoId) continue;
-
-    videos.push({
-      id: videoId,
-      title: (snippet.title as string) ?? "",
-      subtitle: (snippet.description as string) ?? "",
-      thumbnail,
-      date: snippet.publishedAt
-        ? new Date(snippet.publishedAt as string).toISOString()
-        : "",
-      url: `https://www.youtube.com/watch?v=${videoId}`,
+  while (pageCount < 5) {
+    const params = new URLSearchParams({
+      key: apiKey,
+      channelId,
+      part: "snippet,id",
+      order: "date",
+      maxResults: "50",
+      type: "video",
     });
+
+    if (nextPageToken) {
+      params.set("pageToken", nextPageToken);
+    }
+
+    const res = await fetchWithTimeout(
+      `https://www.googleapis.com/youtube/v3/search?${params.toString()}`,
+      {},
+      10000
+    );
+    const payload = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const msg = payload?.error?.message ?? "YouTube API error";
+      throw new Error(msg);
+    }
+
+    const items = payload?.items ?? [];
+    for (const item of items) {
+      const videoId = (item?.id?.videoId as string) ?? "";
+      const snippet = item?.snippet ?? {};
+      const thumbnail =
+        (snippet?.thumbnails?.high?.url as string) ??
+        (snippet?.thumbnails?.default?.url as string) ??
+        "";
+
+      if (!videoId) continue;
+
+      videos.push({
+        id: videoId,
+        title: (snippet.title as string) ?? "",
+        subtitle: (snippet.description as string) ?? "",
+        thumbnail,
+        date: snippet.publishedAt
+          ? new Date(snippet.publishedAt as string).toISOString()
+          : "",
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+      });
+    }
+
+    nextPageToken = payload?.nextPageToken as string | undefined;
+    if (!nextPageToken) break;
+    pageCount += 1;
   }
 
   const ids = videos.map((video) => video.id);
@@ -291,20 +301,14 @@ async function fetchAllVideos(channelId: string): Promise<YouTubeVideo[]> {
     fetchVideoDurations(ids).catch(() => ({} as Record<string, number>)),
   ]);
 
-  const shortTitlePattern = /(?:#shorts?\b|\bshorts?\b)/i;
-
   return videos.map((video) => {
     const details = detailsMap[video.id] ?? { duration: durationMap[video.id] ?? 0, views: 0 };
     const durationSeconds = details.duration ?? durationMap[video.id] ?? 0;
-    const isShort =
-      durationSeconds > 0
-        ? durationSeconds <= 60
-        : shortTitlePattern.test(video.title);
 
     return {
       ...video,
       thumbnail: details.thumbnail ?? video.thumbnail,
-      type: isShort ? "short" : "official",
+      type: "official",
       durationSeconds,
       views: details.views ?? 0,
     };
@@ -322,31 +326,35 @@ export async function GET(req: Request) {
   const cached = cache.get(channelId);
   const now = Date.now();
   if (cached && cached.expires > now) {
-    return withCors(NextResponse.json({ videos: cached.data, fallback: false }), req);
+    return withCors(NextResponse.json({ videos: cached.data.videos, shorts: cached.data.shorts, fallback: false }), req);
   }
 
   const apiKey = getYoutubeApiKey();
   if (!apiKey) {
-    const fallbackVideos = cached?.data ?? getFallbackVideos();
-    cache.set(channelId, { expires: now + CACHE_TTL, data: fallbackVideos });
+    const fallbackFeed = cached?.data ?? getFallbackFeed();
+    cache.set(channelId, { expires: now + CACHE_TTL, data: fallbackFeed });
     return withCors(
-      NextResponse.json({ videos: fallbackVideos, fallback: true }),
+      NextResponse.json({ videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: true }),
       req
     );
   }
 
   try {
     const videos = await fetchAllVideos(channelId);
-    cache.set(channelId, { expires: now + CACHE_TTL, data: videos });
-    return withCors(NextResponse.json({ videos, fallback: false }), req);
+    const payload = {
+      videos,
+      shorts: [],
+    };
+    cache.set(channelId, { expires: now + CACHE_TTL, data: payload });
+    return withCors(NextResponse.json({ videos: payload.videos, shorts: payload.shorts, fallback: false }), req);
   } catch (err: unknown) {
-    const fallbackVideos = cached?.data ?? getFallbackVideos();
-    cache.set(channelId, { expires: now + CACHE_TTL, data: fallbackVideos });
+    const fallbackFeed = cached?.data ?? getFallbackFeed();
+    cache.set(channelId, { expires: now + CACHE_TTL, data: fallbackFeed });
     const errorMessage =
       err instanceof Error ? err.message : "Unknown error occurred";
     console.warn(`YouTube videos fallback active: ${errorMessage}`);
     return withCors(
-      NextResponse.json({ videos: fallbackVideos, fallback: true, error: errorMessage }),
+      NextResponse.json({ videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: true, error: errorMessage }),
       req
     );
   }

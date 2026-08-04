@@ -1,9 +1,7 @@
-import React from 'react'
+import LoadingScreen from '@/components/LoadingScreen'
 
 const loader = () => {
-  return (
-    <div> __ spinner __</div>
-  )
+  return <LoadingScreen />
 }
 
 export default loader

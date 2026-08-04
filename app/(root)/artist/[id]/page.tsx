@@ -334,6 +334,17 @@ export default function PublicArtistDetailPage() {
             <span className="text-[10px] sm:text-xs font-medium text-secondry block truncate">Downloads</span>
           </div>
         </div>
+
+        <div className="mt-5 rounded-2xl border border-card1/10 bg-cardcl/70 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-secondry">
+            <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 font-semibold text-amber-400">
+              Genre: {artist.genre || 'N/A'}
+            </span>
+            <span className="rounded-full border border-card1/10 bg-cardcl/80 px-3 py-1 font-semibold text-primary">
+              Uploaded Audio Tracks: {tracks.length}
+            </span>
+          </div>
+        </div>
       </div>
 
     </section>

@@ -1,163 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { Search, Mic, MicOff } from 'lucide-react';
 import Switchbutton from './Switchbutton';
-
-// --- Web Speech API Interfaces to eliminate 'any' errors ---
-interface SpeechRecognitionResultItem {
-  transcript: string;
-  confidence: number;
-}
-
-interface SpeechRecognitionResult {
-  [index: number]: SpeechRecognitionResultItem;
-  length: number;
-  isFinal: boolean;
-}
-
-interface SpeechRecognitionResultList {
-  [index: number]: SpeechRecognitionResult;
-  length: number;
-}
-
-interface SpeechRecognitionEventCustom extends Event {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionErrorEventCustom extends Event {
-  error: string;
-  message?: string;
-}
-
-interface SpeechRecognitionInstance extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((event: SpeechRecognitionEventCustom) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEventCustom) => void) | null;
-  onend: (() => void) | null;
-}
-
-interface SpeechRecognitionConstructor {
-  new (): SpeechRecognitionInstance;
-}
-
-interface WindowWithSpeech extends Window {
-  SpeechRecognition?: SpeechRecognitionConstructor;
-  webkitSpeechRecognition?: SpeechRecognitionConstructor;
-}
-
-interface VoiceSearchBarProps {
-  searchTerm: string;
-  setSearchTerm: (value: string) => void;
-  filterTracks: (value: string) => void;
-}
-
-export function VoiceSearchBar({
-  searchTerm,
-  setSearchTerm,
-  filterTracks,
-}: VoiceSearchBarProps) {
-  const [isListening, setIsListening] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-
-  useEffect(() => {
-    // Initialize Web Speech API cleanly without type casting to 'any'
-    const win = window as unknown as WindowWithSpeech;
-    const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition;
-
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onresult = (event: SpeechRecognitionEventCustom) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-
-        // Update input state and filter function live as you speak
-        setSearchTerm(transcript);
-        filterTracks(transcript);
-      };
-
-      recognition.onerror = (event: SpeechRecognitionErrorEventCustom) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recognition;
-    }
-  }, [filterTracks, setSearchTerm]);
-
-  const toggleListening = () => {
-    if (!recognitionRef.current) {
-      alert('Speech recognition is not supported in this browser.');
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      recognitionRef.current.start();
-      setIsListening(true);
-      searchRef.current?.focus();
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-3 w-full max-w-xl my-4">
-      {/* Search Input Box */}
-      <div className="relative w-full flex-1">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary/70 transition-colors sm:left-4 sm:h-5 sm:w-5" />
-        <input
-          ref={searchRef}
-          type="text"
-          id="trackSearchInput"
-          placeholder="Search here ..."
-          value={searchTerm}
-          className="w-full rounded-full border border-card1/15 bg-cardcl/60 dark:bg-cardcl/40 backdrop-blur-md pl-9 pr-3 py-2 text-base sm:text-sm text-primary placeholder:text-secondary/60 focus:border-navlink focus:ring-1 focus:ring-navlink focus:bg-cardcl/80 transition-all duration-300 shadow-sm hover:border-card1/25 sm:pl-11 sm:pr-4 sm:py-2.5"
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            filterTracks(e.target.value);
-          }}
-        />
-      </div>
-
-      {/* Circular Microphone Button */}
-      <button
-        type="button"
-        onClick={toggleListening}
-        className={`flex items-center justify-center w-12 h-12 rounded-full shrink-0 transition-all duration-300 shadow-md backdrop-blur-md ${
-          isListening
-            ? 'bg-red-500/90 text-white animate-pulse shadow-red-500/40 ring-4 ring-red-500/20'
-            : 'bg-cardcl/60 dark:bg-cardcl/40 text-primary border border-card1/15 hover:bg-cardcl/90 hover:border-card1/30 hover:scale-105 active:scale-95'
-        }`}
-        title={isListening ? 'Stop recording' : 'Start voice search'}
-      >
-        {isListening ? (
-          <MicOff className="w-5 h-5" />
-        ) : (
-          <Mic className="w-5 h-5" />
-        )}
-      </button>
-    </div>
-  );
-}
 
 const FeaturedAudioCards = dynamic(() => import('./FeaturedAudioCards'), {
   ssr: false,
@@ -217,23 +62,9 @@ export default function AudioPageClient() {
     return () => { cancelled = true; };
   }, []);
 
-  const scrollToSearch = () => {
-    const searchInput = document.getElementById('trackSearchInput');
-    if (searchInput) {
-      searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      searchInput.focus();
-    }
-  };
-
   return (
     <main className="px-4 mb-10 py-5 max-w-9xl mx-auto text-primary">
-      <Switchbutton onScrollToSearch={scrollToSearch} />
-
-      <VoiceSearchBar
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        filterTracks={filterTracks}
-      />
+      <Switchbutton searchHref="/search" />
 
       <FeaturedAudioCards />
 

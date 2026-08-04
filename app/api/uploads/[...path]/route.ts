@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -12,9 +13,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ pat
     return NextResponse.json({ error: 'Missing file path' }, { status: 400 });
   }
 
-  const fullPath = path.join(process.cwd(), 'uploads', requestedPath);
+  const configured = process.env.LOCAL_UPLOAD_DIR && process.env.LOCAL_UPLOAD_DIR.trim();
+  const uploadsDir = path.normalize(configured || path.join(os.tmpdir(), 'nsu-uploads'));
+  const fullPath = path.join(uploadsDir, requestedPath);
   const normalizedPath = path.normalize(fullPath);
-  const uploadsDir = path.normalize(path.join(process.cwd(), 'uploads'));
 
   if (!normalizedPath.startsWith(uploadsDir)) {
     return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });

@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Switchbutton from "../../components/Switchbutton";
 import DownloadModal from "../../components/DownloadModal";
 
-type YouTubeVideo = {
+type HomeMediaItem = {
   id: string;
   title: string;
   subtitle?: string;
@@ -15,7 +14,9 @@ type YouTubeVideo = {
   date: string;
   url: string;
   views?: number;
-  type?: "official" | "short";
+  type?: "official" | "short" | "talk-show";
+  source?: "youtube" | "talk-show";
+  fileUrl?: string;
 };
 
 export const maxDuration = 60;
@@ -24,7 +25,9 @@ export const dynamic = "force-dynamic";
 const CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
 
 const Home = () => {
-  const [videos, setVideos] = useState<YouTubeVideo[]>([]);
+  const [officialVideos, setOfficialVideos] = useState<HomeMediaItem[]>([]);
+  const [shortVideos, setShortVideos] = useState<HomeMediaItem[]>([]);
+  const [talkShowUploads, setTalkShowUploads] = useState<HomeMediaItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<"official" | "short">("official");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -33,17 +36,8 @@ const Home = () => {
   const [downloadAnchor, setDownloadAnchor] = useState<HTMLElement | null>(null);
 
   const router = useRouter();
-  const mainSearchRef = useRef<HTMLDivElement>(null);
   const gridSectionRef = useRef<HTMLDivElement>(null);
   const marqueeRef = useRef<HTMLDivElement>(null);
-
-  const scrollToMainSearch = () => {
-    if (mainSearchRef.current) {
-      mainSearchRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      const input = mainSearchRef.current.querySelector("input");
-      if (input) input.focus();
-    }
-  };
 
   const handleCategoryChange = (category: "official" | "short") => {
     setSelectedCategory(category);
@@ -67,7 +61,7 @@ const Home = () => {
         let payload;
         try {
           payload = JSON.parse(textResponse);
-        } catch (e) {
+        } catch {
           console.error("API did not return valid JSON:", textResponse);
           throw new Error("API returned invalid JSON format (check server logs).");
         }
@@ -76,21 +70,37 @@ const Home = () => {
           throw new Error(payload?.error ?? `Server error status: ${res.status}`);
         }
 
-        const items = payload?.videos ?? [];
-        const formatted = items.map((v: any) => {
-          const fallbackIsShort =
-            v.title?.toLowerCase().includes("#shorts") ||
-            v.title?.toLowerCase().includes("#short") ||
-            v.title?.toLowerCase().includes("short");
+        const officialItems = (payload?.videos ?? []).map((v: Partial<HomeMediaItem> & { date?: string; source?: string }) => ({
+          ...v,
+          date: v.date ? new Date(v.date).toLocaleDateString("en-GB") : "",
+          type: "official" as const,
+          source: (v.source ?? "youtube") as HomeMediaItem["source"],
+        })) as HomeMediaItem[];
 
-          return {
-            ...v,
-            date: v.date ? new Date(v.date).toLocaleDateString("en-GB") : "",
-            type: v.type ?? (fallbackIsShort ? "short" : "official"),
-          } as YouTubeVideo;
-        });
+        const shortItems = (payload?.shorts ?? []).map((v: Partial<HomeMediaItem> & { date?: string }) => ({
+          ...v,
+          date: v.date ? new Date(v.date).toLocaleDateString("en-GB") : "",
+          type: "short" as const,
+          source: "youtube" as HomeMediaItem["source"],
+        })) as HomeMediaItem[];
 
-        setVideos(formatted);
+        setOfficialVideos(officialItems);
+        setShortVideos(shortItems);
+
+        const storageResponse = await fetch('/api/dashboard/storage?source=talk-show');
+        const storageData = await storageResponse.json().catch(() => ({ items: [] }));
+        const uploads = (storageData.items || []).map((item: any) => ({
+          id: item.id,
+          title: item.title || 'Talk Show Upload',
+          thumbnail: 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" rx="32" fill="#111827"/><rect x="44" y="44" width="552" height="272" rx="24" fill="#1f2937"/><circle cx="320" cy="180" r="76" fill="#f43f5e"/><path d="M288 144l64 36-64 36z" fill="#fff"/><text x="320" y="270" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#f9fafb">Talk Show Upload</text></svg>`),
+          date: item.created_at ? new Date(item.created_at).toLocaleDateString('en-GB') : '',
+          url: item.file_url || '',
+          fileUrl: item.file_url || '',
+          type: 'talk-show' as const,
+          source: 'talk-show' as const,
+        })) as HomeMediaItem[];
+
+        setTalkShowUploads(uploads);
       } catch (err) {
         console.error("Fetch videos failed:", err);
         setError(err instanceof Error ? err.message : "Unknown error");
@@ -102,8 +112,7 @@ const Home = () => {
     void fetchVideos();
   }, []);
 
-  const filteredVideos = videos.filter((video) => video.type === selectedCategory);
-  const officialVideos = videos.filter((video) => video.type === "official");
+  const filteredVideos = selectedCategory === "official" ? officialVideos : [...shortVideos, ...talkShowUploads];
   const marqueeItems = officialVideos.slice(0, 5);
 
   // Auto-slide effect for mobile screens (< 640px)
@@ -130,8 +139,13 @@ const Home = () => {
     return () => clearInterval(interval);
   }, [marqueeItems.length]);
 
-  const openPlayer = (videoId: string) => {
-    router.push(`/video/${encodeURIComponent(videoId)}`);
+  const openPlayer = (video: HomeMediaItem) => {
+    if (video.source === "talk-show" && video.fileUrl) {
+      window.open(video.fileUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    router.push(`/video/${encodeURIComponent(video.id)}`);
   };
 
   const openDownloadModal = (e: React.MouseEvent<HTMLButtonElement>, videoId: string) => {
@@ -150,7 +164,7 @@ const Home = () => {
 
   return (
     <main className="min-h-screen pb-28">
-      <Switchbutton onScrollToSearch={scrollToMainSearch} />
+      <Switchbutton searchHref="/search" />
 
       <div className="p-2 text-start text-primary">
         <div className="relative overflow-hidden rounded-lg bg-linear-to-r from-cardcl via-cardcl/90 to-rose-950/40 p-3 shadow-xl border border-card1/20 backdrop-blur-md">
@@ -173,13 +187,13 @@ const Home = () => {
               ? marqueeItems.map((v, idx) => (
                   <div
                     key={`${v.id}-${idx}`}
-                    onClick={() => openPlayer(v.id)}
+                    onClick={() => openPlayer(v)}
                     className="group relative w-full shrink-0 snap-center h-52 sm:h-52 rounded-2xl overflow-hidden cursor-pointer bg-zinc-900 border border-zinc-800/80 shadow-md transition-all duration-300 hover:border-violet-500/50 hover:shadow-xl hover:shadow-violet-950/20"
                   >
-                    <Image
+                    <img
                       src={v.thumbnail}
                       alt={v.title}
-                      className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+                      className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/40 to-transparent opacity-90 transition-opacity group-hover:opacity-80" />
                     <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3">
@@ -233,22 +247,20 @@ const Home = () => {
 
           {/* Horizontal Scroll Cards Container */}
           <div className="flex gap-2.5 overflow-x-auto pb-3 pt-1 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-rose-600/30 px-1">
-            {[...videos]
+            {[...officialVideos]
               .sort((a, b) => (b.views || 0) - (a.views || 0))
               .slice(0, 6)
               .map((video, index) => (
                 <div
                   key={video.id || index}
-                  onClick={() => openPlayer(video.id)}
+                  onClick={() => openPlayer(video)}
                   className="group relative w-36 sm:w-40 h-42.5 shrink-0 rounded-2xl overflow-hidden cursor-pointer snap-start border border-white/10 bg-cardcl/60 shadow-lg transition-all duration-300 hover:scale-[1.02] hover:border-rose-500/50 hover:shadow-rose-950/30"
                 >
                   {/* Thumbnail Image */}
-                  <Image
+                  <img
                     src={video.thumbnail}
                     alt={video.title}
-                    fill
-                    sizes="(max-width: 640px) 100vw, 160px"
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
 
                   {/* Gradient Overlay */}
@@ -302,10 +314,10 @@ const Home = () => {
               >
                 <span>💥</span>
                 <span>
-                  <span className="hidden sm:inline">Official </span>Videos
+                  <span className="hidden sm:inline">Youtube </span>Videos
                 </span>
                 <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${selectedCategory === "official" ? "bg-white/20 text-white" : "bg-white/10 text-secondry"}`}>
-                  {videos.filter((v) => v.type === "official").length}
+                  {officialVideos.length}
                 </span>
               </button>
 
@@ -319,9 +331,9 @@ const Home = () => {
                 }`}
               >
                 <span>⚡</span>
-                <span>Shorts</span>
+                <span>Hot Comedies</span>
                 <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${selectedCategory === "short" ? "bg-white/20 text-white" : "bg-white/10 text-secondry"}`}>
-                  {videos.filter((v) => v.type === "short").length}
+                  {shortVideos.length + talkShowUploads.length}
                 </span>
               </button>
             </div>
@@ -339,16 +351,14 @@ const Home = () => {
                 filteredVideos.map((video) => (
                   <div
                     key={video.id}
-                    onClick={() => openPlayer(video.id)}
+                    onClick={() => openPlayer(video)}
                     className="group relative flex items-center justify-between gap-3 rounded-xl bg-white/10 p-2.5 transition-all duration-300 hover:border-card1/40 hover:bg-card1/10 cursor-pointer shadow-sm"
                   >
                     <div className="relative h-16 w-16 sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-xl bg-black">
-                      <Image
+                      <img
                         src={video.thumbnail}
                         alt={video.title}
-                        fill
-                        sizes="(max-width: 640px) 100vw, 80px"
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     </div>
                     <div className="flex flex-1 flex-col justify-center min-w-0 pr-2">

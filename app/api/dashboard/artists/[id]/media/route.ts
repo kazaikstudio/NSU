@@ -45,6 +45,49 @@ export async function GET(_request: Request, context: Context) {
   }
 }
 
+export async function PUT(request: Request, context: Context) {
+  const { id: artistId } = await context.params;
+  try {
+    const { searchParams } = new URL(request.url);
+    const mediaId = searchParams.get('mediaId');
+    if (!mediaId) {
+      return NextResponse.json({ error: 'A media id is required' }, { status: 400 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const title = typeof body?.title === 'string' ? body.title.trim() : '';
+    const album = typeof body?.album === 'string' ? body.album.trim() : '';
+
+    if (!title) {
+      return NextResponse.json({ error: 'Track title is required' }, { status: 400 });
+    }
+
+    await ensureMediaTable();
+    const { rows } = await pool.query<{ id: string; kind: string; title: string; album: string | null; fileName: string; fileUrl: string; createdAt: string }>(
+      `UPDATE artist_media
+       SET title = $1, album = $2
+       WHERE id = $3 AND artist_id = $4
+       RETURNING id, kind, title, album, file_name AS "fileName", file_url AS "fileUrl", created_at AS "createdAt"`,
+      [title, album || null, mediaId, artistId]
+    );
+
+    if (rows.length === 0) {
+      return NextResponse.json({ error: 'Media not found' }, { status: 404 });
+    }
+
+    await recordActivity({
+      action: 'updated',
+      entityType: 'track',
+      entityId: mediaId,
+      description: `Updated media ${mediaId} for artist ${artistId}`,
+    });
+
+    return NextResponse.json({ media: rows[0] });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
+}
+
 export async function DELETE(request: Request, context: Context) {
   const { id: artistId } = await context.params;
   try {
