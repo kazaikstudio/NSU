@@ -726,114 +726,232 @@ export default function DashboardApp({ user }: { user?: User | null }) {
 
           {activePage === 'videos' && (
             <div className="space-y-6">
+              {/* Page Header */}
               <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
                 <h2 className="mb-2 text-xl font-semibold">Video Library</h2>
-                <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Manage music videos and video media catalog.</p>
+                <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                  Manage music videos and video media catalog.
+                </p>
               </div>
+
+              {/* Upload Section */}
               <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
                 <h3 className="text-lg font-semibold">Talk Show Uploads</h3>
-                <p className={isDarkMode ? 'mt-1 text-sm text-slate-400' : 'mt-1 text-sm text-slate-600'}>Drag & drop video files here or click to choose a file to upload to the Talk Show Drive.</p>
+                <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Drag & drop video files here or click to choose a file to upload to the Talk Show Drive.
+                </p>
 
-                <form onSubmit={handleUpload} className="mt-4">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (editingStorageItemId) {
+                      void handleUpdateStorageItem(editingStorageItemId);
+                    } else if (uploadFile) {
+                      void submitUpload(uploadFile, uploadTitle.trim() || uploadFile.name.replace(/\.[^/.]+$/, ""), uploadType);
+                    }
+                  }}
+                  className="mt-4"
+                >
+                  {/* Drag and Drop Area */}
                   <div
-                    onDragOver={(e) => e.preventDefault()}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onDragEnter={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
                     onDrop={(e) => {
                       e.preventDefault();
-                      const f = e.dataTransfer?.files?.[0] || null;
-                      handleFileSelection(f);
+                      e.stopPropagation();
+
+                      const droppedFiles = e.dataTransfer.files;
+                      if (droppedFiles && droppedFiles.length > 0) {
+                        const droppedFile = droppedFiles[0];
+                        const derivedTitle = uploadTitle.trim() || droppedFile.name.replace(/\.[^/.]+$/, "");
+
+                        if (!uploadTitle.trim()) {
+                          setUploadTitle(derivedTitle);
+                        }
+                        setUploadFile(droppedFile);
+                      }
                     }}
-                    className={`mt-3 flex h-40 items-center justify-center rounded-md border-2 border-dashed px-4 ${isDarkMode ? 'border-slate-700 bg-slate-950' : 'border-slate-300 bg-slate-50'}`}
+                    className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition ${
+                      isDarkMode ? 'border-slate-700 bg-slate-900/40 hover:border-indigo-500' : 'border-slate-300 bg-slate-50 hover:border-indigo-500'
+                    }`}
                   >
                     <div className="text-center">
-                      <p className="text-sm text-slate-400">Drop a file here</p>
+                      <p className={isDarkMode ? 'text-sm text-slate-400' : 'text-sm text-slate-600'}>Drop a file here</p>
                       <p className="mt-2 text-xs text-slate-500">or</p>
-                      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-md bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-500">
-                        <input type="file" accept="video/*,audio/*" onChange={(ev) => handleFileSelection(ev.target.files?.[0] || null)} className="hidden" />
+                      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500">
+                        <input
+                          type="file"
+                          accept="video/*,audio/*"
+                          onChange={(ev) => {
+                            const selectedFile = ev.target.files?.[0] || null;
+                            if (selectedFile) {
+                              setUploadFile(selectedFile);
+                              if (!uploadTitle.trim()) {
+                                setUploadTitle(selectedFile.name.replace(/\.[^/.]+$/, ""));
+                              }
+                            }
+                          }}
+                          className="hidden"
+                        />
                         Choose file
                       </label>
-                      {uploadFile ? <div className="mt-3 text-sm text-slate-300">Selected: {uploadFile.name}</div> : null}
+                      {uploadFile ? (
+                        <div className={`mt-3 text-sm font-medium ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                          Selected: {uploadFile.name}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
+                  {/* Input & Submit Row */}
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <input type="text" placeholder="Title" value={uploadTitle} onChange={(e) => {
-                      setUploadTitle(e.target.value);
-                      if (editingStorageItemId) {
-                        setEditingStorageTitle(e.target.value);
-                      }
-                    }} className={`col-span-2 rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} />
-                    <button type="submit" disabled={uploading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500 disabled:opacity-50">{uploading ? 'Uploading…' : editingStorageItemId ? 'Update' : 'Upload to Talk Show'}</button>
+                    <input
+                      type="text"
+                      placeholder="Title"
+                      value={uploadTitle}
+                      onChange={(e) => setUploadTitle(e.target.value)}
+                      className={`col-span-2 rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-indigo-500 ${
+                        isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
+                      }`}
+                    />
+                    <button
+                      type="submit"
+                      disabled={uploading || (!uploadFile && !editingStorageItemId)}
+                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500 disabled:opacity-50"
+                    >
+                      {uploading ? 'Uploading…' : editingStorageItemId ? 'Update Title' : 'Upload to Talk Show'}
+                    </button>
                   </div>
 
-                  {uploading || uploadProgress > 0 ? (
+                  {/* Progress Bar */}
+                  {(uploading || uploadProgress > 0) && (
                     <div className="mt-3">
                       <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
                         <span>{uploading ? 'Uploading file...' : 'Upload complete'}</span>
                         <span>{uploadProgress}%</span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                        <div className="h-full rounded-full bg-indigo-500 transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                      <div className={`h-2 overflow-hidden rounded-full ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                        <div
+                          className="h-full rounded-full bg-indigo-500 transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
                       </div>
                     </div>
-                  ) : null}
+                  )}
 
-                  {uploadMessage && <p className={`mt-2 text-sm ${uploadMessage.includes('Unable') ? 'text-rose-400' : 'text-emerald-400'}`}>{uploadMessage}</p>}
+                  {/* Upload Status Message */}
+                  {uploadMessage && (
+                    <p className={`mt-2 text-sm ${uploadMessage.includes('Unable') || uploadMessage.includes('Error') ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {uploadMessage}
+                    </p>
+                  )}
                 </form>
 
-                <div className="mt-6 rounded-xl border border-slate-800/70 p-4">
+                {/* Uploaded Items List */}
+                <div className={`mt-6 rounded-xl border p-4 ${isDarkMode ? 'border-slate-800/70 bg-slate-950/30' : 'border-slate-200 bg-slate-50/50'}`}>
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h4 className="text-sm font-semibold">Talk Show Uploads</h4>
-                      <p className={isDarkMode ? 'mt-1 text-xs text-slate-400' : 'mt-1 text-xs text-slate-600'}>Click the arrow to edit the title of an uploaded item.</p>
+                      <p className={`mt-0.5 text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        Manage and edit details of uploaded items.
+                      </p>
                     </div>
-                    <span className="rounded-full bg-indigo-500/10 px-2.5 py-1 text-xs font-medium text-indigo-400">{storageItems.length}</span>
+                    <span className="rounded-full bg-indigo-500/10 px-2.5 py-1 text-xs font-semibold text-indigo-400">
+                      {storageItems.length}
+                    </span>
                   </div>
 
                   <div className="space-y-2">
                     {storageItems.length === 0 ? (
-                      <div className={`rounded-lg border border-dashed px-3 py-4 text-sm ${isDarkMode ? 'border-slate-700 text-slate-400' : 'border-slate-300 text-slate-500'}`}>No Talk Show uploads yet.</div>
+                      <div className={`rounded-lg border border-dashed px-3 py-4 text-center text-sm ${
+                        isDarkMode ? 'border-slate-700 text-slate-400' : 'border-slate-300 text-slate-500'
+                      }`}>
+                        No Talk Show uploads yet.
+                      </div>
                     ) : storageItems.map((item) => (
-                      <div key={item.id} className={`flex items-center justify-between rounded-lg border px-3 py-3 ${isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-200 bg-slate-50'}`}>
+                      <div
+                        key={item.id}
+                        className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 transition ${
+                          isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-200 bg-white'
+                        }`}
+                      >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs uppercase tracking-[0.2em] text-indigo-400">{item.type}</span>
+                            <span className="shrink-0 rounded bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-400">
+                              {item.type}
+                            </span>
                             {editingStorageItemId === item.id ? (
                               <input
+                                type="text"
                                 value={editingStorageTitle}
                                 onChange={(e) => setEditingStorageTitle(e.target.value)}
-                                className={`w-full rounded-md border px-2 py-1 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-900'}`}
+                                className={`w-full rounded-md border px-2 py-1 text-sm outline-none transition focus:border-indigo-500 ${
+                                  isDarkMode ? 'border-slate-700 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-900'
+                                }`}
+                                autoFocus
                               />
                             ) : (
                               <span className="truncate text-sm font-medium">{item.title}</span>
                             )}
                           </div>
-                          <p className={`mt-1 truncate text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>{item.file_url}</p>
+                          <p className={`mt-1 truncate text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>
+                            {item.file_url}
+                          </p>
                         </div>
-                        <div className="ml-3 flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (editingStorageItemId === item.id) {
-                                setEditingStorageItemId(null);
-                                setEditingStorageTitle('');
-                                setUploadTitle('');
-                                setUploadFile(null);
-                              } else {
-                                startEditingStorageItem(item);
-                              }
-                            }}
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 text-slate-400 transition hover:bg-slate-800 hover:text-white"
-                            aria-label={editingStorageItemId === item.id ? 'Cancel edit' : 'Edit title'}
-                          >
-                            {editingStorageItemId === item.id ? '×' : '↺'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteStorageItem(item.id)}
-                            className="rounded-md border border-rose-500/30 px-2.5 py-1 text-xs font-medium text-rose-400 transition hover:bg-rose-500/10"
-                          >
-                            Delete
-                          </button>
+
+                        {/* Action Buttons */}
+                        <div className="ml-3 flex shrink-0 items-center gap-2">
+                          {editingStorageItemId === item.id ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void handleUpdateStorageItem(item.id)}
+                                className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-emerald-500"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingStorageItemId(null);
+                                  setEditingStorageTitle('');
+                                }}
+                                className="rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingStorageItemId(item.id);
+                                  setEditingStorageTitle(item.title);
+                                }}
+                                className="rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteStorageItem(item.id)}
+                                className="rounded-md border border-rose-500/30 px-2.5 py-1 text-xs font-medium text-rose-400 transition hover:bg-rose-500/10"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}
