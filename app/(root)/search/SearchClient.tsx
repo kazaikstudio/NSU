@@ -5,6 +5,12 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Mic, MicOff } from 'lucide-react'
 import Switchbutton from '@/components/Switchbutton'
+import AudioPlayer from '@/components/AudioPlayer'
+
+function getPlayableAudioUrl(url: string) {
+  const match = url.match(/[?&]id=([^&]+)/);
+  return match?.[1] ? `/api/dashboard/media/${match[1]}` : url;
+}
 
 interface AudioTrack {
   id: string
@@ -215,21 +221,22 @@ export default function SearchClient() {
   }
 
   return (
-    <main className="min-h-screen pb-28 px-4 py-6 text-primary mx-auto max-w-7xl">
+    <main className="min-h-screen pb-28 px-2 sm:px-4 py-4 sm:py-6 text-primary mx-auto max-w-7xl">
       <Switchbutton searchHref="/search" />
 
-      <section className="rounded-4xl border border-card1/20 bg-cardcl/90 p-6 shadow-2xl shadow-black/10 backdrop-blur-2xl">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <section className="rounded-3xl border border-card1/20 bg-cardcl/90 p-1 shadow-2xl shadow-black/15 backdrop-blur-2xl">
+        <div className="mb-6 sm:mb-8 p-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.32em] text-rose-400">Search</p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-primary sm:text-4xl">
-              Search audio, artists, and videos
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-secondry sm:text-base">
-              Enter a keyword and view matching audio tracks, artists, and YouTube videos from the app.
+            <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.24em] sm:tracking-[0.32em] text-rose-400">Search</p>
+            <span className="mt-1 sm:mt-2 text-2xl font-bold tracking-tight text-primary sm:text-4xl">
+              Audio & Videos
+            </span>
+            <p className="mt-2 sm:mt-3 max-w-2xl text-xs sm:text-base leading-5 sm:leading-6 text-secondry">
+              Enter a keyword and view matching Audio tracks, Comedies & videos from the app.
             </p>
           </div>
-          <form onSubmit={handleSubmit} className="flex w-full gap-3 sm:w-auto">
+
+          <form onSubmit={handleSubmit} className="flex flex-wrap sm:flex-nowrap w-full gap-2 sm:gap-3 sm:w-auto">
             <label htmlFor="searchQuery" className="sr-only">Search query</label>
             <input
               id="searchQuery"
@@ -237,96 +244,90 @@ export default function SearchClient() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search here..."
-              className="min-w-0 flex-1 rounded-3xl border border-card1/20 bg-black/10 px-4 py-3 text-base text-primary outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
-            />
-            <button
-              type="button"
-              onClick={toggleListening}
-              className={`flex h-12 w-12 items-center justify-center rounded-3xl border border-card1/20 bg-black/10 text-primary transition hover:bg-card1/20 ${isListening ? 'bg-rose-500/20 text-rose-300' : ''}`}
-              aria-label={isListening ? 'Stop voice search' : 'Start voice search'}
-              title={isListening ? 'Stop voice search' : 'Start voice search'}
-            >
-              {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-            </button>
-            <button
-              type="submit"
-              className="rounded-3xl bg-rose-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-600"
-            >
-              Search
-            </button>
+              className="min-w-0 flex-1 rounded-2xl sm:rounded-3xl border border-card1/20 bg-black/10 px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base text-primary outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20"
+              />
+              <button
+                type="button"
+                onClick={toggleListening}
+                className={`flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-2xl sm:rounded-3xl border border-card1/20 bg-black/10 text-primary transition hover:bg-card1/20 ${isListening ? 'bg-rose-500/20 text-rose-300' : ''}`}
+                aria-label={isListening ? 'Stop voice search' : 'Start voice search'}
+                title={isListening ? 'Stop voice search' : 'Start voice search'}
+                >
+                {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+              </button>
           </form>
+
         </div>
 
         {loading ? (
-          <div className="rounded-3xl border border-dashed border-card1/20 bg-cardcl/50 p-8 text-center text-sm text-secondry">Loading search sources...</div>
+          <div className="rounded-2xl sm:rounded-3xl border border-dashed border-card1/20 bg-cardcl/50 p-6 sm:p-8 text-center text-xs sm:text-sm text-secondry">Loading search sources...</div>
         ) : error ? (
-          <div className="rounded-3xl border border-red-500/30 bg-red-500/5 p-6 text-sm text-red-400">{error}</div>
+          <div className="rounded-2xl sm:rounded-3xl border border-red-500/30 bg-red-500/5 p-4 sm:p-6 text-xs sm:text-sm text-red-400">{error}</div>
         ) : query.trim() === '' ? (
-          <div className="rounded-3xl border border-dashed border-card1/20 bg-cardcl/50 p-8 text-center text-sm text-secondry">
+          <div className="rounded-2xl sm:rounded-3xl border border-dashed border-card1/20 bg-cardcl/50 p-6 sm:p-8 text-center text-xs sm:text-sm text-secondry">
             Search across audio and video content by entering a phrase above.
           </div>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-6">
-              <div className="rounded-3xl border border-card1/20 bg-cardcl/80 p-5">
-                <div className="flex items-center justify-between gap-4 pb-4 border-b border-card1/15">
+          <div>
+            <div className="space-y-4 sm:space-y-6">
+              <div className="rounded-2xl sm:rounded-3xl border border-card1/20 bg-cardcl/80 p-1 sm:p-5">
+                <div className="flex items-center justify-between gap-4 pb-3 mt-2 sm:pb-4 border-b border-card1/15">
                   <div>
-                    <h2 className="text-xl font-semibold text-primary">Audio results</h2>
-                    <p className="mt-1 text-sm text-secondry">
+                    <span className="text-lg px-2 sm:text-xl font-semibold text-primary">Audios</span>
+                    <p className="mt-0.5 px-2 text-xs sm:text-sm text-secondry">
                       {filteredTracks.length} result{filteredTracks.length === 1 ? '' : 's'} found
                     </p>
                   </div>
-                  <span className="rounded-full bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-300">
+                  <span className="rounded-full bg-rose-500/10 px-2.5 sm:px-3 py-.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-rose-300">
                     Audio
                   </span>
                 </div>
 
                 {filteredTracks.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-secondry">No audio tracks match your search.</p>
+                  <p className="py-6 sm:py-8 text-center text-xs sm:text-sm text-secondry">No audio tracks match your search.</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-1 mt-3">
                     {filteredTracks.map((track) => (
-                      <div key={track.id} className="rounded-3xl border border-card1/15 bg-cardcl/70 p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-rose-500/10 text-lg font-bold text-rose-300">
-                            {track.artistName.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-base font-semibold text-primary">{track.title}</p>
-                            <p className="mt-1 text-sm text-secondry">{track.artistName} • {track.album || 'Unknown album'}</p>
-                            <p className="mt-2 text-xs text-secondary/70">{new Date(track.createdAt).toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                      </div>
+                      <AudioPlayer
+                        key={track.id}
+                        src={getPlayableAudioUrl(track.fileUrl)}
+                        fileUrl={track.fileUrl}
+                        title={track.title}
+                        album={track.album}
+                        fileName={track.fileName}
+                        createdAt={track.createdAt}
+                        artistName={track.artistName}
+                        artistGenre={track.artistGenre}
+                      />
                     ))}
                   </div>
                 )}
               </div>
 
-              <div className="rounded-3xl border border-card1/20 bg-cardcl/80 p-5">
-                <div className="flex items-center justify-between gap-4 pb-4 border-b border-card1/15">
+              <div className="rounded-2xl sm:rounded-3xl border border-card1/20 bg-cardcl/80 p-1 sm:p-5">
+                <div className="flex items-center justify-between gap-4 pb-3 sm:pb-4 border-b border-card1/15">
                   <div>
-                    <h2 className="text-xl font-semibold text-primary">Video results</h2>
-                    <p className="mt-1 text-sm text-secondry">
+                    <h2 className="text-lg px-2 mt-4 sm:text-xl font-semibold text-primary">Videos</h2>
+                    <p className="mt-0.5 px-2 text-xs sm:text-sm text-secondry">
                       {filteredVideos.length} result{filteredVideos.length === 1 ? '' : 's'} found
                     </p>
                   </div>
-                  <span className="rounded-full bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-300">
+                  <span className="rounded-full bg-amber-400/10 px-2.5 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold text-amber-300">
                     Videos
                   </span>
                 </div>
 
                 {filteredVideos.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-secondry">No videos match your search.</p>
+                  <p className="py-6 sm:py-8 text-center text-xs sm:text-sm text-secondry">No videos match your search.</p>
                 ) : (
-                  <div className="grid gap-4">
+                  <div className="grid gap-1 sm:gap-4 mt-3">
                     {filteredVideos.map((video) => (
                       <a
                         key={video.id}
                         href={`/video/${encodeURIComponent(video.id)}`}
-                        className="group grid gap-3 rounded-3xl border border-card1/15 bg-cardcl/70 p-4 transition hover:border-rose-400/30"
+                        className="group grid gap-2.5 sm:gap-3 rounded-2xl sm:rounded-3xl border border-card1/15 bg-cardcl/70 p-3 sm:p-4 transition hover:border-rose-400/30"
                       >
-                        <div className="relative h-48 overflow-hidden rounded-3xl bg-black">
+                        <div className="relative h-40 sm:h-48 overflow-hidden rounded-2xl sm:rounded-3xl bg-black">
                           <Image
                             src={video.thumbnail}
                             alt={video.title}
@@ -335,8 +336,8 @@ export default function SearchClient() {
                           />
                         </div>
                         <div>
-                          <p className="text-base font-semibold text-primary">{video.title}</p>
-                          <p className="mt-1 text-sm text-secondry">{video.date ? new Date(video.date).toLocaleDateString() : 'Video'}</p>
+                          <p className="text-sm sm:text-base font-semibold text-primary">{video.title}</p>
+                          <p className="mt-0.5 text-xs sm:text-sm text-secondry">{video.date ? new Date(video.date).toLocaleDateString() : 'Video'}</p>
                         </div>
                       </a>
                     ))}
@@ -345,26 +346,10 @@ export default function SearchClient() {
               </div>
             </div>
 
-            <aside className="rounded-3xl border border-card1/20 bg-black/10 p-5">
-              <h3 className="text-lg font-semibold text-primary">Search notes</h3>
-              <p className="mt-3 text-sm leading-6 text-secondry">
-                This page loads the available audio track and video sources, then filters them in the browser.
-                Use a few keywords to narrow the results.
-              </p>
-              <div className="mt-5 space-y-3 text-sm text-secondry">
-                <div className="rounded-2xl bg-cardcl/60 p-3">
-                  <p className="font-semibold text-primary">Tip</p>
-                  <p>Try artist names, track titles, or video keywords.</p>
-                </div>
-                <div className="rounded-2xl bg-cardcl/60 p-3">
-                  <p className="font-semibold text-primary">Open from anywhere</p>
-                  <p>The search button navigates to this page from any page with the Switchbutton component.</p>
-                </div>
-              </div>
-            </aside>
           </div>
         )}
       </section>
     </main>
   )
 }
+
