@@ -39,6 +39,15 @@ const Home = () => {
   const gridSectionRef = useRef<HTMLDivElement>(null);
   const marqueeRef = useRef<HTMLDivElement>(null);
 
+  const openPlayer = (video: HomeMediaItem) => {
+    if (selectedCategory === "short" || video.type === "short" || video.source === "talk-show") {
+      router.push(`/Comedy/${encodeURIComponent(video.id)}`);
+      return;
+    }
+
+    router.push(`/video/${encodeURIComponent(video.id)}`);
+  };
+
   const handleCategoryChange = (category: "official" | "short") => {
     setSelectedCategory(category);
     if (gridSectionRef.current) {
@@ -138,15 +147,6 @@ const Home = () => {
 
     return () => clearInterval(interval);
   }, [marqueeItems.length]);
-
-  const openPlayer = (video: HomeMediaItem) => {
-    if (video.source === "talk-show" && video.fileUrl) {
-      window.open(video.fileUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    router.push(`/video/${encodeURIComponent(video.id)}`);
-  };
 
   const openDownloadModal = (e: React.MouseEvent<HTMLButtonElement>, videoId: string) => {
     e.stopPropagation();
@@ -401,3 +401,7 @@ const Home = () => {
 };
 
 export default Home;
+
+
+
+

@@ -51,10 +51,10 @@ export default function VideoPlayerPage({ params }: { params: Promise<{ id: stri
   };
 
   return (
-    <main className="min-h-screen bg-[#0d0f12] text-slate-100 pb-28 overflow-x-hidden">
+    <main className="min-h-screen mt-5 text-primary pb-28 overflow-x-hidden">
       {/* Full-Width Auto-Sizing Video Container */}
-      <div className="w-full bg-black shadow-2xl">
-        <div className="relative aspect-video w-full max-w-7xl mx-auto bg-slate-900">
+     <div className="rounded-xl overflow-hidden w-full max-w-7xl mx-auto border-2 border-white/50 shadow-lg shadow-Audicard/90">
+        <div className="relative aspect-video w-full max-w-7xl mx-auto bg-mrow">
           {videoId ? (
             <iframe
               className="absolute inset-0 h-full w-full border-0 object-cover"
@@ -66,7 +66,7 @@ export default function VideoPlayerPage({ params }: { params: Promise<{ id: stri
               allowFullScreen
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-slate-900 text-center text-sm text-slate-400">
+            <div className="flex h-full w-full items-center justify-center bg-mrow text-center text-sm text-secondry">
               Invalid video ID. Please check the link and try again.
             </div>
           )}
@@ -80,7 +80,7 @@ export default function VideoPlayerPage({ params }: { params: Promise<{ id: stri
         <div>
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-3.5 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/10 transition"
+            className="inline-flex items-center gap-2 rounded-full bg-cardcl/40 border border-card1/20 px-3.5 py-1.5 text-xs font-medium text-secondary hover:bg-cardcl/70 transition"
           >
             ← Back to browsing
           </Link>
@@ -88,26 +88,26 @@ export default function VideoPlayerPage({ params }: { params: Promise<{ id: stri
 
         {/* Title & Metadata Header */}
         <div className="space-y-2">
-          <span className="text-xl sm:text-3xl font-extrabold text-white tracking-tight">
+          <span className="text-xl sm:text-3xl font-extrabold text-primary tracking-tight">
             Video Playback Experience
           </span>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-slate-400 font-medium">
-            <span className="text-amber-400 font-bold">★ 4.8</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-secondry font-medium">
+            <span className="text-amber-500 dark:text-amber-400 font-bold">★ 4.8</span>
             <span>•</span>
             <span>High Definition</span>
             <span>•</span>
-            <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-slate-200 truncate max-w-50 sm:max-w-none">
+            <span className="font-mono bg-cardcl/60 border border-card1/15 px-2 py-0.5 rounded text-primary truncate max-w-50 sm:max-w-none">
               ID: {id}
             </span>
           </div>
 
           {/* Genre / Category Tags */}
           <div className="flex flex-wrap gap-1.5 pt-1">
-            <span className="rounded-full bg-indigo-600/80 px-3 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+            <span className="rounded-full bg-Audicard px-3 py-0.5 text-[11px] font-semibold text-white shadow-sm">
               Official
             </span>
-            <span className="rounded-full bg-blue-600/80 px-3 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+            <span className="rounded-full bg-Audicard1 px-3 py-0.5 text-[11px] font-semibold text-white shadow-sm border border-card1/15">
               Visuals
             </span>
           </div>
@@ -120,7 +120,7 @@ export default function VideoPlayerPage({ params }: { params: Promise<{ id: stri
             href={videoId ? `https://www.youtube.com/watch?v=${videoId}` : `https://www.youtube.com/`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#10b981] hover:bg-[#059669] px-5 py-3 text-sm font-bold text-white transition shadow-lg shadow-emerald-950/40"
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 dark:bg-[#10b981] dark:hover:bg-[#059669] px-5 py-3 text-sm font-bold text-white transition shadow-lg shadow-emerald-950/20"
           >
             <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
@@ -133,7 +133,7 @@ export default function VideoPlayerPage({ params }: { params: Promise<{ id: stri
             <button
               type="button"
               onClick={(event) => openDownloadModal(event, id)}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm font-medium text-slate-200 hover:bg-white/10 transition shadow"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-cardcl border border-card1/20 px-4 py-3 text-sm font-medium text-primary hover:bg-cardcl/80 transition shadow-sm"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -151,7 +151,7 @@ export default function VideoPlayerPage({ params }: { params: Promise<{ id: stri
                   alert("Link copied to clipboard!");
                 }
               }}
-              className="flex items-center justify-center rounded-xl bg-white/5 border border-white/10 h-11 w-11 shrink-0 text-slate-200 hover:bg-white/10 transition shadow"
+              className="flex items-center justify-center rounded-xl bg-cardcl border border-card1/20 h-11 w-11 shrink-0 text-primary hover:bg-cardcl/80 transition shadow-sm"
               title="Share video"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -162,29 +162,29 @@ export default function VideoPlayerPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* Studio Info Cards Grid */}
-        <div className=" space-y-3">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+        <div className="space-y-3">
+          <span className="text-xs font-bold text-secondry uppercase tracking-wider">
             Studio Information
           </span>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-1">
-            <div className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 p-2.5 shadow-sm">
+            <div className="flex items-center gap-3 rounded-xl bg-cardcl border border-card1/20 p-2.5 shadow-sm">
               <div className="h-11 w-11 shrink-0 rounded-lg bg-linear-to-br from-indigo-500 to-rose-500 flex items-center justify-center text-white font-bold text-sm">
                 NS
               </div>
               <div className="min-w-0 flex-1">
-                <h4 className="text-xs sm:text-sm font-semibold text-white truncate">Noll Studio</h4>
-                <p className="text-[11px] text-slate-400 truncate">Creator & Channel Host</p>
+                <h4 className="text-xs sm:text-sm font-semibold text-primary truncate">Noll Studio</h4>
+                <p className="text-[11px] text-secondry">Creator & Channel Host</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 p-2.5 shadow-sm">
+            <div className="flex items-center gap-3 rounded-xl bg-cardcl border border-card1/20 p-2.5 shadow-sm">
               <div className="h-11 w-11 shrink-0 rounded-lg bg-linear-to-br from-purple-600 to-indigo-700 flex items-center justify-center text-white font-bold text-sm">
                 YT
               </div>
               <div className="min-w-0 flex-1">
-                <h4 className="text-xs sm:text-sm font-semibold text-white truncate">YouTube API Stream</h4>
-                <p className="text-[11px] text-slate-400 truncate">Direct Source Feed</p>
+                <h4 className="text-xs sm:text-sm font-semibold text-primary truncate">YouTube API Stream</h4>
+                <p className="text-[11px] text-secondry">Direct Source Feed</p>
               </div>
             </div>
           </div>
