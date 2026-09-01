@@ -435,17 +435,13 @@ export default function DashboardApp({ user }: { user?: User | null }) {
     }
   }, [editingStorageTitle]);
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await fetch('/api/dashboard/login', { method: 'DELETE' });
-    } catch {
-      // Ignore logout API errors and continue clearing local state.
-    }
-
+  const handleLogout = useCallback(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('nsu_user');
       window.location.href = '/dashboard';
+      return;
     }
+
     router.push('/dashboard');
   }, [router]);
 
