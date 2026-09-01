@@ -3,8 +3,18 @@ import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Noll Studios Ug",
-  description: "nollstudios.org",
+  title: "Noll Studios - NSU | Creative Studio",
+  description:
+    "Noll Studios (NSU) - Your description here. Discover our work and services.",
+  metadataBase: new URL("https://nollstudios.org"),
+  openGraph: {
+    title: "Noll Studios - NSU | Creative Studio",
+    description:
+      "Noll Studios (NSU) - Your description here. Discover our work and services.",
+    url: "https://nollstudios.org",
+    siteName: "Noll Studios (NSU)",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
