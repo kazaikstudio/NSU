@@ -42,7 +42,7 @@ export default function ArtistList({ searchTerm }: { searchTerm: string }) {
     `${artist.name} ${artist.genre}`.toLowerCase().includes(normalizedSearch)
   );
 
-  if (loading) return <p className="col-span-full py-16 text-center text-sm text-slate-400">Loading registered artists...</p>;
+  if (loading) return <p className="col-span-full py-16 text-center text-sm text-slate-400">Loading artists...</p>;
   if (error) return <p className="col-span-full py-16 text-center text-sm text-red-400">{error}</p>;
   if (filteredArtists.length === 0) {
     return <p className="col-span-full py-16 text-center text-sm text-slate-400">No registered artists match your search.</p>;
@@ -74,3 +74,4 @@ export default function ArtistList({ searchTerm }: { searchTerm: string }) {
         </div>
   );
 }
+

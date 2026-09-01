@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import AudioPlayer from '@/components/AudioPlayer';
 import ArtistProfileLoading from '@/components/ArtistProfileLoading';
+import { getArtistById } from '@/lib/artists';
 
 interface Artist {
   id: string;
@@ -203,7 +204,13 @@ export default function PublicArtistDetailPage() {
   };
 
   if (loading) {
-    return <ArtistProfileLoading title="Loading artist profile..." description="Loading artist details and media from the dashboard." />;
+    const loadingName = artist?.name || getArtistById(params.id)?.name || 'artist';
+    return (
+      <ArtistProfileLoading
+        artistName={loadingName}
+        description={`Loading ${loadingName} details and media from the dashboard.`}
+      />
+    );
   }
 
   if (error || !artist) {

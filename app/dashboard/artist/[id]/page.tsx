@@ -197,7 +197,13 @@ export default function ArtistDetailPage() {
   }, [params.id]);
 
   if (loadingArtist) {
-    return <ArtistProfileLoading />;
+    const loadingName = artist?.name || getArtistById(params.id)?.name || 'artist';
+    return (
+      <ArtistProfileLoading
+        artistName={loadingName}
+        description={`Fetching ${loadingName} details and media from the dashboard.`}
+      />
+    );
   }
 
   if (!artist) {

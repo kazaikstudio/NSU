@@ -18,11 +18,11 @@ const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
   const isAudio = pathname === '/Audio'
   const isDownload = pathname === '/download'
   const isVideo = pathname === '/' || pathname.startsWith('/video/')
+  const resolvedSearchHref = searchHref ?? '/search'
 
   return (
-    <div className="fixed inset-x-0 bottom-6 z-50 flex max-w-full items-center justify-center gap-1.5 px-3 sm:gap-2 sm:px-4 pointer-events-none text-primary">
-      {/* Video / Audio / Download Toggle Pills */}
-      <div className="pointer-events-auto flex max-w-[calc(100vw-4rem)] items-center gap-1 sm:gap-2 rounded-full border border-card1/20 bg-cardcl/95 p-1 sm:p-1.5 shadow-xl shadow-black/40 backdrop-blur">
+    <div className="fixed inset-x-0 bottom-6 z-50 flex max-w-full items-center justify-center px-3 sm:px-4 pointer-events-none text-primary">
+      <div className="pointer-events-auto flex max-w-[calc(100vw-2.5rem)] items-center gap-1 sm:gap-2 rounded-full border border-card1/20 bg-cardcl/95 p-1 sm:p-1.5 shadow-xl shadow-black/40 backdrop-blur">
         <Link
           href="/"
           className={`rounded-full px-3 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-medium transition cursor-pointer whitespace-nowrap ${
@@ -53,24 +53,21 @@ const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
         >
           Download
         </Link>
-      </div>
 
-      {/* Quick Jump & Focus Search Icon Button */}
-      {(searchHref || onScrollToSearch) && (
         <button
           type="button"
           onClick={() => {
-            if (searchHref) {
-              router.push(searchHref)
-            } else {
-              onScrollToSearch?.()
+            if (onScrollToSearch) {
+              onScrollToSearch()
+              return
             }
+            router.push(resolvedSearchHref)
           }}
-          title={searchHref ? 'Open search page' : 'Focus search input'}
-          className="pointer-events-auto shrink-0 flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full border border-card1/20 bg-cardcl/95 text-secondry hover:text-primary hover:bg-card1/10 active:bg-rose-600 shadow-xl shadow-black/40 backdrop-blur transition-all cursor-pointer"
+          title={onScrollToSearch ? 'Focus search input' : 'Open search page'}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-card1/20 bg-cardcl/95 text-secondry transition-all hover:text-primary hover:bg-card1/10 active:bg-rose-600 sm:h-9 sm:w-9"
         >
           <svg
-            className="w-4 h-4 sm:w-5 sm:h-5"
+            className="h-3.5 w-3.5 sm:h-4 sm:w-4"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
@@ -83,7 +80,7 @@ const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
             />
           </svg>
         </button>
-      )}
+      </div>
     </div>
   )
 }
