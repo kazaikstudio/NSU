@@ -79,15 +79,18 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
               const itemUrl = item.file_url || item.url || "";
               return itemUrl.startsWith(basePath);
             })
-            .map((item) => ({
-              id: String(item.id),
-              title: item.title || item.name || itemUrl.split("/").pop() || "Audio File",
-              comedian: item.artist || item.comedian || "Media Track",
-              duration: item.duration || "--:--",
-              views: item.views || "Audio Stream",
-              fileUrl: item.file_url || item.url,
-              thumbnail: item.thumbnail
-            }));
+            .map((item) => {
+              const itemUrl = item.file_url || item.url || "";
+              return {
+                id: String(item.id),
+                title: item.title || item.name || itemUrl.split("/").pop() || "Audio File",
+                comedian: item.artist || item.comedian || "Media Track",
+                duration: item.duration || "--:--",
+                views: item.views || "Audio Stream",
+                fileUrl: item.file_url || item.url,
+                thumbnail: item.thumbnail
+              };
+            });
 
           const matchedActive = pathFiles.find((f) => f.id === String(id)) || pathFiles[0];
 
