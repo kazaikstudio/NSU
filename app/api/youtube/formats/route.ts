@@ -38,32 +38,66 @@ export async function GET(request: Request) {
       ...(info.streaming_data?.formats || []),
       ...(info.streaming_data?.adaptive_formats || []),
     ];
+    const ffmpegAvailable = Boolean(getFfmpegPath());
     const audioSource = allFormats
       .filter((format) => format.has_audio && !format.has_video && !format.has_text)
       .sort((left, right) => right.bitrate - left.bitrate)[0]
       || allFormats
         .filter((format) => format.has_audio && !format.has_text)
         .sort((left, right) => right.bitrate - left.bitrate)[0];
-    const videoSource = allFormats
+    const directVideoSources = allFormats
       .filter((format) => {
         const quality = Number(format.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
-        return format.has_video && !format.has_text && format.mime_type?.startsWith('video/mp4') && quality >= 360;
+        return (
+          format.has_video &&
+          format.has_audio &&
+          !format.has_text &&
+          format.mime_type?.startsWith('video/mp4') &&
+          quality >= 360
+        );
       })
       .sort((left, right) => {
         const leftQuality = Number(left.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
         const rightQuality = Number(right.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
         return leftQuality - rightQuality || left.bitrate - right.bitrate;
       });
+    const mergeOnlyVideoSources = ffmpegAvailable
+      ? allFormats
+          .filter((format) => {
+            const quality = Number(format.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
+            return (
+              format.has_video &&
+              !format.has_audio &&
+              !format.has_text &&
+              format.mime_type?.startsWith('video/mp4') &&
+              quality >= 360
+            );
+          })
+          .sort((left, right) => {
+            const leftQuality = Number(left.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
+            const rightQuality = Number(right.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
+            return leftQuality - rightQuality || left.bitrate - right.bitrate;
+          })
+      : [];
     const formats = [
-      ...(audioSource ? [
+      ...(ffmpegAvailable && audioSource ? [
         { itag: audioSource.itag, label: 'MP3 128 kbps', kind: 'audio', mimeType: 'audio/mpeg', extension: 'mp3', outputBitrate: 128, size: null, bitrate: 128000 },
         { itag: audioSource.itag, label: 'MP3 192 kbps', kind: 'audio', mimeType: 'audio/mpeg', extension: 'mp3', outputBitrate: 192, size: null, bitrate: 192000 },
         { itag: audioSource.itag, label: 'MP3 320 kbps', kind: 'audio', mimeType: 'audio/mpeg', extension: 'mp3', outputBitrate: 320, size: null, bitrate: 320000 },
       ] : []),
-      ...videoSource.map((video) => ({
+      ...directVideoSources.map((video) => ({
         itag: video.itag,
         label: video.quality_label || 'Video',
-        kind: video.has_audio ? 'video+audio' : 'video',
+        kind: 'video+audio',
+        mimeType: 'video/mp4',
+        extension: 'mp4',
+        size: video.content_length || null,
+        bitrate: video.bitrate,
+      })),
+      ...mergeOnlyVideoSources.map((video) => ({
+        itag: video.itag,
+        label: `${video.quality_label || 'Video'} (server merged)`,
+        kind: 'video',
         mimeType: 'video/mp4',
         extension: 'mp4',
         size: video.content_length || null,
@@ -82,6 +116,9 @@ export async function GET(request: Request) {
           total: allFormats.length,
           audioOnly: allFormats.filter((format) => format.has_audio && !format.has_video && !format.has_text).length,
           videoMp4: allFormats.filter((format) => format.has_video && format.mime_type?.startsWith('video/mp4')).length,
+          directVideoMp4: directVideoSources.length,
+          mergeOnlyVideoMp4: mergeOnlyVideoSources.length,
+          exposedFormats: formats.length,
         },
       },
     });

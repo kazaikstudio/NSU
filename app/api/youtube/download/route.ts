@@ -180,6 +180,7 @@ export async function GET(req: Request) {
       ...(info.streaming_data?.adaptive_formats || []),
     ];
     const selectedFormat = availableFormats.find((format) => format.itag === itag);
+    const ffmpegAvailable = Boolean(getFfmpegPath());
 
     if (!selectedFormat) {
       throw new YoutubeDownloadError(404, {
@@ -239,6 +240,34 @@ export async function GET(req: Request) {
     const downloadCategory = audioOutput ? "audio" : "video";
     const downloadFilename = `${safeTitle}.${extension}`;
     const downloadPath = await createStoredDownloadPath(downloadFilename, downloadCategory);
+
+    if (audioOutput && !ffmpegAvailable) {
+      throw new YoutubeDownloadError(503, {
+        code: 'FFMPEG_NOT_FOUND',
+        message: 'Audio downloads are temporarily unavailable on this server.',
+        details: {
+          ...getRequestDiagnostics(id, itag, output),
+          ffmpeg: getFfmpegDiagnostics(getFfmpegPath()),
+        },
+      });
+    }
+
+    if (!audioOutput && !selectedFormat.has_audio && !ffmpegAvailable) {
+      throw new YoutubeDownloadError(503, {
+        code: 'FFMPEG_NOT_FOUND',
+        message: 'This video quality requires server-side merging, which is unavailable on this server. Please choose a standard MP4 option.',
+        details: {
+          ...getRequestDiagnostics(id, itag, output),
+          selectedFormat: {
+            itag: selectedFormat.itag,
+            mimeType: selectedFormat.mime_type,
+            hasAudio: selectedFormat.has_audio,
+            hasVideo: selectedFormat.has_video,
+            bitrate: selectedFormat.bitrate,
+          },
+        },
+      });
+    }
 
     if (audioOutput) {
       const executable = getFfmpegPath();
