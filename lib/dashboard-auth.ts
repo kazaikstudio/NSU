@@ -55,8 +55,9 @@ export function getDashboardSessionCookieOptions() {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' || Boolean(process.env.RAILWAY_PUBLIC_DOMAIN),
     path: '/',
     maxAge: ONE_WEEK_IN_SECONDS,
+    expires: new Date(Date.now() + ONE_WEEK_IN_SECONDS * 1000),
   };
 }

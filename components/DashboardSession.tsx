@@ -16,9 +16,44 @@ export default function DashboardSession() {
       return;
     }
 
+    const readStoredUser = () => {
+      try {
+        const rawUser = window.localStorage.getItem('nsu_user');
+        if (!rawUser) return null;
+
+        const parsedUser = JSON.parse(rawUser) as Partial<DashboardUser>;
+        if (
+          typeof parsedUser.email === 'string' &&
+          typeof parsedUser.full_name === 'string' &&
+          typeof parsedUser.role === 'string'
+        ) {
+          return {
+            email: parsedUser.email,
+            full_name: parsedUser.full_name,
+            role: parsedUser.role,
+          } satisfies DashboardUser;
+        }
+      } catch {
+        window.localStorage.removeItem('nsu_user');
+      }
+
+      return null;
+    };
+
+    const storedUser = readStoredUser();
+    if (storedUser) {
+      setSessionUser(storedUser);
+      setIsHydrated(true);
+      return;
+    }
+
     const hydrateFromServer = async () => {
       try {
-        const response = await fetch('/api/dashboard/session', { cache: 'no-store' });
+        const response = await fetch('/api/dashboard/session', {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+
         if (response.ok) {
           const data = await response.json();
           const user = data.user as Partial<DashboardUser> | undefined;
@@ -29,41 +64,23 @@ export default function DashboardSession() {
             typeof user.full_name === 'string' &&
             typeof user.role === 'string'
           ) {
-            setSessionUser({
+            const normalizedUser = {
               email: user.email,
               full_name: user.full_name,
               role: user.role,
-            });
-            window.localStorage.setItem('nsu_user', JSON.stringify(user));
+            } satisfies DashboardUser;
+
+            setSessionUser(normalizedUser);
+            window.localStorage.setItem('nsu_user', JSON.stringify(normalizedUser));
             setIsHydrated(true);
             return;
           }
         }
       } catch {
-        // fall through to localStorage fallback
+        // fall through to empty state
       }
 
-      try {
-        const rawUser = window.localStorage.getItem('nsu_user');
-        if (rawUser) {
-          const parsedUser = JSON.parse(rawUser) as Partial<DashboardUser>;
-          if (
-            typeof parsedUser.email === 'string' &&
-            typeof parsedUser.full_name === 'string' &&
-            typeof parsedUser.role === 'string'
-          ) {
-            setSessionUser({
-              email: parsedUser.email,
-              full_name: parsedUser.full_name,
-              role: parsedUser.role,
-            });
-          }
-        }
-      } catch {
-        window.localStorage.removeItem('nsu_user');
-      } finally {
-        setIsHydrated(true);
-      }
+      setIsHydrated(true);
     };
 
     void hydrateFromServer();

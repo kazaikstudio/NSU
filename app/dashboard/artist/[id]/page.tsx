@@ -53,6 +53,29 @@ export default function ArtistDetailPage() {
   const [artist, setArtist] = useState<Artist | null>(null);
   const [loadingArtist, setLoadingArtist] = useState(true);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const ensureAuthorized = async () => {
+      try {
+        const response = await fetch('/api/dashboard/session', { cache: 'no-store', credentials: 'same-origin' });
+        if (!response.ok && !cancelled) {
+          window.location.href = '/dashboard';
+        }
+      } catch {
+        if (!cancelled) {
+          window.location.href = '/dashboard';
+        }
+      }
+    };
+
+    void ensureAuthorized();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Image State Management
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [profileUrl, setProfileUrl] = useState<string | null>(null);
