@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { ClientType, Innertube } from 'youtubei.js';
+import { getFfmpegDiagnostics, getRuntimeDiagnostics } from '@/lib/youtube-download-diagnostics';
+import ffmpegPath from 'ffmpeg-static';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +17,11 @@ function getYoutubeClient() {
 
 function isVideoId(value: string) {
   return /^[a-zA-Z0-9_-]{11}$/.test(value);
+}
+
+function getFfmpegPath() {
+  const localPath = join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg');
+  return [process.env.FFMPEG_PATH, localPath, ffmpegPath].find((path): path is string => Boolean(path && existsSync(path)));
 }
 
 export async function GET(request: Request) {
@@ -66,10 +75,27 @@ export async function GET(request: Request) {
       videoId: id,
       title: info.basic_info.title || `YouTube video ${id}`,
       formats,
+      diagnostics: {
+        runtime: getRuntimeDiagnostics(),
+        ffmpeg: getFfmpegDiagnostics(getFfmpegPath()),
+        formatCounts: {
+          total: allFormats.length,
+          audioOnly: allFormats.filter((format) => format.has_audio && !format.has_video && !format.has_text).length,
+          videoMp4: allFormats.filter((format) => format.has_video && format.mime_type?.startsWith('video/mp4')).length,
+        },
+      },
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unable to fetch YouTube formats.' },
+      {
+        error: error instanceof Error ? error.message : 'Unable to fetch YouTube formats.',
+        code: 'YOUTUBE_INFO_FAILED',
+        diagnostics: {
+          runtime: getRuntimeDiagnostics(),
+          ffmpeg: getFfmpegDiagnostics(getFfmpegPath()),
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+        },
+      },
       { status: 502 },
     );
   }

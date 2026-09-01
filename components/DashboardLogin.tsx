@@ -31,28 +31,9 @@ export default function DashboardLogin({ onLogin }: Props) {
       }
 
       const user = data.user || { email, full_name: 'Admin User', role: 'admin' };
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('nsu_user', JSON.stringify(user));
-      }
-
       onLogin?.(user);
     } catch (err) {
-      const fallbackEmail = process.env.NEXT_PUBLIC_DASHBOARD_EMAIL || 'nollstudio@gmail.com';
-      const fallbackPassword = process.env.NEXT_PUBLIC_DASHBOARD_PASSWORD || '12345';
-
-      if (email === fallbackEmail && password === fallbackPassword) {
-        const fallbackUser = {
-          email: fallbackEmail,
-          full_name: 'Admin User',
-          role: 'admin',
-        };
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('nsu_user', JSON.stringify(fallbackUser));
-        }
-        onLogin?.(fallbackUser);
-      } else {
-        setError(err instanceof Error ? err.message : 'Login failed');
-      }
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }

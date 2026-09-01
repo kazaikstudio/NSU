@@ -1,4 +1,4 @@
-import { createWriteStream } from "node:fs";
+import { createWriteStream, existsSync } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
 import { join, parse } from "node:path";
 import { PassThrough, type Readable } from "node:stream";
@@ -10,6 +10,20 @@ const NOLL_MUSIC_ROOT = join(DOWNLOADS_ROOT, "Noll-Music");
 
 function getCategoryDirectory(category: DownloadStorageCategory) {
   return join(NOLL_MUSIC_ROOT, category === "audio" ? "Audio" : "Video");
+}
+
+export function getDownloadStorageDirectory(category: DownloadStorageCategory) {
+  return getCategoryDirectory(category);
+}
+
+export function getDownloadStorageDiagnostics(category: DownloadStorageCategory) {
+  const directory = getCategoryDirectory(category);
+  return {
+    directory,
+    exists: existsSync(directory),
+    rootDirectory: DOWNLOADS_ROOT,
+    musicRootDirectory: NOLL_MUSIC_ROOT,
+  };
 }
 
 export async function ensureDownloadStoragePath(filename: string, category: DownloadStorageCategory) {

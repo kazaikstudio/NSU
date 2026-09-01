@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
 import { ClientType, Innertube } from "youtubei.js";
 import { buildMegaShorts } from "@/lib/video-feed";
+import { resolveAllowedOrigin } from '@/lib/request-origin';
 
 export const runtime = "nodejs";
 
 const DEFAULT_CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
-const ALLOWED_ORIGINS = [
-  "https://nollstudios.org",
-  "https://www.nollstudios.org",
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
-];
 
 type YouTubeVideo = {
   id: string;
@@ -121,8 +116,7 @@ function getYoutubeApiKey(): string {
 
 function withCors(response: NextResponse, request: Request): NextResponse {
   const origin = request.headers.get("origin");
-  const allowOrigin =
-    origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowOrigin = resolveAllowedOrigin(origin);
 
   response.headers.set("Access-Control-Allow-Origin", allowOrigin);
   response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");

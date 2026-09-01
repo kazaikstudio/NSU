@@ -40,6 +40,9 @@ export default function DashboardSession() {
   }, []);
 
   const handleLogin = (u: DashboardUser) => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('nsu_user', JSON.stringify(u));
+    }
     setSessionUser(u);
   };
 
