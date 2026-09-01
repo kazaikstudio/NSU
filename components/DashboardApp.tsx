@@ -435,14 +435,22 @@ export default function DashboardApp({ user }: { user?: User | null }) {
     }
   }, [editingStorageTitle]);
 
-  const handleLogout = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('nsu_user');
-      window.location.href = '/dashboard';
-      return;
-    }
+  const handleLogout = useCallback(async () => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('nsu_user');
+      }
 
-    router.push('/dashboard');
+      await fetch('/api/dashboard/logout', { method: 'POST' });
+    } catch {
+      // ignore logout endpoint failures and fall through to a refresh
+    } finally {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/dashboard';
+      } else {
+        router.push('/dashboard');
+      }
+    }
   }, [router]);
 
   return (
