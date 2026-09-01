@@ -4,7 +4,9 @@ export function sanitizeDownloadFilename(filename: string) {
   return filename
     .replace(/[\n"\\/:*?<>|]+/g, '_')
     .trim()
-    .replace(/\s+/g, ' ');
+    .replace(/\s+/g, ' ')
+    .replace(/_+/g, ' ')
+    .replace(/\s+\./g, '.');
 }
 
 export function inferDownloadCategoryFromFilename(filename: string): DownloadCategory {
@@ -16,5 +18,14 @@ export function inferDownloadCategoryFromFilename(filename: string): DownloadCat
 export function getDownloadPath(filename: string, category?: DownloadCategory) {
   const safeFilename = sanitizeDownloadFilename(filename);
   const resolvedCategory = category ?? inferDownloadCategoryFromFilename(safeFilename);
-  return `Noll-Music/${resolvedCategory === 'audio' ? 'Audio' : 'Video'}/${safeFilename}`;
+  const baseName = safeFilename.replace(/\.[^.]+$/, '');
+  const extension = safeFilename.includes('.') ? `.${safeFilename.split('.').pop()}` : '';
+
+  if (resolvedCategory === 'audio') {
+    const normalizedBase = baseName.trim();
+    const withSuffix = normalizedBase ? `${normalizedBase} - Noll Music` : 'Noll Music';
+    return `Noll-Music/Audio/${withSuffix}${extension}`;
+  }
+
+  return `Noll-Music/Video/${safeFilename}`;
 }

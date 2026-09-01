@@ -81,7 +81,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   if (requestedFilename) {
     const safeFilename = requestedFilename.replace(/[\r\n"\\/]/g, '_');
-    headers.set('Content-Disposition', `attachment; filename="${safeFilename}"`);
+    const fileName = safeFilename.endsWith('.mp3')
+      ? safeFilename.replace(/\.mp3$/i, ' - Noll Music.mp3')
+      : safeFilename;
+    headers.set('Content-Disposition', `attachment; filename="${fileName}"`);
   }
 
   return new NextResponse(response.body, { status: response.status, headers });

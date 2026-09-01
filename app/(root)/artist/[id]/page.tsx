@@ -5,6 +5,7 @@ import { ArrowLeft, Bell, BellOff, Radio, Sparkles } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import AudioPlayer from '@/components/AudioPlayer';
+import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 
 interface Artist {
   id: string;
@@ -72,9 +73,11 @@ export default function PublicArtistDetailPage() {
 
     const loadArtist = async () => {
       try {
+        const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 600));
         const [artistResponseResult, mediaResponseResult] = await Promise.allSettled([
           fetch(`/api/dashboard/artists/${params.id}`),
           fetch(`/api/dashboard/artists/${params.id}/media`),
+          minimumDelay,
         ]);
 
         if (artistResponseResult.status !== 'fulfilled' || !artistResponseResult.value?.ok) {
@@ -200,14 +203,7 @@ export default function PublicArtistDetailPage() {
   };
 
   if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-cardcl text-sm text-secondry">
-        <div className="flex items-center gap-3">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-          <span>Loading artist profile...</span>
-        </div>
-      </main>
-    );
+    return <ArtistProfileLoading title="Loading artist profile..." description="Loading artist details and media from the dashboard." />;
   }
 
   if (error || !artist) {

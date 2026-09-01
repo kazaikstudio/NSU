@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { getArtistById } from '@/lib/artists';
 import AudioPlayer from '@/components/AudioPlayer';
+import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 
 interface Artist {
   id: string;
@@ -99,9 +100,13 @@ export default function ArtistDetailPage() {
       }
 
       setLoadingArtist(true);
+      const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 500));
 
       try {
-        const response = await fetch(`/api/dashboard/artists/${params.id}`);
+        const response = await Promise.all([
+          fetch(`/api/dashboard/artists/${params.id}`),
+          minimumDelay,
+        ]).then(([artistResponse]) => artistResponse);
         const data = await response.json();
 
         if (!ignore) {
@@ -169,14 +174,7 @@ export default function ArtistDetailPage() {
   }, [params.id]);
 
   if (loadingArtist) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-8 text-center">
-          <h1 className="text-2xl font-semibold">Loading artist profile…</h1>
-          <p className="mt-2 text-sm text-slate-400">Fetching the latest details from the dashboard API.</p>
-        </div>
-      </main>
-    );
+    return <ArtistProfileLoading />;
   }
 
   if (!artist) {
