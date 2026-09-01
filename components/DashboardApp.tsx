@@ -407,6 +407,34 @@ export default function DashboardApp({ user }: { user?: User | null }) {
     }
   }, [editingStorageItemId]);
 
+  const handleUpdateStorageItem = useCallback(async (id: string) => {
+    try {
+      if (!editingStorageTitle.trim()) {
+        setUploadMessage('Title cannot be empty');
+        return;
+      }
+
+      const response = await fetch(`/api/dashboard/storage/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editingStorageTitle }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to update Talk Show upload');
+      }
+
+      setStorageItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, title: editingStorageTitle } : item))
+      );
+      setEditingStorageItemId(null);
+      setEditingStorageTitle('');
+      setUploadMessage('Talk Show upload updated successfully.');
+    } catch (error) {
+      setUploadMessage(error instanceof Error ? error.message : 'Unable to update Talk Show upload.');
+    }
+  }, [editingStorageTitle]);
+
   const handleLogout = useCallback(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('nsu_user');
