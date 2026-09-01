@@ -141,7 +141,43 @@ export async function saveFileLocally(upload: DriveUpload) {
   };
 }
 
+function maskClientId(clientId: string) {
+  if (!clientId) {
+    return '(missing)';
+  }
+  if (clientId.length <= 8) {
+    return `${clientId.slice(0, 2)}...${clientId.slice(-2)}`;
+  }
+  return `${clientId.slice(0, 6)}...${clientId.slice(-4)}`;
+}
+
+async function requestGoogleToken(params: URLSearchParams) {
+  let lastNetworkError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params,
+      });
+    } catch (error) {
+      lastNetworkError = error;
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+  }
+
+  const detail = lastNetworkError instanceof Error ? normalizeDriveNetworkError(lastNetworkError.message) : 'network request failed';
+  throw new Error(`__NETWORK_ERROR__${detail}`);
+}
+
 async function getAccessToken(config: DriveConfig = getGoogleConfig()) {
+  const maskedClientId = maskClientId(config.clientId);
+
+  console.log(`[GoogleDrive] Requesting access token using "${config.label}" config (client: ${maskedClientId}).`);
+
   const params = new URLSearchParams({
     client_id: config.clientId,
     client_secret: config.clientSecret,
@@ -153,21 +189,44 @@ async function getAccessToken(config: DriveConfig = getGoogleConfig()) {
     params.set('redirect_uri', config.redirectUri);
   }
 
-  const response = await fetchGoogle('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params,
-  });
+  let response: Response;
+  try {
+    response = await requestGoogleToken(params);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const detail = message.startsWith('__NETWORK_ERROR__') ? message.replace('__NETWORK_ERROR__', '') : message;
+    console.error(`[GoogleDrive] Unable to reach Google's token endpoint for "${config.label}" config (client: ${maskedClientId}): ${detail}`);
+    throw new Error(`Unable to reach Google Drive for "${config.label}" config (client: ${maskedClientId}): ${detail}`);
+  }
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({} as { error?: string; error_description?: string; access_token?: string }));
+
   if (!response.ok || !data.access_token) {
-    if (data.error === 'invalid_client') {
-      throw new Error('Google rejected the OAuth client. Verify GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET belong to the client that issued GOOGLE_REFRESH_TOKEN.');
+    const errorCode = data.error || `http_${response.status}`;
+    const errorDescription = data.error_description;
+
+    console.error(
+      `[GoogleDrive] Token request failed for "${config.label}" config (client: ${maskedClientId}). ` +
+      `Status: ${response.status}. Error: ${errorCode}. Description: ${errorDescription || 'none'}.`
+    );
+
+    if (errorCode === 'invalid_client') {
+      throw new Error(
+        `Google rejected the OAuth client for ${config.label} config (client: ${maskedClientId}). Error: invalid_client. ` +
+        `This usually means the client ID/secret do not match the OAuth app that issued the refresh token.`
+      );
     }
-    if (data.error === 'invalid_grant') {
-      throw new Error('Google rejected the refresh token. Generate a new refresh token for this OAuth client with Drive access.');
+    if (errorCode === 'invalid_grant') {
+      throw new Error(
+        `Google rejected the refresh token for ${config.label} config (client: ${maskedClientId}). Error: invalid_grant. ` +
+        `This usually means the refresh token is expired or was issued for a different OAuth app.`
+      );
     }
-    throw new Error(data.error_description || 'Unable to authenticate with Google Drive');
+
+    throw new Error(
+      `Google rejected the request for ${config.label} config (client: ${maskedClientId}). Error: ${errorCode}` +
+      `${errorDescription ? ` (${errorDescription})` : ''}.`
+    );
   }
 
   return data.access_token as string;
