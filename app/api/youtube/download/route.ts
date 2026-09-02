@@ -308,8 +308,21 @@ export async function GET(req: Request) {
         : output === "wav"
           ? ["-codec:a", "pcm_s16le", "-f", "wav"]
           : ["-codec:a", "aac", "-b:a", "192k", "-f", "ipod"];
+      const defaultOutputFormat = output === "mp3" ? "mp3" : output === "wav" ? "wav" : "ipod";
       const ffmpegArgs = artworkAvailable
-        ? ["-loglevel", "error", "-i", "pipe:0", "-i", artworkPath, "-map", "0:a", "-map", "1:v", "-c:a", ...codecArgs.slice(1, 3), "-c:v", "mjpeg", "-disposition:v", "attached_pic", "-f", "mp3", "pipe:1"]
+        ? [
+            "-loglevel", "error",
+            "-i", "pipe:0",
+            "-i", artworkPath,
+            "-map", "0:a",
+            "-map", "1:v",
+            "-c:a", codecArgs[1],
+            "-b:a", output === "mp3" ? `${bitrate}k` : output === "wav" ? "192k" : "192k",
+            "-c:v", "mjpeg",
+            "-disposition:v", "attached_pic",
+            "-f", defaultOutputFormat,
+            "pipe:1",
+          ]
         : ["-loglevel", "error", "-i", "pipe:0", "-vn", ...codecArgs, "pipe:1"];
       const converter = spawn(executable, ffmpegArgs, { stdio: ["pipe", "pipe", "pipe"] });
       const stderrBuffer: string[] = [];
