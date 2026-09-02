@@ -130,10 +130,15 @@ export default function ArtistDetailPage() {
           fetch(`/api/dashboard/artists/${params.id}`),
           minimumDelay,
         ]).then(([artistResponse]) => artistResponse);
+
+        if (!response.ok) {
+          throw new Error(`Artist API returned ${response.status}`);
+        }
+
         const data = await response.json();
 
         if (!ignore) {
-          if (response.ok && data.artist) {
+          if (data.artist) {
             const fetchedArtist = data.artist as Artist;
             setArtist(fetchedArtist);
             setArtistNameDraft(fetchedArtist.name);
@@ -141,8 +146,11 @@ export default function ArtistDetailPage() {
             setBannerUrl(fetchedArtist.bannerUrl || null);
             setProfileUrl(fetchedArtist.profileUrl || null);
             const mediaResponse = await fetch(`/api/dashboard/artists/${params.id}/media`);
+            if (!mediaResponse.ok) {
+              throw new Error(`Artist media API returned ${mediaResponse.status}`);
+            }
             const mediaData = await mediaResponse.json();
-            if (mediaResponse.ok && !ignore) {
+            if (!ignore) {
               const media = mediaData.media || [];
               const bannerMedia = media.find((item: Track) => item.kind === 'banner');
               const profileMedia = media.find((item: Track) => item.kind === 'profile');
