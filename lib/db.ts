@@ -3,10 +3,35 @@ import { Pool, PoolClient } from 'pg';
 
 type DatabasePool = Pick<Pool, 'query' | 'connect' | 'end'>;
 
-const configuredConnectionString = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
-const connectionString = configuredConnectionString && !/USER|PASSWORD|your_railway_postgres_url/i.test(configuredConnectionString)
-  ? configuredConnectionString
-  : undefined;
+export function resolveDatabaseConnectionString(env: NodeJS.ProcessEnv = process.env) {
+  const candidateUrls = [
+    env.DATABASE_URL,
+    env.POSTGRES_URL,
+    env.DATABASE_PUBLIC_URL,
+    env.NEXT_PUBLIC_DATABASE_URL,
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim());
+
+  const validDirectUrl = candidateUrls.find((value) => !/USER|PASSWORD|your_railway_postgres_url|replace_with|example\.com/i.test(value));
+  if (validDirectUrl) {
+    return validDirectUrl;
+  }
+
+  const host = env.PGHOST || env.POSTGRES_HOST;
+  const port = env.PGPORT || env.POSTGRES_PORT || '5432';
+  const database = env.PGDATABASE || env.POSTGRES_DB || env.POSTGRES_DATABASE;
+  const user = env.PGUSER || env.POSTGRES_USER;
+  const password = env.PGPASSWORD || env.POSTGRES_PASSWORD;
+
+  if (host && database && user) {
+    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password || '')}@${host}:${port}/${database}`;
+  }
+
+  return undefined;
+}
+
+const connectionString = resolveDatabaseConnectionString();
 const hasConfiguredDatabase = Boolean(connectionString);
 
 const pool = hasConfiguredDatabase
