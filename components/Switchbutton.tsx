@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import type { Dispatch, SetStateAction } from 'react'
 
 interface SwitchbuttonProps {
@@ -13,7 +13,6 @@ interface SwitchbuttonProps {
 }
 
 const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
-  const router = useRouter()
   const pathname = usePathname() ?? ''
   const isAudio = pathname === '/Audio'
   const isDownload = pathname === '/download'
@@ -54,32 +53,49 @@ const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
           Download
         </Link>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (onScrollToSearch) {
-              onScrollToSearch()
-              return
-            }
-            router.push(resolvedSearchHref)
-          }}
-          title={onScrollToSearch ? 'Focus search input' : 'Open search page'}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-card1/20 bg-cardcl/95 text-secondry transition-all hover:text-primary hover:bg-card1/10 active:bg-rose-600 sm:h-9 sm:w-9"
-        >
-          <svg
-            className="h-3.5 w-3.5 sm:h-4 sm:w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            viewBox="0 0 24 24"
+        {onScrollToSearch ? (
+          <button
+            type="button"
+            onClick={onScrollToSearch}
+            title="Focus search input"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-card1/20 bg-cardcl/95 text-secondry transition-all hover:text-primary hover:bg-card1/10 active:bg-rose-600 sm:h-9 sm:w-9"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-            />
-          </svg>
-        </button>
+            <svg
+              className="h-3.5 w-3.5 sm:h-4 sm:w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+              />
+            </svg>
+          </button>
+        ) : (
+          <Link
+            href={resolvedSearchHref}
+            title="Open search page"
+            aria-label="Open search page"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-card1/20 bg-cardcl/95 text-secondry transition-all hover:text-primary hover:bg-card1/10 active:bg-rose-600 sm:h-9 sm:w-9"
+          >
+            <svg
+              className="h-3.5 w-3.5 sm:h-4 sm:w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+              />
+            </svg>
+          </Link>
+        )}
       </div>
     </div>
   )
