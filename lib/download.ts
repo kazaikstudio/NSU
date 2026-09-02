@@ -24,7 +24,13 @@ export function buildDownloadFilename(filename: string, category?: DownloadCateg
   const extension = safeFilename.includes('.') ? `.${safeFilename.split('.').pop()}` : '';
 
   if (resolvedCategory === 'audio') {
-    const normalizedBase = baseName.trim();
+    let normalizedBase = baseName.trim();
+    normalizedBase = normalizedBase
+      .replace(/^Noll[-_ ]?Music(?:[-_ ]?Audio)?[-_ ]?/i, '')
+      .replace(/^Noll[-_ ]?Music[-_ ]?/i, '')
+      .replace(/^Audio[-_ ]?/i, '')
+      .trim();
+
     const withSuffix = normalizedBase ? `${normalizedBase} - Nollstudios.org` : 'Nollstudios.org';
     return `${withSuffix}${extension}`;
   }
@@ -41,8 +47,8 @@ export function getDownloadPath(filename: string, category?: DownloadCategory) {
   const resolvedCategory = category ?? inferDownloadCategoryFromFilename(filename);
 
   if (resolvedCategory === 'audio') {
-    return `Noll-Music/Audio/${resolvedFilename}`;
+    return resolvedFilename;
   }
 
-  return `Noll-Music/Video/${resolvedFilename}`;
+  return resolvedFilename;
 }

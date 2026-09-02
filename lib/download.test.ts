@@ -6,14 +6,14 @@ import { getAudioDownloadThumbnailUrl, getDownloadPath } from './download';
 test('mp3 download names end with the Nollstudios.org suffix', () => {
   assert.equal(
     getDownloadPath('My Song.mp3', 'audio'),
-    'Noll-Music/Audio/My Song - Nollstudios.org.mp3',
+    'My Song - Nollstudios.org.mp3',
   );
 });
 
 test('video downloads keep their original name without the audio suffix', () => {
   assert.equal(
     getDownloadPath('My Song.mp4', 'video'),
-    'Noll-Music/Video/My Song.mp4',
+    'My Song.mp4',
   );
 });
 
