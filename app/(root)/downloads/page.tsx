@@ -10,6 +10,11 @@ interface DownloadNotice {
   progress?: number;
   downloadedBytes?: number;
   totalBytes?: number;
+  paused?: boolean;
+  sourceVideoId?: string;
+  sourceItag?: number;
+  sourceExtension?: string;
+  sourceOutputBitrate?: number;
 }
 
 export default function DownloadsPage() {
@@ -50,7 +55,11 @@ export default function DownloadsPage() {
           progress: detail.progress,
           downloadedBytes: detail.downloadedBytes ?? previousEntries.find((entry) => entry.title === detail.title)?.downloadedBytes,
           totalBytes: detail.totalBytes ?? previousEntries.find((entry) => entry.title === detail.title)?.totalBytes,
-          paused: detail.status === 'downloading' ? (previousEntries.find((entry) => entry.title === detail.title)?.paused ?? false) : false,
+          paused: detail.status === 'downloading' ? (detail.paused ?? previousEntries.find((entry) => entry.title === detail.title)?.paused ?? false) : false,
+          sourceVideoId: detail.sourceVideoId ?? previousEntries.find((entry) => entry.title === detail.title)?.sourceVideoId,
+          sourceItag: detail.sourceItag ?? previousEntries.find((entry) => entry.title === detail.title)?.sourceItag,
+          sourceExtension: detail.sourceExtension ?? previousEntries.find((entry) => entry.title === detail.title)?.sourceExtension,
+          sourceOutputBitrate: detail.sourceOutputBitrate ?? previousEntries.find((entry) => entry.title === detail.title)?.sourceOutputBitrate,
           createdAt: previousEntries.find((entry) => entry.title === detail.title)?.createdAt ?? now,
           updatedAt: now,
         };
@@ -89,6 +98,22 @@ export default function DownloadsPage() {
 
     window.dispatchEvent(new CustomEvent('nsu-download-control', {
       detail: { title: entry.title, action: nextPaused ? 'pause' : 'resume' },
+    }));
+  };
+
+  const handleRetry = (entry: DownloadEntry) => {
+    if (!entry.sourceVideoId || typeof entry.sourceItag !== 'number' || !entry.sourceExtension) {
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent('nsu-download-retry', {
+      detail: {
+        title: entry.title,
+        videoId: entry.sourceVideoId,
+        itag: entry.sourceItag,
+        extension: entry.sourceExtension,
+        outputBitrate: entry.sourceOutputBitrate,
+      },
     }));
   };
 
@@ -175,38 +200,34 @@ export default function DownloadsPage() {
 
           {/* Empty State */}
           {downloadEntries.length === 0 ? (
-            <div className="mt-7 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-950/30 px-5 py-10 text-center sm:mt-8 sm:px-6 sm:py-12">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-800/50 text-slate-500">
-                <Inbox size={24} />
+            <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-950/30 px-4 py-8 text-center sm:mt-8 sm:rounded-2xl sm:px-6 sm:py-12">
+              <div className="mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/50 text-slate-500 sm:mb-3 sm:h-12 sm:w-12 sm:rounded-2xl">
+                <Inbox size={20} className="sm:h-6 sm:w-6" />
               </div>
-              <p className="text-sm font-medium text-slate-400">No downloads yet</p>
-              <p className="mt-1 text-xs text-slate-500">Your downloaded files will appear here.</p>
+              <p className="text-xs font-medium text-slate-400 sm:text-sm">No downloads yet</p>
+              <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">Your downloaded files will appear here.</p>
             </div>
           ) : (
             <div className="mt-7 space-y-5 sm:mt-8 sm:space-y-6">
 
               {/* Active Downloads Section */}
               {activeDownloads.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                <div className="space-y-2.5 sm:space-y-3">
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-400 sm:text-xs sm:tracking-wider">
                       Active Downloads
                     </span>
-                    <span className="inline-flex w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
+                    <span className="inline-flex w-fit max-w-full rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300 sm:px-2.5 sm:text-xs">
                       {activeDownloads.length} active
                     </span>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                    </div>
-
-                    <div className="space-y-3">
-                      {activeDownloads.map((entry, index) => (
+                  <div className="space-y-2.5 sm:space-y-3">
+                    <div className="space-y-2.5 sm:space-y-3">
+                      {activeDownloads.map((entry) => (
                         <DownloadRow
                           key={entry.id}
                           entry={entry}
-                          index={index}
                           onTogglePause={handleTogglePause}
                         />
                       ))}
@@ -223,7 +244,7 @@ export default function DownloadsPage() {
                   </span>
                   <div className="space-y-2">
                     {previousDownloads.map((entry) => (
-                      <DownloadRow key={entry.id} entry={entry} />
+                      <DownloadRow key={entry.id} entry={entry} onRetry={handleRetry} />
                     ))}
                   </div>
                 </div>

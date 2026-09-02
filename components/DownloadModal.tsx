@@ -31,6 +31,23 @@ type DownloadHistoryPayload = {
   totalBytes?: number;
   paused?: boolean;
   action?: "pause" | "resume";
+  sourceVideoId?: string;
+  sourceItag?: number;
+  sourceExtension?: string;
+  sourceOutputBitrate?: number;
+};
+
+type DownloadControlDetail = {
+  title: string;
+  action: "pause" | "resume";
+};
+
+type DownloadRetryDetail = {
+  title: string;
+  videoId: string;
+  itag: number;
+  extension: string;
+  outputBitrate?: number;
 };
 
 const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: DownloadModalProps) => {
@@ -56,6 +73,7 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
   const modalRef = useRef<HTMLDivElement>(null);
   const activeFormatRef = useRef<DownloadFormat | null>(null);
   const activeTitleRef = useRef<string | null>(null);
+  const downloadChunksRef = useRef<Uint8Array[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isPausedRef = useRef(false);
   const isMountedRef = useRef(true);
@@ -137,6 +155,9 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    activeFormatRef.current = null;
+    activeTitleRef.current = null;
+    downloadChunksRef.current = [];
     setTitle("");
     setFormats([]);
     setError("");
@@ -167,10 +188,11 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
       downloadOffsetRef.current = 0;
       safeSetState(() => setDownloadProgressValue(0));
       isPausedRef.current = false;
-      emitDownloadHistory({ status: "downloading", title: historyTitle, progress: 0, downloadedBytes: 0, totalBytes: format.size ?? undefined, paused: false });
+      downloadChunksRef.current = [];
+      emitDownloadHistory({ status: "downloading", title: historyTitle, progress: 0, downloadedBytes: 0, totalBytes: format.size ?? undefined, paused: false, sourceVideoId: videoId || undefined, sourceItag: format.itag, sourceExtension: format.extension, sourceOutputBitrate: format.outputBitrate });
     } else {
       safeSetState(() => setLoadingFormat(formatKey));
-      emitDownloadHistory({ status: "downloading", title: historyTitle, progress: downloadProgressRef.current, paused: false });
+      emitDownloadHistory({ status: "downloading", title: historyTitle, progress: downloadProgressRef.current, downloadedBytes: undefined, totalBytes: format.size ?? undefined, paused: false, sourceVideoId: videoId || undefined, sourceItag: format.itag, sourceExtension: format.extension, sourceOutputBitrate: format.outputBitrate });
     }
 
     if (abortControllerRef.current) {
@@ -196,7 +218,7 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
         throw new Error("Download body is unavailable.");
       }
 
-      const chunks: Uint8Array[] = [];
+      const chunks = downloadChunksRef.current;
       let downloadedBytes = 0;
       let lastProgress = 0;
 
@@ -220,6 +242,10 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
               downloadedBytes,
               totalBytes,
               paused: false,
+              sourceVideoId: videoId || undefined,
+              sourceItag: format.itag,
+              sourceExtension: format.extension,
+              sourceOutputBitrate: format.outputBitrate,
             });
           }
         }
@@ -241,6 +267,9 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
       anchor.remove();
       URL.revokeObjectURL(objectUrl);
       safeSetState(() => setDownloadProgressValue(100));
+      downloadChunksRef.current = [];
+      activeFormatRef.current = null;
+      activeTitleRef.current = null;
       emitDownloadHistory({
         status: "done",
         title: historyTitle,
@@ -248,12 +277,19 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
         downloadedBytes,
         totalBytes: totalBytes || downloadedBytes,
         paused: false,
+        sourceVideoId: videoId || undefined,
+        sourceItag: format.itag,
+        sourceExtension: format.extension,
+        sourceOutputBitrate: format.outputBitrate,
       });
     } catch (downloadError: unknown) {
-      if (downloadError instanceof Error && downloadError.name === "AbortError") {
+      if (downloadError instanceof Error && downloadError.name === "AbortError" && isPausedRef.current) {
         return;
       }
-      emitDownloadHistory({ status: "error", title: historyTitle, progress: downloadProgressRef.current, paused: false });
+      downloadChunksRef.current = [];
+      activeFormatRef.current = null;
+      activeTitleRef.current = null;
+      emitDownloadHistory({ status: "error", title: historyTitle, progress: downloadProgressRef.current, paused: false, sourceVideoId: videoId || undefined, sourceItag: format.itag, sourceExtension: format.extension, sourceOutputBitrate: format.outputBitrate });
       safeSetState(() => setError(downloadError instanceof Error ? downloadError.message : "Unable to download this format."));
     } finally {
       if (!isPausedRef.current) {
@@ -264,7 +300,58 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     }
   }, [emitDownloadHistory, title, videoId]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
+    const handleDownloadControl = (event: Event) => {
+      const detail = (event as CustomEvent<DownloadControlDetail>).detail;
+      const activeTitle = activeTitleRef.current;
+      const activeFormat = activeFormatRef.current;
+      if (!detail || !activeTitle || !activeFormat || detail.title !== activeTitle) return;
+
+      if (detail.action === 'pause') {
+        isPausedRef.current = true;
+        abortControllerRef.current?.abort();
+        emitDownloadHistory({
+          status: 'downloading',
+          title: activeTitle,
+          progress: downloadProgressRef.current,
+          paused: true,
+        });
+        return;
+      }
+
+      if (detail.action === 'resume') {
+        isPausedRef.current = false;
+        void handleDownload(activeFormat, { skipReset: true });
+      }
+    };
+
+    const handleDownloadRetry = (event: Event) => {
+      const detail = (event as CustomEvent<DownloadRetryDetail>).detail;
+      if (!detail || detail.videoId !== videoId) return;
+
+      setTitle(detail.title);
+      void handleDownload({
+        itag: detail.itag,
+        label: detail.title,
+        kind: 'video',
+        mimeType: detail.extension === 'mp3' ? 'audio/mpeg' : 'video/mp4',
+        extension: detail.extension,
+        outputBitrate: detail.outputBitrate,
+        codec: '',
+        size: null,
+        bitrate: 0,
+      });
+    };
+
+    window.addEventListener('nsu-download-control', handleDownloadControl as EventListener);
+    window.addEventListener('nsu-download-retry', handleDownloadRetry as EventListener);
+    return () => {
+      window.removeEventListener('nsu-download-control', handleDownloadControl as EventListener);
+      window.removeEventListener('nsu-download-retry', handleDownloadRetry as EventListener);
+    };
+  }, [emitDownloadHistory, handleDownload, videoId]);
 
   if (!open || !videoId) return null;
 
