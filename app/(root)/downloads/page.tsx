@@ -258,6 +258,12 @@ export default function DownloadsPage() {
   };
 
   const handleTogglePause = (entry: DownloadEntry) => {
+    const canResume = Boolean(entry.sourceVideoId && typeof entry.sourceItag === 'number' && entry.sourceExtension);
+    if (!canResume && !entry.paused) {
+      handleCancelDownload(entry);
+      return;
+    }
+
     const nextPaused = !entry.paused;
     const now = new Date().toISOString();
     const updatedEntry: DownloadEntry = {
@@ -273,23 +279,44 @@ export default function DownloadsPage() {
     });
 
     if (nextPaused) {
-      abortControllerRef.current?.abort();
       setDownloadNotice((current) => current && current.title === entry.title
         ? { ...current, paused: true, progress: entry.progress }
         : current);
-    } else if (entry.sourceVideoId && typeof entry.sourceItag === 'number' && entry.sourceExtension) {
-      void runRetryDownload({
-        title: entry.title,
-        videoId: entry.sourceVideoId,
-        itag: entry.sourceItag,
-        extension: entry.sourceExtension,
-        outputBitrate: entry.sourceOutputBitrate,
-      }, { keepProgress: true });
+    } else if (!entry.sourceVideoId || typeof entry.sourceItag !== 'number' || !entry.sourceExtension) {
+      setDownloadEntries((previousEntries) => {
+        const nextEntries = previousEntries.filter((item) => item.id !== entry.id);
+        window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+        return nextEntries;
+      });
+      return;
     }
 
     window.dispatchEvent(new CustomEvent('nsu-download-control', {
       detail: { title: entry.title, action: nextPaused ? 'pause' : 'resume' },
     }));
+  };
+
+  const handleCancelDownload = (entry: DownloadEntry) => {
+    activeRetryRef.current = null;
+    window.dispatchEvent(new CustomEvent('nsu-download-control', {
+      detail: { title: entry.title, action: 'cancel' },
+    }));
+    setDownloadNotice((current) => current && current.title === entry.title ? null : current);
+    setDownloadEntries((previousEntries) => {
+      const nextEntries = previousEntries.filter((item) => item.id !== entry.id);
+      window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+      return nextEntries;
+    });
+  };
+
+  const handleRemoveEntry = (entry: DownloadEntry) => {
+    setDownloadEntries((previousEntries) => {
+      const nextEntries = previousEntries.filter((item) => item.id !== entry.id);
+      window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+      return nextEntries;
+    });
+
+    setDownloadNotice((current) => current && current.title === entry.title ? null : current);
   };
 
   const handleRetry = (entry: DownloadEntry) => {
@@ -438,6 +465,7 @@ export default function DownloadsPage() {
                           key={entry.id}
                           entry={entry}
                           onTogglePause={handleTogglePause}
+                          onCancel={handleCancelDownload}
                         />
                       ))}
                     </div>
@@ -453,7 +481,7 @@ export default function DownloadsPage() {
                   </span>
                   <div className="space-y-2">
                     {previousDownloads.map((entry) => (
-                      <DownloadRow key={entry.id} entry={entry} onRetry={handleRetry} />
+                      <DownloadRow key={entry.id} entry={entry} onRetry={handleRetry} onRemove={handleRemoveEntry} />
                     ))}
                   </div>
                 </div>

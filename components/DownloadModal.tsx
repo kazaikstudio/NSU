@@ -39,7 +39,7 @@ type DownloadHistoryPayload = {
 
 type DownloadControlDetail = {
   title: string;
-  action: "pause" | "resume";
+  action: "pause" | "resume" | "cancel";
 };
 
 type DownloadRetryDetail = {
@@ -318,6 +318,17 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
           progress: downloadProgressRef.current,
           paused: true,
         });
+        return;
+      }
+
+      if (detail.action === 'cancel') {
+        isPausedRef.current = false;
+        abortControllerRef.current?.abort();
+        downloadChunksRef.current = [];
+        activeFormatRef.current = null;
+        activeTitleRef.current = null;
+        safeSetState(() => setLoadingFormat(null));
+        safeSetState(() => setDownloadProgressValue(0));
         return;
       }
 

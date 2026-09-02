@@ -33,7 +33,7 @@ type DownloadFormat = {
 
 type DownloadControlDetail = {
   title: string
-  action: 'pause' | 'resume'
+  action: 'pause' | 'resume' | 'cancel'
 }
 
 type DownloadRetryDetail = {
@@ -218,6 +218,17 @@ function DownloadForm() {
           progress: progressRef.current,
           paused: true,
         })
+        return
+      }
+
+      if (detail.action === 'cancel') {
+        pausedRef.current = false
+        abortControllerRef.current?.abort()
+        chunksRef.current = []
+        activeDownloadRef.current = null
+        setLoadingFormat(null)
+        setDownloadProgress(0)
+        progressRef.current = 0
         return
       }
 

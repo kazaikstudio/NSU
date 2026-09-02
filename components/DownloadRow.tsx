@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, CheckCircle2, Download, Pause, Play, RotateCcw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, Pause, Play, RotateCcw, Trash2, X } from 'lucide-react';
 
 export interface DownloadEntry {
   id: string;
@@ -36,10 +36,12 @@ function formatBytes(bytes?: number) {
 interface DownloadRowProps {
   entry: DownloadEntry;
   onTogglePause?: (entry: DownloadEntry) => void;
+  onCancel?: (entry: DownloadEntry) => void;
+  onRemove?: (entry: DownloadEntry) => void;
   onRetry?: (entry: DownloadEntry) => void;
 }
 
-export default function DownloadRow({ entry, onTogglePause, onRetry }: DownloadRowProps) {
+export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, onRetry }: DownloadRowProps) {
   const progressValue = typeof entry.progress === 'number' ? Math.max(0, Math.min(100, entry.progress)) : undefined;
   const isActive = entry.status === 'downloading';
   const progressLabel = entry.paused ? 'Paused' : typeof progressValue === 'number' ? `${Math.round(progressValue)}%` : 'Preparing...';
@@ -67,7 +69,7 @@ export default function DownloadRow({ entry, onTogglePause, onRetry }: DownloadR
                           {sizeLabel}
                         </div>
                       </div>
-                      {onTogglePause && (
+                      {onTogglePause ? (
                         <button
                           type="button"
                           onClick={() => onTogglePause(entry)}
@@ -81,7 +83,18 @@ export default function DownloadRow({ entry, onTogglePause, onRetry }: DownloadR
                             <Pause size={13} fill="currentColor" className="sm:h-3.5 sm:w-3.5" />
                           )}
                         </button>
-                      )}
+                      ) : null}
+                      {onCancel ? (
+                        <button
+                          type="button"
+                          onClick={() => onCancel(entry)}
+                          aria-label="Cancel download"
+                          title="Cancel"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 transition-all duration-200 hover:scale-105 hover:border-rose-500/40 hover:bg-rose-500/20 hover:text-rose-200 active:scale-95 sm:h-9 sm:w-9 sm:rounded-xl"
+                        >
+                          <X size={13} className="sm:h-3.5 sm:w-3.5" />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -133,6 +146,18 @@ export default function DownloadRow({ entry, onTogglePause, onRetry }: DownloadR
         >
           <RotateCcw size={13} className="sm:h-3.5 sm:w-3.5" />
           <span className="hidden sm:inline">Retry</span>
+        </button>
+      ) : null}
+      {entry.status !== 'downloading' && onRemove ? (
+        <button
+          type="button"
+          onClick={() => onRemove(entry)}
+          aria-label="Remove download"
+          title="Remove"
+          className="inline-flex shrink-0 items-center justify-center gap-1 rounded-lg border border-slate-700/70 bg-slate-900/60 px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 transition-all duration-200 hover:border-slate-600 hover:bg-slate-800/80 hover:text-white sm:px-3"
+        >
+          <Trash2 size={13} className="sm:h-3.5 sm:w-3.5" />
+          <span className="hidden sm:inline">Remove</span>
         </button>
       ) : null}
     </div>

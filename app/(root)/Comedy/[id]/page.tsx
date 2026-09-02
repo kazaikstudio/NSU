@@ -125,10 +125,11 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
     const targetUrl = item.fileUrl || '';
 
     const getDownloadUrl = (fileUrl: string) => {
-      const match = fileUrl.match(/[?&]id=([^&]+)/);
-      if (!match?.[1]) return fileUrl;
+      const match = fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
+      const fileId = match ? (match[1] || match[2]) : null;
+      if (!fileId) return fileUrl;
 
-      return `/api/dashboard/media/${match[1]}?download=1&filename=${encodeURIComponent(`${safeTitle}.mp4`)}`;
+      return `/api/dashboard/media/${fileId}?download=1&filename=${encodeURIComponent(`${safeTitle}.mp4`)}`;
     };
 
     const downloadUrl = getDownloadUrl(targetUrl);
