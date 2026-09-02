@@ -99,28 +99,28 @@ export default function DownloadsPage() {
   };
 
   return (
-    <main className="min-h-screen px-1 mt-2 text-slate-100 sm:px-6 sm:pb-24 sm:pt-20">
-      <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <main className="mt-2 min-h-screen px-3 pb-16 text-slate-100 sm:px-6 sm:pb-24 sm:pt-20">
+      <div className="mx-auto flex max-w-4xl flex-col gap-4 sm:gap-6">
 
         {/* Main Glass Section */}
-        <section className="relative overflow-hidden rounded-3xl border border-slate-800/80 bg-slate-900/60 p-5 backdrop-blur-xl shadow-2xl shadow-black/50 sm:p-8">
+        <section className="relative overflow-hidden rounded-[1.75rem] border border-slate-800/80 bg-slate-900/60 p-4 backdrop-blur-xl shadow-2xl shadow-black/50 sm:rounded-3xl sm:p-8">
 
           {/* Subtle Background Glow Accent */}
           <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-rose-500/10 blur-3xl" />
 
           {/* Header */}
-          <div className="relative flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-500/10 text-amber-400 shadow-inner sm:h-13 sm:w-13">
-                <Download size={22} />
+          <div className="relative flex items-start justify-between gap-2.5 sm:items-center sm:gap-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 text-amber-400 shadow-inner sm:h-13 sm:w-13 sm:rounded-2xl">
+                <Download size={18} className="sm:h-5.5 sm:w-5.5" />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-amber-400">
-                  <Sparkles size={12} />
+                <div className="flex flex-wrap items-center gap-1 text-[9px] font-bold uppercase tracking-[0.18em] text-amber-400 sm:gap-1.5 sm:text-[11px] sm:tracking-widest">
+                  <Sparkles size={10} className="sm:h-3 sm:w-3" />
                   <span>Downloads</span>
                 </div>
-                <span className="truncate text-xl font-extrabold tracking-tight text-white sm:text-3xl">
+                <span className="block truncate text-base font-extrabold tracking-tight text-white sm:text-3xl">
                   Download History
                 </span>
               </div>
@@ -130,25 +130,26 @@ export default function DownloadsPage() {
               <button
                 type="button"
                 onClick={handleClearHistory}
-                className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition-all hover:border-rose-500/40 hover:bg-rose-500/20 hover:text-rose-200"
+                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition-all hover:border-rose-500/40 hover:bg-rose-500/20 hover:text-rose-200"
               >
                 <Trash2 size={14} />
                 <span className="hidden sm:inline">Clear history</span>
+                <span className="sm:hidden">Clear</span>
               </button>
             )}
           </div>
 
           {downloadEntries.length > 0 && (
-            <div className="relative mt-6 grid grid-cols-2 gap-3 sm:max-w-md">
+            <div className="relative mt-6 hidden grid-cols-2 gap-3 sm:grid sm:max-w-md">
               <div className="rounded-2xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Transferred</p>
-                <p className="mt-1 text-lg font-bold tabular-nums text-amber-300">
+                <p className="mt-1 wrap-break-words text-base font-bold tabular-nums text-amber-300 sm:text-lg">
                   {formatBytes(downloadedBytes)}
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total size</p>
-                <p className="mt-1 text-lg font-bold tabular-nums text-white">
+                <p className="mt-1 wrap-break-words text-base font-bold tabular-nums text-white sm:text-lg">
                   {totalBytes ? formatBytes(totalBytes) : 'Calculating'}
                 </p>
               </div>
@@ -157,12 +158,12 @@ export default function DownloadsPage() {
 
           {/* Download Notice Banner */}
           {downloadNotice && (
-            <div className="mt-5 flex items-center gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200 backdrop-blur-md sm:text-sm">
+            <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-xs text-amber-200 backdrop-blur-md sm:items-center sm:px-4 sm:text-sm">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
               </span>
-              <span>
+              <span className="min-w-0 wrap-break-words leading-relaxed">
                 {downloadNotice.status === 'downloading'
                   ? `Downloading ${downloadNotice.title}`
                   : downloadNotice.status === 'done'
@@ -174,7 +175,7 @@ export default function DownloadsPage() {
 
           {/* Empty State */}
           {downloadEntries.length === 0 ? (
-            <div className="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-950/30 px-6 py-12 text-center">
+            <div className="mt-7 flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-950/30 px-5 py-10 text-center sm:mt-8 sm:px-6 sm:py-12">
               <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-800/50 text-slate-500">
                 <Inbox size={24} />
               </div>
@@ -182,16 +183,16 @@ export default function DownloadsPage() {
               <p className="mt-1 text-xs text-slate-500">Your downloaded files will appear here.</p>
             </div>
           ) : (
-            <div className="mt-8 space-y-6">
+            <div className="mt-7 space-y-5 sm:mt-8 sm:space-y-6">
 
               {/* Active Downloads Section */}
               {activeDownloads.length > 0 && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <h2 className="text-xs font-bold uppercase tracking-wider text-amber-400">
                       Active Downloads
                     </h2>
-                    <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
+                    <span className="inline-flex w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
                       {activeDownloads.length} active
                     </span>
                   </div>
@@ -217,9 +218,9 @@ export default function DownloadsPage() {
               {/* Recent Downloads Section */}
               {previousDownloads.length > 0 && (
                 <div className="space-y-3">
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     Recent Activity
-                  </h2>
+                  </span>
                   <div className="space-y-2">
                     {previousDownloads.map((entry) => (
                       <DownloadRow key={entry.id} entry={entry} />

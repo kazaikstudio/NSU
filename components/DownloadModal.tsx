@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { X } from "lucide-react";import { getDownloadPath, inferDownloadCategoryFromFilename } from '@/lib/download'
+import { X } from "lucide-react";
+import { getDownloadPath, inferDownloadCategoryFromFilename } from '@/lib/download';
 type DownloadFormat = {
   itag: number;
   label: string;
@@ -26,6 +27,8 @@ type DownloadHistoryPayload = {
   status: "downloading" | "done" | "error";
   title: string;
   progress?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
   paused?: boolean;
   action?: "pause" | "resume";
 };
@@ -41,7 +44,7 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     y: 0,
     placeAbove: false,
   });
-  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [, setDownloadProgress] = useState(0);
 
   const downloadProgressRef = useRef(0);
   const downloadOffsetRef = useRef(0);
@@ -64,7 +67,7 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     };
   }, []);
 
-  const safeSetState = <T extends unknown>(callback: () => T) => {
+  const safeSetState = (callback: () => void) => {
     if (isMountedRef.current) callback();
   };
 
@@ -164,7 +167,7 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
       downloadOffsetRef.current = 0;
       safeSetState(() => setDownloadProgressValue(0));
       isPausedRef.current = false;
-      emitDownloadHistory({ status: "downloading", title: historyTitle, progress: 0, paused: false });
+      emitDownloadHistory({ status: "downloading", title: historyTitle, progress: 0, downloadedBytes: 0, totalBytes: format.size ?? undefined, paused: false });
     } else {
       safeSetState(() => setLoadingFormat(formatKey));
       emitDownloadHistory({ status: "downloading", title: historyTitle, progress: downloadProgressRef.current, paused: false });
@@ -177,28 +180,89 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     try {
       const downloadUrl = `/api/youtube/download?id=${encodeURIComponent(videoId || "")}&itag=${format.itag}&output=${format.extension}&bitrate=${format.outputBitrate || ""}`;
       const filename = `${title || videoId}.${format.extension || "mp4"}`;
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const response = await fetch(downloadUrl, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`);
+      }
+
+      const totalBytes = Number(response.headers.get("content-length")) || format.size || 0;
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Download body is unavailable.");
+      }
+
+      const chunks: Uint8Array[] = [];
+      let downloadedBytes = 0;
+      let lastProgress = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        chunks.push(value);
+        downloadedBytes += value.length;
+
+        if (totalBytes > 0) {
+          const progress = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100));
+          if (progress !== lastProgress) {
+            lastProgress = progress;
+            safeSetState(() => setDownloadProgressValue(progress));
+            emitDownloadHistory({
+              status: "downloading",
+              title: historyTitle,
+              progress,
+              downloadedBytes,
+              totalBytes,
+              paused: false,
+            });
+          }
+        }
+      }
+
+      const binaryData = chunks.map((chunk) => {
+        const array = new Uint8Array(chunk.length);
+        array.set(chunk);
+        return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
+      });
+      const blob = new Blob(binaryData, { type: response.headers.get("content-type") || format.mimeType || "application/octet-stream" });
       const anchor = document.createElement("a");
-      anchor.href = downloadUrl;
+      const objectUrl = URL.createObjectURL(blob);
+      anchor.href = objectUrl;
       anchor.download = getDownloadPath(filename, inferDownloadCategoryFromFilename(filename));
       anchor.style.display = "none";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      emitDownloadHistory({ status: "downloading", title: historyTitle, progress: 0, paused: false });
+      URL.revokeObjectURL(objectUrl);
+      safeSetState(() => setDownloadProgressValue(100));
+      emitDownloadHistory({
+        status: "done",
+        title: historyTitle,
+        progress: 100,
+        downloadedBytes,
+        totalBytes: totalBytes || downloadedBytes,
+        paused: false,
+      });
     } catch (downloadError: unknown) {
       if (downloadError instanceof Error && downloadError.name === "AbortError") {
         return;
       }
       emitDownloadHistory({ status: "error", title: historyTitle, progress: downloadProgressRef.current, paused: false });
-      setError(downloadError instanceof Error ? downloadError.message : "Unable to download this format.");
+      safeSetState(() => setError(downloadError instanceof Error ? downloadError.message : "Unable to download this format."));
     } finally {
       if (!isPausedRef.current) {
-        setLoadingFormat(null);
-        setDownloadProgressValue(0);
+        safeSetState(() => setLoadingFormat(null));
+        safeSetState(() => setDownloadProgressValue(0));
       }
       abortControllerRef.current = null;
     }
-  }, [downloadProgress, emitDownloadHistory, title, videoId]);
+  }, [emitDownloadHistory, title, videoId]);
 
 
 
@@ -261,7 +325,6 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
                         onClick={(event) => {
                           event.preventDefault();
                           void handleDownload(format);
-                          handleClose();
                         }}
                         disabled={loadingFormat !== null}
                         className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
