@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Download } from 'lucide-react';
 import { useClickOutside } from "./useClickOutside";
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
 interface DownloadNotice {
   status: 'downloading' | 'done' | 'error';
@@ -28,7 +28,6 @@ const Navbar = () => {
   const navRef = useRef<HTMLHeadingElement>(null);
   const noticeTimerRef = useRef<number | null>(null);
   const pathname = usePathname();
-  const router = useRouter();
 
   useClickOutside(navRef, () => {
     if (isOpen) setIsOpen(false);
@@ -167,9 +166,8 @@ const Navbar = () => {
         {/* Desktop Links & Theme Toggle */}
         <div className="hidden md:flex min-w-0 flex-1 items-center justify-end">
           <div className="relative mr-4">
-            <button
-              type="button"
-              onClick={() => router.push('/downloads')}
+            <Link
+              href="/downloads"
               className="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-400/20"
               aria-label="Open downloads"
             >
@@ -179,7 +177,7 @@ const Navbar = () => {
                   {activeDownloads.length}
                 </span>
               ) : null}
-            </button>
+            </Link>
           </div>
           <ul className="flex items-center gap-6 text-sm font-medium">
           <li>
@@ -239,9 +237,8 @@ const Navbar = () => {
         {/* Mobile Actions Container: Theme Toggle + Hamburger Menu */}
         <div className="flex items-center gap-2 md:hidden">
           <div className="relative">
-            <button
-              type="button"
-              onClick={() => router.push('/downloads')}
+            <Link
+              href="/downloads"
               className="rounded-lg p-2 text-primary transition hover:bg-gray-700/10 dark:hover:bg-zinc-800"
               aria-label="Open downloads"
             >
@@ -251,7 +248,7 @@ const Navbar = () => {
                   {activeDownloads.length}
                 </span>
               ) : null}
-            </button>
+            </Link>
           </div>
           {/* Mobile Theme Toggle Button (Always Visible) */}
           <button
