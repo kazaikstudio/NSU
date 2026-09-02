@@ -8,6 +8,8 @@ interface DownloadNotice {
   status: 'downloading' | 'done' | 'error';
   title: string;
   progress?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
 }
 
 export default function DownloadsPage() {
@@ -46,6 +48,8 @@ export default function DownloadsPage() {
           title: detail.title,
           status: detail.status,
           progress: detail.progress,
+          downloadedBytes: detail.downloadedBytes ?? previousEntries.find((entry) => entry.title === detail.title)?.downloadedBytes,
+          totalBytes: detail.totalBytes ?? previousEntries.find((entry) => entry.title === detail.title)?.totalBytes,
           paused: detail.status === 'downloading' ? (previousEntries.find((entry) => entry.title === detail.title)?.paused ?? false) : false,
           createdAt: previousEntries.find((entry) => entry.title === detail.title)?.createdAt ?? now,
           updatedAt: now,
@@ -65,6 +69,8 @@ export default function DownloadsPage() {
 
   const activeDownloads = downloadEntries.filter((entry) => entry.status === 'downloading');
   const previousDownloads = downloadEntries.filter((entry) => entry.status !== 'downloading');
+  const downloadedBytes = downloadEntries.reduce((sum, entry) => sum + (entry.downloadedBytes ?? 0), 0);
+  const totalBytes = downloadEntries.reduce((sum, entry) => sum + (entry.totalBytes ?? 0), 0);
 
   const handleTogglePause = (entry: DownloadEntry) => {
     const nextPaused = !entry.paused;
@@ -131,6 +137,23 @@ export default function DownloadsPage() {
               </button>
             )}
           </div>
+
+          {downloadEntries.length > 0 && (
+            <div className="relative mt-6 grid grid-cols-2 gap-3 sm:max-w-md">
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Transferred</p>
+                <p className="mt-1 text-lg font-bold tabular-nums text-amber-300">
+                  {formatBytes(downloadedBytes)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-950/35 px-4 py-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total size</p>
+                <p className="mt-1 text-lg font-bold tabular-nums text-white">
+                  {totalBytes ? formatBytes(totalBytes) : 'Calculating'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Download Notice Banner */}
           {downloadNotice && (
@@ -210,4 +233,19 @@ export default function DownloadsPage() {
       </div>
     </main>
   );
+}
+
+function formatBytes(bytes: number) {
+  if (!bytes) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }

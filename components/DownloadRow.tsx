@@ -7,9 +7,26 @@ export interface DownloadEntry {
   title: string;
   status: 'downloading' | 'done' | 'error';
   progress?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
   paused?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+function formatBytes(bytes?: number) {
+  if (!Number.isFinite(bytes) || !bytes || bytes < 0) return 'Size unknown';
+  if (bytes < 1024) return `${bytes} B`;
+
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
 interface DownloadRowProps {
@@ -39,6 +56,11 @@ export default function DownloadRow({ entry, index, onTogglePause }: DownloadRow
               <span className="font-mono text-[11px] text-amber-300">
                 {entry.paused ? 'Paused' : typeof progressValue === 'number' ? `${Math.round(progressValue)}%` : 'Preparing...'}
               </span>
+            </div>
+
+            <div className="mt-1 flex items-center justify-between gap-3 text-[10px] text-slate-500">
+              <span>{formatBytes(entry.downloadedBytes)} transferred</span>
+              <span>{entry.totalBytes ? `${formatBytes(entry.totalBytes)} total` : 'Calculating size'}</span>
             </div>
 
             {/* Progress Bar */}
@@ -92,6 +114,11 @@ export default function DownloadRow({ entry, index, onTogglePause }: DownloadRow
           <Clock3 size={12} className="text-slate-500" />
           {entry.status === 'done' ? 'Completed & Saved' : 'Download Failed'}
         </p>
+        {(entry.downloadedBytes || entry.totalBytes) ? (
+          <p className="mt-1 text-[10px] text-slate-500">
+            {formatBytes(entry.downloadedBytes)} of {formatBytes(entry.totalBytes)}
+          </p>
+        ) : null}
       </div>
     </div>
   );

@@ -62,7 +62,7 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
     if (!downloadUrl) return;
 
     window.dispatchEvent(new CustomEvent('nsu-download-status', {
-      detail: { status: 'downloading', title: track.title, progress: 0 },
+      detail: { status: 'downloading', title: track.title, progress: 0, downloadedBytes: 0 },
     }));
 
     try {
@@ -90,7 +90,7 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
           if (nextProgress !== lastProgress) {
             lastProgress = nextProgress;
             window.dispatchEvent(new CustomEvent('nsu-download-status', {
-              detail: { status: 'downloading', title: track.title, progress: nextProgress },
+              detail: { status: 'downloading', title: track.title, progress: nextProgress, downloadedBytes: loaded, totalBytes: total },
             }));
           }
         }
@@ -112,7 +112,7 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
       URL.revokeObjectURL(objectUrl);
 
       window.dispatchEvent(new CustomEvent('nsu-download-status', {
-        detail: { status: 'done', title: track.title, progress: 100 },
+        detail: { status: 'done', title: track.title, progress: 100, downloadedBytes: loaded, totalBytes: total || loaded },
       }));
     } catch (error) {
       console.error('Download failed:', error);

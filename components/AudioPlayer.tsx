@@ -8,6 +8,8 @@ interface DownloadNoticePayload {
   status: 'downloading' | 'done' | 'error';
   title: string;
   progress?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
 }
 
 interface AudioPlayerProps {
@@ -160,7 +162,7 @@ export default function AudioPlayer({
     setDownloadStatus('downloading');
     downloadProgressRef.current = 8;
     window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-      detail: { status: 'downloading', title, progress: 8 },
+      detail: { status: 'downloading', title, progress: 0, downloadedBytes: 0 },
     }));
     onDownload?.();
 
@@ -205,7 +207,7 @@ export default function AudioPlayer({
             downloadProgressRef.current = nextProgress;
             setDownloadStatus('downloading');
             window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-              detail: { status: 'downloading', title, progress: nextProgress },
+              detail: { status: 'downloading', title, progress: nextProgress, downloadedBytes: loaded, totalBytes: total },
             }));
           }
         }
@@ -233,7 +235,7 @@ export default function AudioPlayer({
       downloadProgressRef.current = 100;
       setDownloadStatus('done');
       window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-        detail: { status: 'done', title, progress: 100 },
+        detail: { status: 'done', title, progress: 100, downloadedBytes: loaded, totalBytes: total || loaded },
       }));
       downloadTimerRef.current = window.setTimeout(() => {
         setDownloadStatus('idle');
