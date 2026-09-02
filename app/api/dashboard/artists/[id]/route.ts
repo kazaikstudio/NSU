@@ -3,10 +3,11 @@ import { Pool } from 'pg';
 import { artistsSeed } from '@/lib/artists';
 import { deleteFromGoogleDrive } from '@/lib/google-drive';
 import { recordActivity } from '@/lib/activity';
+import { getDatabaseConnectionString } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
-const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEXT_PUBLIC_DATABASE_URL;
+const connectionString = getDatabaseConnectionString();
 
 let pool: Pool | null = null;
 

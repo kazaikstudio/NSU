@@ -13,7 +13,13 @@ export function resolveDatabaseConnectionString(env: NodeJS.ProcessEnv = process
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .map((value) => value.trim());
 
-  const validDirectUrl = candidateUrls.find((value) => !/USER|PASSWORD|your_railway_postgres_url|replace_with|example\.com/i.test(value));
+  const validDirectUrl = candidateUrls.find((value) => {
+    const lower = value.toLowerCase();
+    return !/USER:PASSWORD|USERNAME:PASSWORD|user:password|username:password|your_railway_postgres_url|replace_with|example\.com|<username>|<password>/i.test(value)
+      && !/\/\$\{.*\}/.test(value)
+      && !lower.includes('placeholder');
+  });
+
   if (validDirectUrl) {
     return validDirectUrl;
   }
@@ -31,7 +37,11 @@ export function resolveDatabaseConnectionString(env: NodeJS.ProcessEnv = process
   return undefined;
 }
 
-const connectionString = resolveDatabaseConnectionString();
+export function getDatabaseConnectionString(env: NodeJS.ProcessEnv = process.env) {
+  return resolveDatabaseConnectionString(env) ?? process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? undefined;
+}
+
+const connectionString = getDatabaseConnectionString();
 const hasConfiguredDatabase = Boolean(connectionString);
 
 const pool = hasConfiguredDatabase

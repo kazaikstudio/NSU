@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { resolveDatabaseConnectionString } from './db';
+import { getDatabaseConnectionString, resolveDatabaseConnectionString } from './db';
 
 test('resolveDatabaseConnectionString prefers a real configured DATABASE_URL', () => {
   const value = resolveDatabaseConnectionString({
@@ -14,6 +14,20 @@ test('resolveDatabaseConnectionString prefers a real configured DATABASE_URL', (
 
 test('resolveDatabaseConnectionString builds a URL from PG* vars when DATABASE_URL is missing', () => {
   const value = resolveDatabaseConnectionString({
+    PGHOST: 'sakura.proxy.rlwy.net',
+    PGPORT: '43026',
+    PGDATABASE: 'railway',
+    PGUSER: 'postgres',
+    PGPASSWORD: 'secret',
+  });
+
+  assert.equal(value, 'postgresql://postgres:secret@sakura.proxy.rlwy.net:43026/railway');
+});
+
+test('getDatabaseConnectionString ignores placeholder Railway values and prefers the live config', () => {
+  const value = getDatabaseConnectionString({
+    DATABASE_URL: 'postgresql://USER:PASSWORD@sakura.proxy.rlwy.net:43026/railway',
+    POSTGRES_URL: 'postgresql://postgres:secret@sakura.proxy.rlwy.net:43026/railway',
     PGHOST: 'sakura.proxy.rlwy.net',
     PGPORT: '43026',
     PGDATABASE: 'railway',
