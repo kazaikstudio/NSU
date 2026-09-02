@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useId } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
-import { getDownloadPath } from '@/lib/download';
+import { getAudioDownloadThumbnailUrl, getDownloadPath } from '@/lib/download';
 
 interface DownloadNoticePayload {
   status: 'downloading' | 'done' | 'error';
@@ -163,6 +163,7 @@ export default function AudioPlayer({
       const anchor = document.createElement('a');
       anchor.href = downloadUrl;
       anchor.download = filename;
+      anchor.dataset.thumbnailUrl = getAudioDownloadThumbnailUrl();
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();

@@ -245,12 +245,30 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
   };
 
   const handleDownload = () => {
-    const link = document.createElement("a");
-    link.href = videoSrc;
-    link.download = `${videoTitle.replace(/\s+/g, "_")}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const safeTitle = videoTitle.trim() || "download";
+    const dispatchStatus = (status: "downloading" | "done" | "error", progress?: number) => {
+      if (typeof window === "undefined") return;
+      window.dispatchEvent(new CustomEvent("nsu-download-status", {
+        detail: { status, title: safeTitle, progress },
+      }));
+    };
+
+    dispatchStatus("downloading", 0);
+
+    try {
+      const link = document.createElement("a");
+      link.href = videoSrc;
+      link.download = `${safeTitle.replace(/\s+/g, "_")}`;
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      window.setTimeout(() => dispatchStatus("done", 100), 1000);
+    } catch (error) {
+      console.error("Direct download failed:", error);
+      dispatchStatus("error", 0);
+    }
   };
 
   const formatTime = (timeInSeconds: number) => {

@@ -10,6 +10,7 @@ import {
   getDownloadStorageDiagnostics,
   teeStreamToFile,
 } from "@/lib/download-storage";
+import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { resolveAllowedOrigin } from '@/lib/request-origin';
 import {
   YoutubeDownloadError,
@@ -251,16 +252,11 @@ export async function GET(req: Request) {
         : output === "m4a"
           ? "audio/mp4"
           : selectedFormat?.mime_type?.split(';')[0] || "video/mp4";
-    const encodedFilename = encodeURIComponent(`${safeTitle}.${extension}`);
-    const fallbackFilename = output === "mp3"
-      ? "audio.mp3"
-      : output === "wav"
-        ? "audio.wav"
-        : output === "m4a"
-          ? "audio.m4a"
-          : "video.mp4";
     const downloadCategory = audioOutput ? "audio" : "video";
-    const downloadFilename = `${safeTitle}.${extension}`;
+    const downloadDisplayName = buildDownloadFilename(`${safeTitle}.${extension}`, downloadCategory);
+    const encodedFilename = encodeURIComponent(downloadDisplayName);
+    const fallbackFilename = downloadDisplayName;
+    const downloadFilename = downloadDisplayName;
     const downloadPath = await createStoredDownloadPath(downloadFilename, downloadCategory);
 
     if (audioOutput && !ffmpegAvailable) {
@@ -305,12 +301,17 @@ export async function GET(req: Request) {
       }
 
       const input = Readable.fromWeb(stream as never);
+      const artworkPath = join(process.cwd(), "public", "noll.jpg");
+      const artworkAvailable = existsSync(artworkPath);
       const codecArgs = output === "mp3"
         ? ["-codec:a", "libmp3lame", "-b:a", `${bitrate}k`, "-f", "mp3"]
         : output === "wav"
           ? ["-codec:a", "pcm_s16le", "-f", "wav"]
           : ["-codec:a", "aac", "-b:a", "192k", "-f", "ipod"];
-      const converter = spawn(executable, ["-loglevel", "error", "-i", "pipe:0", "-vn", ...codecArgs, "pipe:1"], { stdio: ["pipe", "pipe", "pipe"] });
+      const ffmpegArgs = artworkAvailable
+        ? ["-loglevel", "error", "-i", "pipe:0", "-i", artworkPath, "-map", "0:a", "-map", "1:v", "-c:a", ...codecArgs.slice(1, 3), "-c:v", "mjpeg", "-disposition:v", "attached_pic", "-f", "mp3", "pipe:1"]
+        : ["-loglevel", "error", "-i", "pipe:0", "-vn", ...codecArgs, "pipe:1"];
+      const converter = spawn(executable, ffmpegArgs, { stdio: ["pipe", "pipe", "pipe"] });
       const stderrBuffer: string[] = [];
       collectProcessStderr(converter.stderr, stderrBuffer);
       registerProcessFailureHandlers('ffmpeg-convert', converter, stderrBuffer, {
@@ -336,7 +337,8 @@ export async function GET(req: Request) {
         headers: {
           "Content-Type": mimeType,
           "Content-Disposition": `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodedFilename}`,
-          "Access-Control-Expose-Headers": "Content-Disposition, X-NSU-Download-Code, X-NSU-Download-Runtime",
+          "X-NSU-Thumbnail-Url": getAudioDownloadThumbnailUrl(),
+          "Access-Control-Expose-Headers": "Content-Disposition, X-NSU-Download-Code, X-NSU-Download-Runtime, X-NSU-Thumbnail-Url",
           "Cache-Control": 'no-store',
         },
       }, 'audio-convert');

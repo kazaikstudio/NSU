@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool, { ensureDatabaseReady } from '@/lib/db';
+import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
 
 export const runtime = 'nodejs';
 
@@ -81,10 +82,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   if (requestedFilename) {
     const safeFilename = requestedFilename.replace(/[\r\n"\\/]/g, '_');
-    const fileName = safeFilename.endsWith('.mp3')
-      ? safeFilename.replace(/\.mp3$/i, ' - Noll Music.mp3')
-      : safeFilename;
-    headers.set('Content-Disposition', `attachment; filename="${fileName}"`);
+    const fileName = buildDownloadFilename(safeFilename, 'audio');
+    headers.set('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    headers.set('X-NSU-Thumbnail-Url', getAudioDownloadThumbnailUrl());
   }
 
   return new NextResponse(response.body, { status: response.status, headers });

@@ -1,18 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getDownloadPath } from './download';
+import { getAudioDownloadThumbnailUrl, getDownloadPath } from './download';
 
-test('mp3 download names end with Noll Music suffix', () => {
+test('mp3 download names end with the Nollstudios.org suffix', () => {
   assert.equal(
     getDownloadPath('My Song.mp3', 'audio'),
-    'Noll-Music/Audio/My Song - Noll Music.mp3',
+    'Noll-Music/Audio/My Song - Nollstudios.org.mp3',
   );
 });
 
-test('video downloads keep their original name without Noll Music prefixing', () => {
+test('video downloads keep their original name without the audio suffix', () => {
   assert.equal(
     getDownloadPath('My Song.mp4', 'video'),
     'Noll-Music/Video/My Song.mp4',
   );
+});
+
+test('audio downloads point to the public noll cover image', () => {
+  assert.equal(getAudioDownloadThumbnailUrl(), '/noll.jpg');
 });
