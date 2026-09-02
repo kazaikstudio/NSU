@@ -272,7 +272,6 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
         activeItemId={activeItem?.id ?? null}
         loading={loading}
         onSelectAction={selectVideo}
-        onDownloadAction={handleDownloadItem}
       />
 
       </div>
