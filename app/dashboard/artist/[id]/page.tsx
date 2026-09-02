@@ -59,12 +59,19 @@ export default function ArtistDetailPage() {
     const ensureAuthorized = async () => {
       try {
         const response = await fetch('/api/dashboard/session', { cache: 'no-store', credentials: 'same-origin' });
-        if (!response.ok && !cancelled) {
-          window.location.href = '/dashboard';
+
+        if (!response.ok) {
+          const isUnauthorized = response.status === 401 || response.status === 403;
+          if (isUnauthorized && !cancelled) {
+            window.location.href = '/dashboard';
+          }
+          return;
         }
       } catch {
         if (!cancelled) {
-          window.location.href = '/dashboard';
+          // Keep the artist page visible instead of bouncing back to the dashboard
+          // when a network or backend error prevents the session check from resolving.
+          return;
         }
       }
     };
