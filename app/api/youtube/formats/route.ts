@@ -8,11 +8,33 @@ import { join } from 'node:path';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-let youtubeClientPromise: Promise<Innertube> | undefined;
+const YOUTUBE_CLIENT_TYPES = [ClientType.ANDROID_VR, ClientType.WEB, ClientType.IOS] as const;
 
-function getYoutubeClient() {
-  youtubeClientPromise ??= Innertube.create({ client_type: ClientType.ANDROID_VR, retrieve_player: true });
-  return youtubeClientPromise;
+async function getYoutubeVideoInfo(videoId: string) {
+  let lastError: unknown;
+
+  for (const clientType of YOUTUBE_CLIENT_TYPES) {
+    try {
+      const youtube = await Innertube.create({ client_type: clientType, retrieve_player: true });
+      const info = await youtube.getBasicInfo(videoId);
+      const formatCount = (info.streaming_data?.formats?.length ?? 0) + (info.streaming_data?.adaptive_formats?.length ?? 0);
+      const hasTitle = Boolean(info.basic_info?.title);
+
+      if (formatCount > 0 || hasTitle) {
+        return { youtube, info, clientType };
+      }
+
+      lastError = new Error(`No playable stream metadata for ${videoId} using ${String(clientType)}`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  throw new Error(`Unable to fetch YouTube metadata for ${videoId}`);
 }
 
 function isVideoId(value: string) {
@@ -32,12 +54,33 @@ export async function GET(request: Request) {
   }
 
   try {
-    const youtube = await getYoutubeClient();
-    const info = await youtube.getBasicInfo(id);
+    const { info } = await getYoutubeVideoInfo(id);
     const allFormats = [
       ...(info.streaming_data?.formats || []),
       ...(info.streaming_data?.adaptive_formats || []),
     ];
+
+    if (allFormats.length === 0) {
+      return NextResponse.json({
+        error: 'This YouTube video is not currently returning playable streams from the server runtime.',
+        code: 'NO_STREAMS_AVAILABLE',
+        videoId: id,
+        title: info.basic_info?.title || `YouTube video ${id}`,
+        diagnostics: {
+          runtime: getRuntimeDiagnostics(),
+          ffmpeg: getFfmpegDiagnostics(getFfmpegPath()),
+          formatCounts: {
+            total: 0,
+            audioOnly: 0,
+            videoMp4: 0,
+            directVideoMp4: 0,
+            mergeOnlyVideoMp4: 0,
+            exposedFormats: 0,
+          },
+        },
+      }, { status: 404 });
+    }
+
     const ffmpegAvailable = Boolean(getFfmpegPath());
     const audioSource = allFormats
       .filter((format) => format.has_audio && !format.has_video && !format.has_text)
