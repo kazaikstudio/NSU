@@ -37,3 +37,4 @@ test('getDatabaseConnectionString ignores placeholder Railway values and prefers
 
   assert.equal(value, 'postgresql://postgres:secret@sakura.proxy.rlwy.net:43026/railway');
 });
+
