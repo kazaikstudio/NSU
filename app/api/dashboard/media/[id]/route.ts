@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { ensureDatabaseReady } from '@/lib/db';
 import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
+import { incrementMediaPlayCount } from '@/lib/media-play';
 
 export const runtime = 'nodejs';
 
@@ -47,21 +48,17 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   if (searchParams.get('download') === '1') {
     try {
-      await ensureDatabaseReady();
-      await pool.query(
-        `UPDATE artist_media
-         SET download_count = COALESCE(download_count, 0) + 1
-         WHERE drive_file_id = $1 AND kind = 'track'`,
-        [id]
-      );
-      await pool.query(
-        `UPDATE artists
-         SET total_downloads = COALESCE(total_downloads, 0) + 1
-         WHERE id::text = (SELECT artist_id FROM artist_media WHERE drive_file_id = $1 LIMIT 1)`,
-        [id]
-      );
+      await incrementMediaPlayCount(id);
     } catch (error) {
       console.error('Unable to record artist download:', error);
+    }
+  }
+
+  if (searchParams.get('play') === '1') {
+    try {
+      await incrementMediaPlayCount(id);
+    } catch (error) {
+      console.error('Unable to record artist play:', error);
     }
   }
   const response = await fetchGoogleDriveFile(id, range ?? undefined);

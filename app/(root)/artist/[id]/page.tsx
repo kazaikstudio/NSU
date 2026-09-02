@@ -185,21 +185,28 @@ export default function PublicArtistDetailPage() {
     }
   };
 
-  const refreshTrackDownloads = async (trackId: string, fileUrl: string) => {
+  const syncPlayCount = async (trackId: string, fileUrl: string) => {
     const driveFileId = getDriveFileId(fileUrl);
     if (!driveFileId) return;
 
+    const nextDownloadCount = (tracks.find((track) => track.id === trackId)?.downloadCount ?? 0) + 1;
+    setActiveTrackId(trackId);
+    setActiveTrackDownloads(nextDownloadCount);
+    setTracks((currentTracks) => currentTracks.map((track) => track.id === trackId
+      ? { ...track, downloadCount: Number(track.downloadCount || 0) + 1 }
+      : track));
+
     try {
-      const response = await fetch(`/api/dashboard/media/${driveFileId}/play`, { cache: 'no-store' });
+      const response = await fetch(`/api/dashboard/media/${driveFileId}?play=1`, { method: 'GET', cache: 'no-store' });
       if (!response.ok) return;
       const result = await response.json();
-      setActiveTrackId(trackId);
-      setActiveTrackDownloads(Number(result.trackDownloads || 0));
+      const updatedCount = Number(result.trackDownloads || nextDownloadCount || 0);
+      setActiveTrackDownloads(updatedCount);
       setTracks((currentTracks) => currentTracks.map((track) => track.id === trackId
-        ? { ...track, downloadCount: Number(result.trackDownloads || 0) }
+        ? { ...track, downloadCount: updatedCount }
         : track));
     } catch {
-      // Playback should continue even when download statistics are unavailable.
+      // Playback continues even if the DB result is delayed; the UI already updated optimistically.
     }
   };
 
@@ -382,8 +389,8 @@ export default function PublicArtistDetailPage() {
                     createdAt={track.createdAt}
                     artistName={artist.name}
                     artistGenre={artist.genre}
-                    onPlay={() => void refreshTrackDownloads(track.id, track.fileUrl || '')}
-                    onDownload={() => void refreshTrackDownloads(track.id, track.fileUrl || '')}
+                    onPlay={() => void syncPlayCount(track.id, track.fileUrl || '')}
+                    onDownload={() => void syncPlayCount(track.id, track.fileUrl || '')}
                   />
                 );
               })}

@@ -176,15 +176,58 @@ export default function AudioPlayer({
     }, 180);
 
     try {
+      const response = await fetch(downloadUrl, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`);
+      }
+
+      const total = Number(response.headers.get('content-length')) || 0;
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Download body is unavailable.');
+      }
+
+      const chunks: Uint8Array[] = [];
+      let loaded = 0;
+      let lastProgress = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        chunks.push(value);
+        loaded += value.length;
+        if (total > 0) {
+          const nextProgress = Math.min(100, Math.round((loaded / total) * 100));
+          if (nextProgress !== lastProgress) {
+            lastProgress = nextProgress;
+            downloadProgressRef.current = nextProgress;
+            setDownloadStatus('downloading');
+            window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
+              detail: { status: 'downloading', title, progress: nextProgress },
+            }));
+          }
+        }
+      }
+
+      const binaryData = chunks.map((chunk) => {
+        const array = new Uint8Array(chunk.length);
+        array.set(chunk);
+        return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
+      });
+      const blob = new Blob(binaryData, { type: 'audio/mpeg' });
       const filename = getDownloadPath(fileName || `${title}.mp3`, 'audio');
       const anchor = document.createElement('a');
-      anchor.href = downloadUrl;
+      const objectUrl = URL.createObjectURL(blob);
+      anchor.href = objectUrl;
       anchor.download = filename;
       anchor.dataset.thumbnailUrl = getAudioDownloadThumbnailUrl();
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
+      URL.revokeObjectURL(objectUrl);
 
       window.clearInterval(progressTimer);
       downloadProgressRef.current = 100;

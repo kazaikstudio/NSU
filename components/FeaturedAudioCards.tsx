@@ -200,6 +200,86 @@ export default function FeaturedAudioCards() {
     }
   };
 
+  const getDownloadUrl = (track: FeaturedAudioTrack) => {
+    const match = track.fileUrl.match(/[?&]id=([^&]+)/);
+    if (!match?.[1]) return track.fileUrl;
+
+    return `/api/dashboard/media/${match[1]}?download=1&filename=${encodeURIComponent(`${track.title}.mp3`)}`;
+  };
+
+  const handleDownloadClick = async (event: React.MouseEvent<HTMLButtonElement>, track: FeaturedAudioTrack) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const downloadUrl = getDownloadUrl(track);
+    if (!downloadUrl) return;
+
+    window.dispatchEvent(new CustomEvent('nsu-download-status', {
+      detail: { status: 'downloading', title: track.title, progress: 0 },
+    }));
+
+    try {
+      const response = await fetch(downloadUrl, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`);
+      }
+
+      const total = Number(response.headers.get('content-length')) || 0;
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Download body is unavailable.');
+      }
+
+      const chunks: Uint8Array[] = [];
+      let loaded = 0;
+      let lastProgress = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        chunks.push(value);
+        loaded += value.length;
+
+        if (total > 0) {
+          const nextProgress = Math.min(100, Math.round((loaded / total) * 100));
+          if (nextProgress !== lastProgress) {
+            lastProgress = nextProgress;
+            window.dispatchEvent(new CustomEvent('nsu-download-status', {
+              detail: { status: 'downloading', title: track.title, progress: nextProgress },
+            }));
+          }
+        }
+      }
+
+      const blob = new Blob(chunks.map((chunk) => {
+        const array = new Uint8Array(chunk.length);
+        array.set(chunk);
+        return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
+      }), { type: 'audio/mpeg' });
+
+      const anchor = document.createElement('a');
+      const objectUrl = URL.createObjectURL(blob);
+      anchor.href = objectUrl;
+      anchor.download = `${track.title}.mp3`;
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      window.dispatchEvent(new CustomEvent('nsu-download-status', {
+        detail: { status: 'done', title: track.title, progress: 100 },
+      }));
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.dispatchEvent(new CustomEvent('nsu-download-status', {
+        detail: { status: 'error', title: track.title, progress: 0 },
+      }));
+    }
+  };
+
   // Seek audio position
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -388,15 +468,14 @@ export default function FeaturedAudioCards() {
                     </span>
                   </button>
 
-                  <a
-                    href={track.fileUrl}
-                    download
-                    onClick={(e) => e.stopPropagation()}
+                  <button
+                    type="button"
+                    onClick={(e) => void handleDownloadClick(e, track)}
                     className="flex items-center gap-1.5 text-xs hover:text-white transition-colors"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download</span>
-                  </a>
+                  </button>
                 </div>
               </div>
             );
