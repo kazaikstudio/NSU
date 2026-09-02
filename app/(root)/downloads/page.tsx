@@ -121,9 +121,10 @@ export default function DownloadsPage() {
       });
     }
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
       const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(detail.videoId)}&itag=${detail.itag}&output=${detail.extension}&bitrate=${detail.outputBitrate || ''}`, {
         signal: controller.signal,
         cache: 'no-store',
@@ -253,7 +254,9 @@ export default function DownloadsPage() {
         return nextEntries;
       });
     } finally {
-      abortControllerRef.current = null;
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -279,16 +282,14 @@ export default function DownloadsPage() {
     });
 
     if (nextPaused) {
+      if (activeRetryRef.current?.title === entry.title) {
+        abortControllerRef.current?.abort();
+      }
       setDownloadNotice((current) => current && current.title === entry.title
         ? { ...current, paused: true, progress: entry.progress }
         : current);
-    } else if (!entry.sourceVideoId || typeof entry.sourceItag !== 'number' || !entry.sourceExtension) {
-      setDownloadEntries((previousEntries) => {
-        const nextEntries = previousEntries.filter((item) => item.id !== entry.id);
-        window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
-        return nextEntries;
-      });
-      return;
+    } else if (activeRetryRef.current?.title === entry.title) {
+      void runRetryDownload(activeRetryRef.current, { keepProgress: true });
     }
 
     window.dispatchEvent(new CustomEvent('nsu-download-control', {
@@ -298,6 +299,7 @@ export default function DownloadsPage() {
 
   const handleCancelDownload = (entry: DownloadEntry) => {
     activeRetryRef.current = null;
+    abortControllerRef.current?.abort();
     window.dispatchEvent(new CustomEvent('nsu-download-control', {
       detail: { title: entry.title, action: 'cancel' },
     }));
