@@ -158,7 +158,7 @@ export default function DownloadsPage() {
 
           {/* Download Notice Banner */}
           {downloadNotice && (
-            <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-xs text-amber-200 backdrop-blur-md sm:items-center sm:px-4 sm:text-sm">
+            <div className="mt-5 hidden items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-xs text-amber-200 backdrop-blur-md sm:flex sm:items-center sm:px-4 sm:text-sm">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75"></span>
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500"></span>
@@ -189,9 +189,9 @@ export default function DownloadsPage() {
               {activeDownloads.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <h2 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
                       Active Downloads
-                    </h2>
+                    </span>
                     <span className="inline-flex w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
                       {activeDownloads.length} active
                     </span>
