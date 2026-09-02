@@ -1,41 +1,30 @@
 "use client";
 
-import React, { useRef, useState, useEffect, use } from "react";
+import React, { useState, useEffect, use } from "react";
 import Link from "next/link";
-import {
-  Play,
-  Pause,
-  Volume2,
-  VolumeX,
-  Maximize,
-  Minimize,
-  RotateCcw,
-  ArrowLeft,
-  Share2,
-  Download,
-  Flame,
-  Info,
-  Check,
-  Music
-} from "lucide-react";
+import ComedyDirectoryList, { type ComedyDirectoryItem } from '@/components/ComedyDirectoryList';
+import ModernVideoPlayer from '@/components/ModernVideoPlayer';
+import { ArrowLeft, Share2, Download, Info, Check } from "lucide-react";
 
-type PlaylistItem = {
-  id: string;
-  title: string;
+type PlaylistItem = ComedyDirectoryItem;
+
+type StorageItem = {
+  id: string | number;
+  title?: string;
+  name?: string;
+  artist?: string;
   comedian?: string;
   duration?: string;
   views?: string;
   thumbnail?: string;
-  fileUrl: string;
+  file_url?: string;
+  url?: string;
 };
 
 export default function ComedyVideoPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const { id } = resolvedParams;
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const playerContainerRef = useRef<HTMLDivElement>(null);
-  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
   const [activeItem, setActiveItem] = useState<PlaylistItem | null>(null);
@@ -43,14 +32,7 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
   const [videoTitle, setVideoTitle] = useState<string>("Loading...");
   const [loading, setLoading] = useState(true);
 
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
-  const [showControls, setShowControls] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -58,8 +40,8 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
       try {
         setLoading(true);
         const storageResponse = await fetch("/api/dashboard/storage?source=talk-show");
-        const storageData = await storageResponse.json().catch(() => ({ items: [] }));
-        const allItems: any[] = storageData.items || [];
+        const storageData = (await storageResponse.json().catch(() => ({ items: [] }))) as { items?: StorageItem[] };
+        const allItems = Array.isArray(storageData.items) ? storageData.items : [];
 
         let current = allItems.find((item) => String(item.id) === String(id));
 
@@ -74,11 +56,7 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
 
           const basePath = mainUrl.substring(0, mainUrl.lastIndexOf("/") + 1);
 
-          let pathFiles: PlaylistItem[] = allItems
-            .filter((item) => {
-              const itemUrl = item.file_url || item.url || "";
-              return itemUrl.startsWith(basePath);
-            })
+          const pathFiles: PlaylistItem[] = allItems
             .map((item) => {
               const itemUrl = item.file_url || item.url || "";
               return {
@@ -87,10 +65,11 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
                 comedian: item.artist || item.comedian || "Media Track",
                 duration: item.duration || "--:--",
                 views: item.views || "Audio Stream",
-                fileUrl: item.file_url || item.url,
-                thumbnail: item.thumbnail
+                fileUrl: itemUrl,
+                thumbnail: item.thumbnail,
               };
-            });
+            })
+            .filter((item) => item.fileUrl.startsWith(basePath));
 
           const matchedActive = pathFiles.find((f) => f.id === String(id)) || pathFiles[0];
 
@@ -107,55 +86,12 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
     void fetchDirectoryFiles();
   }, [id]);
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !videoSrc) return;
-
-    video.load();
-    if (isPlaying) {
-      video.play().catch((err) => {
-        console.warn("Autoplay blocked or interrupted:", err);
-        setIsPlaying(false);
-      });
-    }
-  }, [videoSrc]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(video.currentTime);
-      if (video.duration) {
-        setProgress((video.currentTime / video.duration) * 100);
-      }
-    };
-
-    const handleLoadedMetadata = () => {
-      setDuration(video.duration);
-    };
-
-    const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
-    };
-
-    video.addEventListener("timeupdate", handleTimeUpdate);
-    video.addEventListener("loadedmetadata", handleLoadedMetadata);
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-
-    return () => {
-      video.removeEventListener("timeupdate", handleTimeUpdate);
-      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-    };
-  }, [videoSrc]);
 
   const selectVideo = (item: PlaylistItem) => {
     if (item.fileUrl) {
       setActiveItem(item);
       setVideoSrc(item.fileUrl);
       setVideoTitle(item.title);
-      setIsPlaying(true);
     }
   };
 
@@ -164,66 +100,6 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
     const currentIndex = playlist.findIndex((item) => item.id === activeItem.id);
     if (currentIndex !== -1 && currentIndex < playlist.length - 1) {
       selectVideo(playlist[currentIndex + 1]);
-    } else {
-      setIsPlaying(false);
-    }
-  };
-
-  const togglePlay = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (isPlaying) {
-      video.pause();
-      setIsPlaying(false);
-    } else {
-      video.play().catch(() => setIsPlaying(false));
-      setIsPlaying(true);
-    }
-  };
-
-  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const newTime = (parseFloat(e.target.value) / 100) * duration;
-    video.currentTime = newTime;
-    setProgress(parseFloat(e.target.value));
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const newVolume = parseFloat(e.target.value);
-    video.volume = newVolume;
-    setVolume(newVolume);
-    setIsMuted(newVolume === 0);
-  };
-
-  const toggleMute = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (isMuted) {
-      video.volume = volume || 0.5;
-      setIsMuted(false);
-    } else {
-      video.volume = 0;
-      setIsMuted(true);
-    }
-  };
-
-  const toggleFullscreen = () => {
-    const container = playerContainerRef.current;
-    if (!container) return;
-
-    if (!document.fullscreenElement) {
-      container.requestFullscreen().catch((err) => {
-        console.error(`Error entering fullscreen: ${err.message}`);
-      });
-    } else {
-      document.exitFullscreen();
     }
   };
 
@@ -244,201 +120,145 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
     }
   };
 
-  const handleDownload = () => {
-    const safeTitle = videoTitle.trim() || "download";
-    const dispatchStatus = (status: "downloading" | "done" | "error", progress?: number) => {
-      if (typeof window === "undefined") return;
-      window.dispatchEvent(new CustomEvent("nsu-download-status", {
-        detail: { status, title: safeTitle, progress },
+  const handleDownloadItem = async (item: PlaylistItem) => {
+    const safeTitle = (item.title || 'download').trim() || 'download';
+    const targetUrl = item.fileUrl || '';
+
+    const getDownloadUrl = (fileUrl: string) => {
+      const match = fileUrl.match(/[?&]id=([^&]+)/);
+      if (!match?.[1]) return fileUrl;
+
+      return `/api/dashboard/media/${match[1]}?download=1&filename=${encodeURIComponent(`${safeTitle}.mp4`)}`;
+    };
+
+    const downloadUrl = getDownloadUrl(targetUrl);
+
+    const dispatchStatus = (status: 'downloading' | 'done' | 'error', progress?: number, downloadedBytes?: number, totalBytes?: number) => {
+      if (typeof window === 'undefined') return;
+      window.dispatchEvent(new CustomEvent('nsu-download-status', {
+        detail: { status, title: safeTitle, progress, downloadedBytes, totalBytes },
       }));
     };
 
-    dispatchStatus("downloading", 0);
+    if (!downloadUrl) {
+      dispatchStatus('error', 0);
+      return;
+    }
+
+    dispatchStatus('downloading', 0, 0);
 
     try {
-      const link = document.createElement("a");
-      link.href = videoSrc;
-      link.download = `${safeTitle.replace(/\s+/g, "_")}`;
-      link.rel = "noopener";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const response = await fetch(downloadUrl, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Download failed with status ${response.status}`);
+      }
 
-      window.setTimeout(() => dispatchStatus("done", 100), 1000);
+      const total = Number(response.headers.get('content-length')) || 0;
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Download body is unavailable.');
+      }
+
+      const chunks: Uint8Array[] = [];
+      let loaded = 0;
+      let lastProgress = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        chunks.push(value);
+        loaded += value.length;
+
+        if (total > 0) {
+          const nextProgress = Math.min(100, Math.round((loaded / total) * 100));
+          if (nextProgress !== lastProgress) {
+            lastProgress = nextProgress;
+            dispatchStatus('downloading', nextProgress, loaded, total);
+          }
+        }
+      }
+
+      const blob = new Blob(chunks.map((chunk) => {
+        const array = new Uint8Array(chunk.length);
+        array.set(chunk);
+        return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
+      }), { type: response.headers.get('content-type') || 'video/mp4' });
+
+      const anchor = document.createElement('a');
+      const objectUrl = URL.createObjectURL(blob);
+      anchor.href = objectUrl;
+      anchor.download = `${safeTitle}.mp4`;
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      dispatchStatus('done', 100, loaded, total || loaded);
     } catch (error) {
-      console.error("Direct download failed:", error);
-      dispatchStatus("error", 0);
+      console.error('Download failed:', error);
+      dispatchStatus('error', 0);
     }
   };
 
-  const formatTime = (timeInSeconds: number) => {
-    if (isNaN(timeInSeconds)) return "00:00";
-    const minutes = Math.floor(timeInSeconds / 60);
-    const seconds = Math.floor(timeInSeconds % 60);
-    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  const handleDownload = () => {
+    if (!activeItem) {
+      return;
+    }
+
+    handleDownloadItem(activeItem);
   };
 
-  const handleMouseMove = () => {
-    setShowControls(true);
-    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying) {
-        setShowControls(false);
-      }
-    }, 2500);
-  };
 
   return (
-    <main className="min-h-screen mt-1 bg-zinc-950 text-zinc-100 flex flex-col p-1 sm:p-6 font-sans">
-      <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-2 flex-1 items-start">
+    <main className="mt-1 flex min-h-screen flex-col text-Eltext p-1 font-sans sm:p-6">
+      <div className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 items-start gap-2 lg:grid-cols-4">
 
       {/* Sticky Video Section on desktop screens only */}
-      <section className="lg:col-span-3 flex flex-col gap-1.5 sticky top-16 sm:top-20 h-fit z-20 bg-zinc-950 pb-2">
-          <div
-            ref={playerContainerRef}
-            className="relative w-full aspect-video bg-black rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl group"
-            onMouseMove={handleMouseMove}
-            onMouseLeave={() => isPlaying && setShowControls(false)}
-          >
-            {loading ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-zinc-950 text-zinc-400 text-sm">
-                Loading directory media...
-              </div>
-            ) : (
-              <video
-                ref={videoRef}
-                src={videoSrc}
-                className="w-full h-full object-cover cursor-pointer"
-                onClick={togglePlay}
-                playsInline
-                autoPlay={isPlaying}
-                crossOrigin="anonymous"
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
-                onEnded={handleVideoEnded}
-              />
-            )}
-
-            {!isPlaying && !loading && (
-              <div
-                className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-xs cursor-pointer transition-opacity"
-                onClick={togglePlay}
-              >
-                <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-orange-500 text-black flex items-center justify-center shadow-lg shadow-orange-500/20 transition hover:scale-110 active:scale-95">
-                  <Play className="h-8 w-8 sm:h-10 sm:w-10 fill-current translate-x-0.5" />
-                </div>
-              </div>
-            )}
-
-            <div
-              className={`absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/90 via-black/50 to-transparent px-4 py-3 sm:px-6 sm:py-4 flex flex-col gap-2.5 transition-opacity duration-300 ${
-                showControls ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-              }`}
-            >
-              <div className="relative flex items-center w-full">
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={progress || 0}
-                  onChange={handleProgressChange}
-                  className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-orange-500 hover:h-2 transition-all"
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-white text-xs sm:text-sm">
-                <div className="flex items-center gap-3 sm:gap-4">
-                  <button type="button" onClick={togglePlay} className="p-1 hover:text-orange-400 transition-colors">
-                    {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 fill-current" />}
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={toggleMute} className="p-1 hover:text-orange-400 transition-colors">
-                      {isMuted || volume === 0 ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-                    </button>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={isMuted ? 0 : volume}
-                      onChange={handleVolumeChange}
-                      className="w-14 sm:w-20 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
-                    />
-                  </div>
-
-                  <div className="text-zinc-400 font-mono text-xs">
-                    <span>{formatTime(currentTime)}</span>
-                    <span className="mx-1 opacity-60">/</span>
-                    <span>{formatTime(duration)}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (videoRef.current) {
-                        videoRef.current.currentTime = 0;
-                        videoRef.current.play();
-                        setIsPlaying(true);
-                      }
-                    }}
-                    className="p-1 hover:text-orange-400 transition-colors"
-                    title="Restart"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={toggleFullscreen}
-                    className="p-1 hover:text-orange-400 transition-colors"
-                    title="Full Screen"
-                  >
-                    {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+      <section className="sticky top-16 z-20 flex h-fit flex-col gap-1.5 pb-2 sm:top-20 lg:col-span-3">
+          <ModernVideoPlayer
+            src={videoSrc}
+            loading={loading}
+            onEndedAction={handleVideoEnded}
+          />
 
           <section className="w-full max-w-79xl mx-auto flex items-center justify-between">
             <Link
               href="/"
-              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 sm:gap-3 rounded-2xl sm:rounded-full border border-zinc-800 bg-zinc-900/80 px-4 py-3 sm:px-10 sm:py-2.5 text-xs font-semibold text-zinc-300 backdrop-blur-md transition hover:bg-zinc-800 hover:text-white active:scale-95"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-card1/20 bg-cardcl/80 px-4 py-3 text-xs font-semibold text-secondary backdrop-blur-md transition hover:bg-cardcl hover:text-primary active:scale-95 sm:w-auto sm:gap-3 sm:rounded-full sm:px-10 sm:py-2.5"
             >
               <ArrowLeft size={14} className="w-4 h-4" />
               <span>Back</span>
             </Link>
           </section>
 
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl sm:rounded-3xl p-4 sm:p-5
-            backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col justify-between gap-2 rounded-2xl border border-card1/20 bg-cardcl/70 p-4 backdrop-blur-md sm:flex-row sm:items-center sm:rounded-3xl sm:p-5">
             <div className="space-y-1 min-w-0">
-              <span className="text-base sm:text-lg font-bold text-zinc-100 flex items-center gap-2 truncate">
-                <Info size={18} className="text-orange-400 shrink-0" />
+              <span className="flex items-center gap-2 truncate text-base font-bold text-primary sm:text-lg">
+                <Info size={18} className="shrink-0 text-navlink" />
                 <span className="truncate">{videoTitle}</span>
               </span>
-              <p className="text-[11px] sm:text-xs text-zinc-400 leading-relaxed max-w-xl">
-                Powered by <span className="text-orange-400 font-semibold">Noll Music Ug</span> — your home for premium local beats and high-energy shows.
+              <p className="max-w-xl text-[11px] leading-relaxed text-secondry sm:text-xs">
+                Powered by <span className="font-semibold text-navlink">Noll Music Ug</span> — your home for premium local beats and high-energy shows.
               </p>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <button
                 type="button"
                 onClick={handleShare}
-                className="flex-1 sm:flex-none justify-center flex items-center gap-2 px-4 py-2.5 rounded-xl sm:rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 transition active:scale-95 border border-zinc-700/50"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-card1/20 bg-backnav px-4 py-2.5 text-xs font-semibold text-secondary transition active:scale-95 hover:bg-cardcl sm:flex-none sm:rounded-2xl"
               >
-                {copied ? <Check size={14} className="text-orange-400" /> : <Share2 size={14} />}
+                {copied ? <Check size={14} className="text-navlink" /> : <Share2 size={14} />}
                 <span>{copied ? "Copied Link" : "Share"}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleDownload}
-                className="flex-1 sm:flex-none justify-center flex items-center gap-2 px-4 py-2.5 rounded-xl sm:rounded-2xl bg-orange-500 hover:bg-orange-400 text-xs font-semibold text-black transition active:scale-95 shadow-md shadow-orange-500/20"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-navlink px-4 py-2.5 text-xs font-semibold text-backnav transition active:scale-95 hover:opacity-90 sm:flex-none sm:rounded-2xl"
               >
                 <Download size={14} />
                 <span>Download</span>
@@ -447,65 +267,13 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
           </div>
       </section>
 
-      <aside className="lg:col-span-1 bg-zinc-900/60 border border-zinc-800 rounded-3xl p-3 backdrop-blur-md flex flex-col gap-2 lg:sticky lg:top-16 lg:self-start lg:h-[calc(100vh-5rem)] overflow-hidden">
-        {/* Header (Pinned) */}
-        <div className="flex items-center justify-between pb-2 border-b border-zinc-800 shrink-0">
-          <div className="flex items-center gap-2 text-zinc-200 font-semibold text-sm">
-            <Flame size={18} className="text-orange-500 fill-orange-500" />
-            <span>Directory Files</span>
-          </div>
-          <span className="text-[10px] font-mono bg-orange-500/10 text-orange-400 px-2 py-0.5 rounded-full border border-orange-500/20">
-            {playlist.length} Files
-          </span>
-        </div>
-
-        {/* Scrollable Row List */}
-        <div className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto pr-1">
-          {playlist.length === 0 && !loading ? (
-            <div className="text-xs text-zinc-500 p-4 text-center">No other files found in this path.</div>
-          ) : (
-            playlist.map((item, index) => {
-              const isCurrent = activeItem?.id === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => selectVideo(item)}
-                  className={`group flex items-center gap-3 p-2.5 rounded-2xl text-left transition-all ${
-                    isCurrent
-                      ? "bg-orange-500/10 border border-orange-500/30 text-orange-400"
-                      : "bg-zinc-800/40 border border-transparent hover:bg-zinc-800/80 text-zinc-300"
-                  }`}
-                >
-                  <div className="relative shrink-0 w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center overflow-hidden border border-zinc-700/50">
-                    {item.thumbnail ? (
-                      <img src={item.thumbnail} alt={item.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center">
-                        {isCurrent ? (
-                          <Play size={14} className="fill-orange-400 text-orange-400" />
-                        ) : (
-                          <Music size={14} className="text-zinc-500 group-hover:text-zinc-300" />
-                        )}
-                        <span className="text-[9px] font-mono text-zinc-500 mt-0.5">#{index + 1}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold truncate group-hover:text-zinc-100">{item.title}</p>
-                    <p className="text-[11px] text-zinc-400 truncate mt-0.5">{item.comedian}</p>
-                    <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono mt-1">
-                      <span>{item.duration}</span>
-                      <span>•</span>
-                      <span className="text-zinc-400">{item.views}</span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </aside>
+      <ComedyDirectoryList
+        items={playlist}
+        activeItemId={activeItem?.id ?? null}
+        loading={loading}
+        onSelectAction={selectVideo}
+        onDownloadAction={handleDownloadItem}
+      />
 
       </div>
     </main>

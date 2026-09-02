@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Download, Trash2, Inbox, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Download, Trash2, Inbox, Sparkles } from 'lucide-react';
 import DownloadRow, { DownloadEntry } from '../../../components/DownloadRow';
 
 interface DownloadNotice {
@@ -17,9 +17,19 @@ interface DownloadNotice {
   sourceOutputBitrate?: number;
 }
 
+interface RetryDetail {
+  title: string;
+  videoId: string;
+  itag: number;
+  extension: string;
+  outputBitrate?: number;
+}
+
 export default function DownloadsPage() {
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
   const [downloadNotice, setDownloadNotice] = useState<DownloadNotice | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const activeRetryRef = useRef<RetryDetail | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -81,6 +91,172 @@ export default function DownloadsPage() {
   const downloadedBytes = downloadEntries.reduce((sum, entry) => sum + (entry.downloadedBytes ?? 0), 0);
   const totalBytes = downloadEntries.reduce((sum, entry) => sum + (entry.totalBytes ?? 0), 0);
 
+  const runRetryDownload = async (detail: RetryDetail, options?: { keepProgress?: boolean }) => {
+    activeRetryRef.current = detail;
+
+    if (!options?.keepProgress) {
+      setDownloadEntries((previousEntries) => {
+        const nextEntries = previousEntries.map((item): DownloadEntry => item.title === detail.title
+          ? {
+              ...item,
+              status: 'downloading',
+              paused: false,
+              progress: 0,
+              downloadedBytes: 0,
+              updatedAt: new Date().toISOString(),
+            }
+          : item);
+        window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+        return nextEntries;
+      });
+      setDownloadNotice({
+        status: 'downloading',
+        title: detail.title,
+        progress: 0,
+        paused: false,
+        sourceVideoId: detail.videoId,
+        sourceItag: detail.itag,
+        sourceExtension: detail.extension,
+        sourceOutputBitrate: detail.outputBitrate,
+      });
+    }
+
+    try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const response = await fetch(`/api/youtube/download?id=${encodeURIComponent(detail.videoId)}&itag=${detail.itag}&output=${detail.extension}&bitrate=${detail.outputBitrate || ''}`, {
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || response.statusText || 'Unable to retry download.');
+      }
+
+      const totalBytes = Number(response.headers.get('content-length')) || undefined;
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Unable to start retry download.');
+
+      const chunks: Uint8Array[] = [];
+      let downloadedBytes = 0;
+      let lastProgress = options?.keepProgress ? Math.round(downloadEntries.find((item) => item.title === detail.title)?.progress || 0) : 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        chunks.push(value);
+        downloadedBytes += value.length;
+        const progress = totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : lastProgress;
+
+        if (!totalBytes || progress !== lastProgress) {
+          lastProgress = progress;
+          const notice: DownloadNotice = {
+            status: 'downloading',
+            title: detail.title,
+            progress,
+            downloadedBytes,
+            totalBytes,
+            paused: false,
+            sourceVideoId: detail.videoId,
+            sourceItag: detail.itag,
+            sourceExtension: detail.extension,
+            sourceOutputBitrate: detail.outputBitrate,
+          };
+          setDownloadNotice(notice);
+          setDownloadEntries((previousEntries) => {
+            const nextEntries = previousEntries.map((item): DownloadEntry => item.title === detail.title
+              ? {
+                  ...item,
+                  status: 'downloading',
+                  paused: false,
+                  progress,
+                  downloadedBytes,
+                  totalBytes,
+                  updatedAt: new Date().toISOString(),
+                }
+              : item);
+            window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+            return nextEntries;
+          });
+        }
+      }
+
+      const blob = new Blob(chunks as BlobPart[], {
+        type: response.headers.get('content-type') || 'application/octet-stream',
+      });
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `${detail.title}.${detail.extension}`;
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      const completedNotice: DownloadNotice = {
+        status: 'done',
+        title: detail.title,
+        progress: 100,
+        downloadedBytes: blob.size,
+        totalBytes: blob.size,
+        paused: false,
+        sourceVideoId: detail.videoId,
+        sourceItag: detail.itag,
+        sourceExtension: detail.extension,
+        sourceOutputBitrate: detail.outputBitrate,
+      };
+      setDownloadNotice(completedNotice);
+      setDownloadEntries((previousEntries) => {
+        const nextEntries = previousEntries.map((item): DownloadEntry => item.title === detail.title
+          ? {
+              ...item,
+              status: 'done',
+              paused: false,
+              progress: 100,
+              downloadedBytes: blob.size,
+              totalBytes: blob.size,
+              updatedAt: new Date().toISOString(),
+            }
+          : item);
+        window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+        return nextEntries;
+      });
+      activeRetryRef.current = null;
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
+
+      const failedNotice: DownloadNotice = {
+        status: 'error',
+        title: detail.title,
+        paused: false,
+        sourceVideoId: detail.videoId,
+        sourceItag: detail.itag,
+        sourceExtension: detail.extension,
+        sourceOutputBitrate: detail.outputBitrate,
+      };
+      setDownloadNotice(failedNotice);
+      setDownloadEntries((previousEntries) => {
+        const nextEntries = previousEntries.map((item): DownloadEntry => item.title === detail.title
+          ? {
+              ...item,
+              status: 'error',
+              paused: false,
+              updatedAt: new Date().toISOString(),
+            }
+          : item);
+        window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+        return nextEntries;
+      });
+    } finally {
+      abortControllerRef.current = null;
+    }
+  };
+
   const handleTogglePause = (entry: DownloadEntry) => {
     const nextPaused = !entry.paused;
     const now = new Date().toISOString();
@@ -96,6 +272,21 @@ export default function DownloadsPage() {
       return nextEntries;
     });
 
+    if (nextPaused) {
+      abortControllerRef.current?.abort();
+      setDownloadNotice((current) => current && current.title === entry.title
+        ? { ...current, paused: true, progress: entry.progress }
+        : current);
+    } else if (entry.sourceVideoId && typeof entry.sourceItag === 'number' && entry.sourceExtension) {
+      void runRetryDownload({
+        title: entry.title,
+        videoId: entry.sourceVideoId,
+        itag: entry.sourceItag,
+        extension: entry.sourceExtension,
+        outputBitrate: entry.sourceOutputBitrate,
+      }, { keepProgress: true });
+    }
+
     window.dispatchEvent(new CustomEvent('nsu-download-control', {
       detail: { title: entry.title, action: nextPaused ? 'pause' : 'resume' },
     }));
@@ -106,14 +297,17 @@ export default function DownloadsPage() {
       return;
     }
 
+    const detail = {
+      title: entry.title,
+      videoId: entry.sourceVideoId,
+      itag: entry.sourceItag,
+      extension: entry.sourceExtension,
+      outputBitrate: entry.sourceOutputBitrate,
+    };
+
+    void runRetryDownload(detail);
     window.dispatchEvent(new CustomEvent('nsu-download-retry', {
-      detail: {
-        title: entry.title,
-        videoId: entry.sourceVideoId,
-        itag: entry.sourceItag,
-        extension: entry.sourceExtension,
-        outputBitrate: entry.sourceOutputBitrate,
-      },
+      detail,
     }));
   };
 
@@ -121,6 +315,10 @@ export default function DownloadsPage() {
     setDownloadEntries([]);
     setDownloadNotice(null);
     window.localStorage.removeItem('nsu-download-history');
+  };
+
+  const handleGoBack = () => {
+    window.history.back();
   };
 
   return (
@@ -133,6 +331,17 @@ export default function DownloadsPage() {
           {/* Subtle Background Glow Accent */}
           <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-rose-500/10 blur-3xl" />
+
+          <div className="relative mb-4 flex">
+            <button
+              type="button"
+              onClick={handleGoBack}
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/70 bg-slate-950/40 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-900/70 hover:text-white"
+            >
+              <ArrowLeft size={14} />
+              <span>Back</span>
+            </button>
+          </div>
 
           {/* Header */}
           <div className="relative flex items-start justify-between gap-2.5 sm:items-center sm:gap-4">
