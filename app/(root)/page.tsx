@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Switchbutton from "../../components/Switchbutton";
-import DownloadModal from "../../components/DownloadModal";
+import HotComediesRowList from "../../components/HotComediesRowList";
 
 type HomeMediaItem = {
   id: string;
@@ -19,6 +19,13 @@ type HomeMediaItem = {
   fileUrl?: string;
 };
 
+type TalkShowStorageItem = {
+  id: string | number;
+  title?: string;
+  file_url?: string;
+  created_at?: string;
+};
+
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
@@ -31,9 +38,6 @@ const Home = () => {
   const [selectedCategory, setSelectedCategory] = useState<"official" | "short">("official");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeDownloadVideoId, setActiveDownloadVideoId] = useState<string | null>(null);
-  const [downloadPosition, setDownloadPosition] = useState<{ x: number; y: number } | null>(null);
-  const [downloadAnchor, setDownloadAnchor] = useState<HTMLElement | null>(null);
 
   const router = useRouter();
   const gridSectionRef = useRef<HTMLDivElement>(null);
@@ -97,9 +101,9 @@ const Home = () => {
         setShortVideos(shortItems);
 
         const storageResponse = await fetch('/api/dashboard/storage?source=talk-show');
-        const storageData = await storageResponse.json().catch(() => ({ items: [] }));
-        const uploads = (storageData.items || []).map((item: any) => ({
-          id: item.id,
+        const storageData = (await storageResponse.json().catch(() => ({ items: [] }))) as { items?: TalkShowStorageItem[] };
+        const uploads = (storageData.items || []).map((item) => ({
+          id: String(item.id),
           title: item.title || 'Talk Show Upload',
           thumbnail: 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" rx="32" fill="#111827"/><rect x="44" y="44" width="552" height="272" rx="24" fill="#1f2937"/><circle cx="320" cy="180" r="76" fill="#f43f5e"/><path d="M288 144l64 36-64 36z" fill="#fff"/><text x="320" y="270" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#f9fafb">Talk Show Upload</text></svg>`),
           date: item.created_at ? new Date(item.created_at).toLocaleDateString('en-GB') : '',
@@ -122,6 +126,13 @@ const Home = () => {
   }, []);
 
   const filteredVideos = selectedCategory === "official" ? officialVideos : [...shortVideos, ...talkShowUploads];
+  const hotComedyItems = [...shortVideos, ...talkShowUploads].map((video) => ({
+    id: video.id,
+    title: video.title,
+    date: video.date,
+    thumbnail: video.thumbnail,
+    fileUrl: video.fileUrl,
+  }));
   const marqueeItems = officialVideos.slice(0, 5);
 
   // Auto-slide effect for mobile screens (< 640px)
@@ -147,20 +158,6 @@ const Home = () => {
 
     return () => clearInterval(interval);
   }, [marqueeItems.length]);
-
-  const openDownloadModal = (e: React.MouseEvent<HTMLButtonElement>, videoId: string) => {
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    setActiveDownloadVideoId(videoId);
-    setDownloadPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
-    setDownloadAnchor(e.currentTarget);
-  };
-
-  const closeDownloadModal = () => {
-    setActiveDownloadVideoId(null);
-    setDownloadPosition(null);
-    setDownloadAnchor(null);
-  };
 
   return (
     <main className="min-h-screen pb-28">
@@ -347,6 +344,11 @@ const Home = () => {
                 <p className="text-red-400 col-span-full py-12 text-center">Error loading videos: {error}</p>
               ) : filteredVideos.length === 0 ? (
                 <p className="text-secondry col-span-full py-12 text-center">No content matches your selection.</p>
+              ) : selectedCategory === "short" ? (
+                <HotComediesRowList
+                  items={hotComedyItems}
+                  onOpenAction={(item) => router.push(`/Comedy/${encodeURIComponent(item.id)}`)}
+                />
               ) : (
                 filteredVideos.map((video) => (
                   <div
@@ -389,19 +391,8 @@ const Home = () => {
         </div>
       </div>
 
-      <DownloadModal
-        open={Boolean(activeDownloadVideoId)}
-        videoId={activeDownloadVideoId}
-        position={downloadPosition}
-        anchor={downloadAnchor}
-        onClose={closeDownloadModal}
-      />
     </main>
   );
 };
 
 export default Home;
-
-
-
-
