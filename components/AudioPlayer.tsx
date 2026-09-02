@@ -7,6 +7,7 @@ import { getAudioDownloadThumbnailUrl, getDownloadPath } from '@/lib/download';
 interface DownloadNoticePayload {
   status: 'downloading' | 'done' | 'error';
   title: string;
+  progress?: number;
 }
 
 interface AudioPlayerProps {
@@ -56,6 +57,7 @@ export default function AudioPlayer({
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'done' | 'error'>('idle');
   const waveId = useId();
   const downloadTimerRef = useRef<number | null>(null);
+  const downloadProgressRef = useRef(0);
 
   // Pseudo-random wave bar heights to simulate an equalizer visualizer
   const waveBars = [
@@ -79,6 +81,9 @@ export default function AudioPlayer({
     return () => {
       if (downloadTimerRef.current) {
         window.clearTimeout(downloadTimerRef.current);
+      }
+      if (downloadProgressRef.current) {
+        downloadProgressRef.current = 0;
       }
     };
   }, []);
@@ -153,10 +158,22 @@ export default function AudioPlayer({
     }
 
     setDownloadStatus('downloading');
+    downloadProgressRef.current = 8;
     window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-      detail: { status: 'downloading', title },
+      detail: { status: 'downloading', title, progress: 8 },
     }));
     onDownload?.();
+
+    const progressSteps = [12, 24, 38, 52, 68, 82, 92];
+    let progressIndex = 0;
+    const progressTimer = window.setInterval(() => {
+      const nextProgress = progressSteps[progressIndex] ?? 94;
+      progressIndex += 1;
+      downloadProgressRef.current = nextProgress;
+      window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
+        detail: { status: 'downloading', title, progress: nextProgress },
+      }));
+    }, 180);
 
     try {
       const filename = getDownloadPath(fileName || `${title}.mp3`, 'audio');
@@ -168,18 +185,22 @@ export default function AudioPlayer({
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
+
+      window.clearInterval(progressTimer);
+      downloadProgressRef.current = 100;
       setDownloadStatus('done');
       window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-        detail: { status: 'done', title },
+        detail: { status: 'done', title, progress: 100 },
       }));
       downloadTimerRef.current = window.setTimeout(() => {
         setDownloadStatus('idle');
       }, 1800);
     } catch (error) {
       console.error('Download failed:', error);
+      window.clearInterval(progressTimer);
       setDownloadStatus('error');
       window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-        detail: { status: 'error', title },
+        detail: { status: 'error', title, progress: downloadProgressRef.current },
       }));
       downloadTimerRef.current = window.setTimeout(() => {
         setDownloadStatus('idle');

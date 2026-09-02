@@ -5,6 +5,7 @@ import { getDatabaseConnectionString, resolveDatabaseConnectionString } from './
 
 test('resolveDatabaseConnectionString prefers a real configured DATABASE_URL', () => {
   const value = resolveDatabaseConnectionString({
+    NODE_ENV: 'test',
     DATABASE_URL: 'postgresql://postgres:secret@host:5432/railway',
     POSTGRES_URL: 'postgresql://postgres:other@fallback:5432/railway',
   });
@@ -14,6 +15,7 @@ test('resolveDatabaseConnectionString prefers a real configured DATABASE_URL', (
 
 test('resolveDatabaseConnectionString builds a URL from PG* vars when DATABASE_URL is missing', () => {
   const value = resolveDatabaseConnectionString({
+    NODE_ENV: 'test',
     PGHOST: 'sakura.proxy.rlwy.net',
     PGPORT: '43026',
     PGDATABASE: 'railway',
@@ -26,6 +28,7 @@ test('resolveDatabaseConnectionString builds a URL from PG* vars when DATABASE_U
 
 test('getDatabaseConnectionString ignores placeholder Railway values and prefers the live config', () => {
   const value = getDatabaseConnectionString({
+    NODE_ENV: 'test',
     DATABASE_URL: 'postgresql://USER:PASSWORD@sakura.proxy.rlwy.net:43026/railway',
     POSTGRES_URL: 'postgresql://postgres:secret@sakura.proxy.rlwy.net:43026/railway',
     PGHOST: 'sakura.proxy.rlwy.net',
