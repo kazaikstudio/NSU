@@ -51,27 +51,50 @@ async function ensureArtistsTable() {
   }
 }
 
+let mediaTablesReady: Promise<void> | null = null;
+
 async function ensureMediaTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS artist_media (
-      id TEXT PRIMARY KEY,
-      artist_id TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      title TEXT NOT NULL,
-      album TEXT,
-      file_name TEXT NOT NULL,
-      mime_type TEXT NOT NULL,
-      file_url TEXT NOT NULL,
-      drive_file_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  if (!mediaTablesReady) {
+    mediaTablesReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS artist_media (
+        id TEXT PRIMARY KEY,
+        artist_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        album TEXT,
+        file_name TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        drive_file_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `).then(() => undefined).catch((error) => {
+      mediaTablesReady = null;
+      throw error;
+    });
+  }
+
+  await mediaTablesReady;
+}
+
+let artistsTablesReady: Promise<void> | null = null;
+
+async function ensureTables() {
+  if (!artistsTablesReady) {
+    artistsTablesReady = Promise.all([ensureArtistsTable(), ensureMediaTable()])
+      .then(() => undefined)
+      .catch((error) => {
+        artistsTablesReady = null;
+        throw error;
+      });
+  }
+
+  await artistsTablesReady;
 }
 
 export async function GET() {
   try {
-    await ensureArtistsTable();
-    await ensureMediaTable();
+    await ensureTables();
 
     const { rows } = await pool.query(`
       SELECT
