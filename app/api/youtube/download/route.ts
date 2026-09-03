@@ -40,6 +40,19 @@ const YOUTUBE_CLIENT_TYPES = [
 async function getYoutubeVideoInfo(videoId: string) {
   let lastError: unknown;
 
+  try {
+    const pageInfo = await getYoutubePageInfo(videoId);
+    const pageFormats = [
+      ...pageInfo.streaming_data.formats,
+      ...pageInfo.streaming_data.adaptive_formats,
+    ];
+    if (pageFormats.some((format) => format.url)) {
+      return { youtube: undefined, info: pageInfo, clientType: 'watch-page' as const };
+    }
+  } catch (error) {
+    lastError = error;
+  }
+
   for (const clientType of YOUTUBE_CLIENT_TYPES) {
     try {
       const youtube = await Innertube.create({
@@ -119,7 +132,10 @@ function setDiagnosticHeaders(response: Response, diagnosticCode: string) {
 
 async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo, selectedFormat: { itag: number; url?: string }) {
   if (selectedFormat.url) {
-    const directResponse = await fetch(selectedFormat.url, { redirect: 'follow' });
+    const directResponse = await fetch(selectedFormat.url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      redirect: 'follow',
+    });
     if (directResponse.ok && directResponse.body) {
       return directResponse.body;
     }

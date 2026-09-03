@@ -25,6 +25,19 @@ const YOUTUBE_CLIENT_TYPES = [
 async function getYoutubeVideoInfo(videoId: string) {
   let lastError: unknown;
 
+  try {
+    const pageInfo = await getYoutubePageInfo(videoId);
+    const pageFormats = [
+      ...pageInfo.streaming_data.formats,
+      ...pageInfo.streaming_data.adaptive_formats,
+    ];
+    if (pageFormats.some((format) => format.url)) {
+      return { youtube: undefined, info: pageInfo, clientType: 'watch-page' as const };
+    }
+  } catch (error) {
+    lastError = error;
+  }
+
   for (const clientType of YOUTUBE_CLIENT_TYPES) {
     try {
       const youtube = await Innertube.create({
