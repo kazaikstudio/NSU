@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { getClientCachedData } from '@/lib/client-cache';
 
 interface RegisteredArtist {
   id: string;
@@ -22,9 +23,11 @@ export default function ArtistList({ searchTerm }: { searchTerm: string }) {
 
     const loadArtists = async () => {
       try {
-        const response = await fetch('/api/artists');
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Unable to load artists');
+        const data = await getClientCachedData('dashboard-artists', async () => {
+          const response = await fetch('/api/dashboard/artists');
+          if (!response.ok) throw new Error('Unable to load artists');
+          return response.json();
+        });
         if (!cancelled) setArtists(data.artists || []);
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to load artists');
@@ -42,6 +45,21 @@ export default function ArtistList({ searchTerm }: { searchTerm: string }) {
     `${artist.name} ${artist.genre}`.toLowerCase().includes(normalizedSearch)
   );
 
+  const preloadArtist = (artistId: string) => {
+    void Promise.all([
+      getClientCachedData(`artist:${artistId}`, async () => {
+        const response = await fetch(`/api/dashboard/artists/${encodeURIComponent(artistId)}`);
+        if (!response.ok) throw new Error('Unable to preload artist');
+        return response.json();
+      }),
+      getClientCachedData(`artist-media:${artistId}`, async () => {
+        const response = await fetch(`/api/dashboard/artists/${encodeURIComponent(artistId)}/media`);
+        if (!response.ok) throw new Error('Unable to preload artist media');
+        return response.json();
+      }),
+    ]).catch(() => {});
+  };
+
   if (loading) return <p className="col-span-full py-16 text-center text-sm text-slate-400">Loading artists...</p>;
   if (error) return <p className="col-span-full py-16 text-center text-sm text-red-400">{error}</p>;
   if (filteredArtists.length === 0) {
@@ -51,7 +69,13 @@ export default function ArtistList({ searchTerm }: { searchTerm: string }) {
   return (
     <div className="col-span-full grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-2 text-primary">
           {filteredArtists.map((artist) => (
-            <Link href={`/artist/${encodeURIComponent(artist.id)}`} key={artist.id} className="flex items-center gap-4 rounded-xl  bg-mrow/70 p-4 transition hover:border-amber-400/40">
+            <Link
+              href={`/artist/${encodeURIComponent(artist.id)}`}
+              key={artist.id}
+              onMouseEnter={() => preloadArtist(artist.id)}
+              onFocus={() => preloadArtist(artist.id)}
+              className="flex items-center gap-4 rounded-xl  bg-mrow/70 p-4 transition hover:border-amber-400/40"
+            >
               <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-amber-400/30 bg-amber-400/10">
                 {artist.profileUrl ? (
                   <div

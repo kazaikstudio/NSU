@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Switchbutton from './Switchbutton';
+import { getClientCachedData } from '@/lib/client-cache';
 
 const FeaturedAudioCards = dynamic(() => import('./FeaturedAudioCards'), {
   ssr: false,
@@ -24,32 +25,43 @@ const TrendingCard = dynamic(() => import('./TrendingCard'), {
   loading: () => <div className="my-4 h-16 rounded-2xl border border-card1/10 bg-cardcl/50" />,
 });
 
-export default function AudioPageClient() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'music' | 'artist'>('music');
-  const [dashboardArtists, setDashboardArtists] = useState<Array<any>>([]);
-  const [topArtists, setTopArtists] = useState<Array<any>>([]);
+interface DashboardArtist {
+  id: string;
+  name: string;
+  profileUrl?: string | null;
+  totalDownloads?: number;
+}
 
-  const filterTracks = (query: string) => {
-    setSearchTerm(query);
-  };
+interface TrendingArtist {
+  id: string;
+  name: string;
+  avatarUrl: string;
+  downloads: number;
+}
+
+export default function AudioPageClient() {
+  const [searchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'music' | 'artist'>('music');
+  const [topArtists, setTopArtists] = useState<TrendingArtist[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch('/api/dashboard/artists');
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to load dashboard artists');
-        const mapped = (data.artists || []).map((a: any) => ({
-          id: a.id,
-          name: a.name,
-          avatarUrl: a.profileUrl || a.profileUrl || null,
-          downloads: Number(a.totalDownloads || 0),
+        const data = await getClientCachedData('dashboard-artists', async () => {
+          const res = await fetch('/api/dashboard/artists');
+          const payload = await res.json();
+          if (!res.ok) throw new Error(payload.error || 'Failed to load dashboard artists');
+          return payload;
+        });
+        const mapped: TrendingArtist[] = (data.artists as DashboardArtist[] || []).map((artist) => ({
+          id: artist.id,
+          name: artist.name,
+          avatarUrl: artist.profileUrl || '',
+          downloads: Number(artist.totalDownloads || 0),
         }));
-        if (!cancelled) setDashboardArtists(mapped);
         if (mapped.length > 0) {
-          const ranked = [...mapped].sort((a: any, b: any) => (b.downloads || 0) - (a.downloads || 0));
+          const ranked = [...mapped].sort((left, right) => right.downloads - left.downloads);
           if (!cancelled) setTopArtists(ranked.slice(0, 5));
         } else {
           if (!cancelled) setTopArtists([]);

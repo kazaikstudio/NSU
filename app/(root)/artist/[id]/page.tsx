@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import AudioPlayer from '@/components/AudioPlayer';
 import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 import { getArtistById } from '@/lib/artists';
+import { getClientCachedData } from '@/lib/client-cache';
 
 interface Artist {
   id: string;
@@ -74,24 +75,19 @@ export default function PublicArtistDetailPage() {
 
     const loadArtist = async () => {
       try {
-        const minimumDelay = new Promise((resolve) => window.setTimeout(resolve, 600));
-        const [artistResponseResult, mediaResponseResult] = await Promise.allSettled([
-          fetch(`/api/dashboard/artists/${params.id}`),
-          fetch(`/api/dashboard/artists/${params.id}/media`),
-          minimumDelay,
+        const [artistData, mediaData] = await Promise.all([
+          getClientCachedData(`artist:${params.id}`, async () => {
+            const response = await fetch(`/api/dashboard/artists/${params.id}`);
+            if (!response.ok) throw new Error('Artist not found');
+            return response.json();
+          }),
+          getClientCachedData(`artist-media:${params.id}`, async () => {
+            const response = await fetch(`/api/dashboard/artists/${params.id}/media`);
+            if (!response.ok) return { media: [] };
+            return response.json();
+          }),
         ]);
-
-        if (artistResponseResult.status !== 'fulfilled' || !artistResponseResult.value?.ok) {
-          throw new Error('Artist not found');
-        }
-
-        const artistData = await artistResponseResult.value.json();
         if (!artistData.artist) throw new Error('Artist not found');
-
-        let mediaData: { media?: Track[] } = { media: [] };
-        if (mediaResponseResult.status === 'fulfilled' && mediaResponseResult.value.ok) {
-          mediaData = await mediaResponseResult.value.json();
-        }
 
         if (!cancelled) {
           setArtist(artistData.artist);
