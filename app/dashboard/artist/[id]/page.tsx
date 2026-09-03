@@ -148,7 +148,7 @@ export default function ArtistDetailPage() {
 
       try {
         const response = await Promise.all([
-          fetch(`/api/dashboard/artists/${params.id}`),
+          fetch(`/api/dashboard/artists/${encodeURIComponent(params.id)}`),
           minimumDelay,
         ]).then(([artistResponse]) => artistResponse);
 
@@ -166,26 +166,30 @@ export default function ArtistDetailPage() {
             setArtistGenreDraft(fetchedArtist.genre);
             setBannerUrl(fetchedArtist.bannerUrl || null);
             setProfileUrl(fetchedArtist.profileUrl || null);
-            const mediaResponse = await fetch(`/api/dashboard/artists/${params.id}/media`);
-            if (!mediaResponse.ok) {
-              throw new Error(`Artist media API returned ${mediaResponse.status}`);
-            }
-            const mediaData = await mediaResponse.json();
-            if (!ignore) {
-              const media = mediaData.media || [];
-              const bannerMedia = media.find((item: Track) => item.kind === 'banner');
-              const profileMedia = media.find((item: Track) => item.kind === 'profile');
-              if (bannerMedia?.fileUrl) setBannerUrl(bannerMedia.fileUrl);
-              if (profileMedia?.fileUrl) setProfileUrl(profileMedia.fileUrl);
-              setTracks(media.filter((item: Track) => item.kind === 'track').map((item: Track) => ({
-                id: item.id,
-                title: item.title,
-                album: item.album || 'Single',
-                fileName: item.fileName,
-                fileUrl: item.fileUrl,
-                thumbnailUrl: item.thumbnailUrl,
-                uploadedAt: new Date(item.uploadedAt || item.createdAt || new Date().toISOString()).toISOString().split('T')[0],
-              })));
+            try {
+              const mediaResponse = await fetch(`/api/dashboard/artists/${encodeURIComponent(params.id)}/media`);
+              if (!mediaResponse.ok) {
+                throw new Error(`Artist media API returned ${mediaResponse.status}`);
+              }
+              const mediaData = await mediaResponse.json();
+              if (!ignore) {
+                const media = mediaData.media || [];
+                const bannerMedia = media.find((item: Track) => item.kind === 'banner');
+                const profileMedia = media.find((item: Track) => item.kind === 'profile');
+                if (bannerMedia?.fileUrl) setBannerUrl(bannerMedia.fileUrl);
+                if (profileMedia?.fileUrl) setProfileUrl(profileMedia.fileUrl);
+                setTracks(media.filter((item: Track) => item.kind === 'track').map((item: Track) => ({
+                  id: item.id,
+                  title: item.title,
+                  album: item.album || 'Single',
+                  fileName: item.fileName,
+                  fileUrl: item.fileUrl,
+                  thumbnailUrl: item.thumbnailUrl,
+                  uploadedAt: new Date(item.uploadedAt || item.createdAt || new Date().toISOString()).toISOString().split('T')[0],
+                })));
+              }
+            } catch (mediaError) {
+              console.warn('Failed to load artist media; showing the artist profile without tracks.', mediaError);
             }
           } else {
             // Safely check if fallback exists before assigning
