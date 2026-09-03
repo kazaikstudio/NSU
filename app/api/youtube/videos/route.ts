@@ -73,16 +73,23 @@ async function fetchAllVideosWithInnertube(channelId: string): Promise<YouTubeVi
 
     // If uploads not found or empty, fall back to searching the channel's name/id
     if (videos.length === 0) {
-      const search = await (youtube as any).search(channelId);
-      const items = search?.contents || search?.results || search || [];
-      for (const it of items) {
-        const vid = it?.id || it?.videoId || it?.video?.id || (it?.navigationEndpoint?.watchEndpoint?.videoId) || (it?.id?.videoId);
-        const title = it?.title?.simpleText || it?.title || it?.video?.title || it?.snippet?.title || '';
-        const thumbnails = it?.thumbnail?.thumbnails || it?.thumbnails || it?.video?.thumbnail || it?.snippet?.thumbnails || {};
-        const thumb = (thumbnails?.maxres?.url) || (thumbnails?.high?.url) || (thumbnails?.default?.url) || '';
-        const published = it?.published || it?.video?.published || it?.snippet?.publishedAt || '';
-        if (!vid) continue;
-        videos.push({ id: String(vid), title: String(title || vid), subtitle: '', thumbnail: thumb, date: published, url: `https://www.youtube.com/watch?v=${vid}` });
+      let search = await (youtube as any).search(channelId);
+      while (videos.length < 200) {
+        const items = search?.contents || search?.results || search || [];
+        for (const it of items) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const item = it as any;
+          const vid = item?.id || item?.videoId || item?.video?.id || (item?.navigationEndpoint?.watchEndpoint?.videoId) || (item?.id?.videoId);
+          const title = item?.title?.simpleText || item?.title || item?.video?.title || item?.snippet?.title || '';
+          const thumbnails = item?.thumbnail?.thumbnails || item?.thumbnails || item?.video?.thumbnail || item?.snippet?.thumbnails || {};
+          const thumb = (thumbnails?.maxres?.url) || (thumbnails?.high?.url) || (thumbnails?.default?.url) || '';
+          const published = item?.published || item?.video?.published || item?.snippet?.publishedAt || '';
+          if (!vid || videos.some((video) => video.id === String(vid))) continue;
+          videos.push({ id: String(vid), title: String(title || vid), subtitle: '', thumbnail: thumb, date: published, url: `https://www.youtube.com/watch?v=${vid}` });
+        }
+
+        if (!search?.has_continuation) break;
+        search = await search.getContinuation();
       }
     }
 
