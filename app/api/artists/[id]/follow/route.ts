@@ -49,7 +49,6 @@ export async function GET(request: Request, context: Context) {
   }
 
   try {
-    await ensureFollowTable();
     return NextResponse.json(await getFollowState(id, subscriberId));
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });

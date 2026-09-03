@@ -42,7 +42,6 @@ async function ensureMediaTable() {
 export async function GET(_request: Request, context: Context) {
   const { id } = await context.params;
   try {
-    await ensureMediaTable();
     const { rows } = await pool.query(
       `SELECT id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", download_count AS "downloadCount", created_at AS "createdAt"
        FROM artist_media WHERE artist_id = $1 ORDER BY created_at DESC`,
