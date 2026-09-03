@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Download, Trash2, Inbox, Sparkles } from 'lucide-react';
 import DownloadRow, { DownloadEntry } from '../../../components/DownloadRow';
+import { startYoutubeDownload } from '@/lib/youtube-download-manager';
 
 interface DownloadNotice {
   status: 'downloading' | 'done' | 'error';
@@ -334,10 +335,27 @@ export default function DownloadsPage() {
       outputBitrate: entry.sourceOutputBitrate,
     };
 
-    void runRetryDownload(detail);
-    window.dispatchEvent(new CustomEvent('nsu-download-retry', {
-      detail,
-    }));
+    setDownloadEntries((previousEntries) => {
+      const nextEntries = previousEntries.map((item) => item.id === entry.id
+        ? {
+            ...item,
+            status: 'downloading' as const,
+            paused: false,
+            progress: 0,
+            downloadedBytes: 0,
+            updatedAt: new Date().toISOString(),
+          }
+        : item);
+      window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+      return nextEntries;
+    });
+    startYoutubeDownload({
+      title: detail.title,
+      videoId: detail.videoId,
+      itag: detail.itag,
+      extension: detail.extension,
+      outputBitrate: detail.outputBitrate,
+    });
   };
 
   const handleClearHistory = () => {

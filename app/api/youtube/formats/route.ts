@@ -59,7 +59,7 @@ async function getYoutubeVideoInfo(videoId: string) {
         }
       }
 
-      lastError = new Error(`No playable stream metadata for ${videoId} using ${String(clientType)}`);
+      lastError = new Error(`No playable stream metadata for ${videoId}`);
     } catch (error) {
       lastError = error;
     }
