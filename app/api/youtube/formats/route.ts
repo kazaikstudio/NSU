@@ -122,10 +122,10 @@ export async function GET(request: Request) {
 
     const ffmpegAvailable = Boolean(getFfmpegPath());
     const audioSource = allFormats
-      .filter((format) => format.has_audio && !format.has_video && !format.has_text)
+      .filter((format) => format.has_audio && !format.has_video && !format.has_text && format.url)
       .sort((left, right) => right.bitrate - left.bitrate)[0]
       || allFormats
-        .filter((format) => format.has_audio && !format.has_text)
+        .filter((format) => format.has_audio && !format.has_text && format.url)
         .sort((left, right) => right.bitrate - left.bitrate)[0];
     const directVideoSources = allFormats
       .filter((format) => {

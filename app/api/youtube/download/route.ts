@@ -267,6 +267,7 @@ export async function GET(req: Request) {
 
     let selectedFormat = availableFormats.find((format) => format.itag === itag);
     const ffmpegAvailable = Boolean(getFfmpegPath());
+    const audioOutput = output === "mp3" || output === "wav" || output === "m4a";
 
     if (!selectedFormat) {
       throw new YoutubeDownloadError(404, {
@@ -277,6 +278,13 @@ export async function GET(req: Request) {
           availableItags: availableFormats.map((format) => format.itag),
         },
       });
+    }
+
+    if (audioOutput && !selectedFormat.url) {
+      const playableAudio = availableFormats
+        .filter((format) => format.has_audio && !format.has_video && !format.has_text && format.url)
+        .sort((left, right) => right.bitrate - left.bitrate)[0];
+      if (playableAudio) selectedFormat = playableAudio;
     }
 
     let stream: ReadableStream<Uint8Array> | undefined;
@@ -337,7 +345,6 @@ export async function GET(req: Request) {
 
     const title = info.basic_info.title || `youtube-${id}`;
     const safeTitle = title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").trim() || `youtube-${id}`;
-    const audioOutput = output === "mp3" || output === "wav" || output === "m4a";
     const extension = audioOutput ? output : "mp4";
     const mimeType = output === "mp3"
       ? "audio/mpeg"
