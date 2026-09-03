@@ -418,6 +418,7 @@ export async function GET(req: Request) {
           ? ["-codec:a", "pcm_s16le", "-f", "wav"]
           : ["-codec:a", "aac", "-b:a", "192k", "-f", "ipod"];
       const defaultOutputFormat = output === "mp3" ? "mp3" : output === "wav" ? "wav" : "ipod";
+      const fragmentedMp4Args = output === "m4a" ? ["-movflags", "frag_keyframe+empty_moov"] : [];
       const ffmpegArgs = artworkAvailable
         ? [
             "-loglevel", "error",
@@ -430,9 +431,10 @@ export async function GET(req: Request) {
             "-c:v", "mjpeg",
             "-disposition:v", "attached_pic",
             "-f", defaultOutputFormat,
+            ...fragmentedMp4Args,
             "pipe:1",
           ]
-        : ["-loglevel", "error", "-i", "pipe:0", "-vn", ...codecArgs, "pipe:1"];
+        : ["-loglevel", "error", "-i", "pipe:0", "-vn", ...codecArgs, ...fragmentedMp4Args, "pipe:1"];
       const converter = spawn(executable, ffmpegArgs, { stdio: ["pipe", "pipe", "pipe"] });
       const stderrBuffer: string[] = [];
       collectProcessStderr(converter.stderr, stderrBuffer);
