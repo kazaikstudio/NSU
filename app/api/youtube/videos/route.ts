@@ -45,18 +45,28 @@ async function fetchAllVideosWithInnertube(channelId: string): Promise<YouTubeVi
     if (channelId.startsWith("UC")) {
       const uploadPlaylistId = `UU${channelId.slice(2)}`;
       try {
-        const pl = await (youtube as any).getPlaylist(uploadPlaylistId);
-        const items = pl?.contents?.items || pl?.playlist?.items || pl?.videos || [];
-        for (const it of items) {
-          const vid = it?.id || it?.videoId || it?.video?.id || (it?.navigationEndpoint?.watchEndpoint?.videoId);
-          const title = it?.title?.simpleText || it?.title || it?.video?.title || it?.snippet?.title || '';
-          const thumbnails = it?.thumbnail?.thumbnails || it?.thumbnails || it?.video?.thumbnail || it?.snippet?.thumbnails || {};
-          const thumb = (thumbnails?.maxres?.url) || (thumbnails?.high?.url) || (thumbnails?.default?.url) || '';
-          const published = it?.published || it?.video?.published || it?.snippet?.publishedAt || '';
-          if (!vid) continue;
-          videos.push({ id: String(vid), title: String(title || vid), subtitle: '', thumbnail: thumb, date: published, url: `https://www.youtube.com/watch?v=${vid}` });
+        let pl = await (youtube as any).getPlaylist(uploadPlaylistId);
+        const addItems = (items: unknown[]) => {
+          for (const it of items) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const item = it as any;
+            const vid = item?.id || item?.videoId || item?.video?.id || (item?.navigationEndpoint?.watchEndpoint?.videoId);
+            const title = item?.title?.simpleText || item?.title || item?.video?.title || item?.snippet?.title || '';
+            const thumbnails = item?.thumbnail?.thumbnails || item?.thumbnails || item?.video?.thumbnail || item?.snippet?.thumbnails || {};
+            const thumb = (thumbnails?.maxres?.url) || (thumbnails?.high?.url) || (thumbnails?.default?.url) || '';
+            const published = item?.published || item?.video?.published || item?.snippet?.publishedAt || '';
+            if (!vid || videos.some((video) => video.id === String(vid))) continue;
+            videos.push({ id: String(vid), title: String(title || vid), subtitle: '', thumbnail: thumb, date: published, url: `https://www.youtube.com/watch?v=${vid}` });
+          }
+        };
+
+        while (videos.length < 200) {
+          const items = pl?.contents?.items || pl?.playlist?.items || pl?.videos || [];
+          addItems(items);
+          if (!pl?.has_continuation) break;
+          pl = await pl.getContinuation();
         }
-      } catch (e) {
+      } catch {
         // ignore and fallthrough to search
       }
     }
