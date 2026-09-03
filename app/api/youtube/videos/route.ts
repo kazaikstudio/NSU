@@ -295,11 +295,9 @@ async function fetchAllVideos(channelId: string): Promise<YouTubeVideo[]> {
   while (pageCount < 5) {
     const params = new URLSearchParams({
       key: apiKey,
-      channelId,
-      part: "snippet,id",
-      order: "date",
+      playlistId: `UU${channelId.slice(2)}`,
+      part: "snippet",
       maxResults: "50",
-      type: "video",
     });
 
     if (nextPageToken) {
@@ -320,7 +318,7 @@ async function fetchAllVideos(channelId: string): Promise<YouTubeVideo[]> {
 
     const items = payload?.items ?? [];
     for (const item of items) {
-      const videoId = (item?.id?.videoId as string) ?? "";
+      const videoId = (item?.snippet?.resourceId?.videoId as string) ?? "";
       const snippet = item?.snippet ?? {};
       const thumbnail =
         (snippet?.thumbnails?.high?.url as string) ??
