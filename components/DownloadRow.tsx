@@ -43,7 +43,6 @@ interface DownloadRowProps {
 export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, onRetry, onFormats }: DownloadRowProps) {
   const progressValue = typeof entry.progress === 'number' ? Math.max(0, Math.min(100, entry.progress)) : undefined;
   const isActive = entry.status === 'downloading';
-  const canResume = Boolean(entry.sourceVideoId && typeof entry.sourceItag === 'number' && entry.sourceExtension);
   const progressLabel = entry.paused ? 'Paused' : typeof progressValue === 'number' ? `${Math.round(progressValue)}%` : 'Preparing...';
   const sizeLabel = entry.totalBytes
     ? `${formatBytes(entry.downloadedBytes)} / ${formatBytes(entry.totalBytes)}`
@@ -69,7 +68,7 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
                           {sizeLabel}
                         </div>
                       </div>
-                      {onTogglePause && canResume ? (
+                      {onTogglePause ? (
                         <button
                           type="button"
                           onClick={(event) => {

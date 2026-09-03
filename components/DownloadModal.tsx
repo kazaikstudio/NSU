@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
-import { useRouter } from 'next/navigation';
 import { getDownloadPath, inferDownloadCategoryFromFilename } from '@/lib/download';
 import { startYoutubeDownload } from '@/lib/youtube-download-manager';
 type DownloadFormat = {
@@ -53,7 +52,6 @@ type DownloadRetryDetail = {
 };
 
 const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: DownloadModalProps) => {
-  const router = useRouter();
   const [loadingFormat, setLoadingFormat] = useState<string | null>(null);
   const [formats, setFormats] = useState<DownloadFormat[]>([]);
   const [title, setTitle] = useState("");
@@ -205,8 +203,7 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
       totalBytes: format.size ?? undefined,
     });
     onClose?.();
-    router.push('/downloads');
-  }, [emitDownloadHistory, onClose, router, title, videoId]);
+  }, [emitDownloadHistory, onClose, title, videoId]);
 
   const handleDownload = useCallback(async (format: DownloadFormat, options?: { skipReset?: boolean }) => {
     const formatKey = getFormatKey(format);
