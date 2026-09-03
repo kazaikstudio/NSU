@@ -3,24 +3,15 @@ import type { MetadataRoute } from "next";
 export const revalidate = 3600;
 
 const BASE_URL = "https://nollstudios.org";
-
-const publicRoutes = [
-  "/",
-  "/about",
-  "/Audio",
-  "/download",
-  "/downloads",
-  "/Feature",
-  "/search",
-] as const;
+const HOME_URL = `${BASE_URL}/`;
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 
-  return publicRoutes.map((route) => ({
-    url: `${BASE_URL}${route}`,
+  return [{
+    url: HOME_URL,
     lastModified: now,
-    changeFrequency: route === "/" ? "daily" : "weekly",
-    priority: route === "/" ? 1.0 : 0.7,
-  }));
+    changeFrequency: "daily",
+    priority: 1.0,
+  }];
 }
