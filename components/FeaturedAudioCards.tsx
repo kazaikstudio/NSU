@@ -46,14 +46,7 @@ function getTrackThumbnailUrl(track: FeaturedAudioTrack) {
     return `https://drive.google.com/thumbnail?id=${encodeURIComponent(track.thumbnailDriveFileId)}&sz=w400`;
   }
 
-  if (track.driveFileId) {
-    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(track.driveFileId)}&sz=w400`;
-  }
-
-  const fileId = track.fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
-  return fileId
-    ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId[1] || fileId[2])}&sz=w400`
-    : '/noll.jpg';
+  return '/noll.jpg';
 }
 
 // Waveform bar height matrix
