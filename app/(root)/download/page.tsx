@@ -252,6 +252,8 @@ function DownloadForm() {
     })
   }, [handleDownload])
 
+  const videoId = getVideoId(source)
+
   return (
     <main className="min-h-screen pt-2 text-primary">
           <Switchbutton />
@@ -267,6 +269,20 @@ function DownloadForm() {
               <p className="mt-4 w-full max-w-xl text-balance text-xs leading-relaxed text-secondry sm:text-sm md:text-base">
                 Paste a YouTube video link or ID to see the formats YouTube makes available.
               </p>
+
+              {videoId ? (
+                <div className="mt-6 overflow-hidden rounded-2xl border border-card1/20 bg-black shadow-xl shadow-black/20">
+                  <div className="aspect-video w-full">
+                    <iframe
+                      title={title ? `Preview of ${title}` : 'YouTube video preview'}
+                      src={`https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0`}
+                      className="h-full w-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               <form onSubmit={handleSubmit} className="mt-4 space-y-6">
                 <label className="block">
@@ -312,7 +328,7 @@ function DownloadForm() {
                 {error && <p id="download-error" className="text-sm text-red-400" role="alert">{error}</p>}
                 {loadingFormats && <p className="text-sm text-secondry">Checking available formats...</p>}
                 {title && <p className="text-sm font-semibold text-primary">{title}</p>}
-                {!getVideoId(source) && getDirectUrl(source) && !loadingFormats && (
+                {!videoId && getDirectUrl(source) && !loadingFormats && (
                   <button
                     type="button"
                     onClick={() => void handleDirectDownload()}
@@ -323,63 +339,65 @@ function DownloadForm() {
                     {loadingDirectDownload ? 'Downloading...' : 'Download file'}
                   </button>
                 )}
-                {!loadingFormats && !error && (['audio', 'video'] as const).map((section) => {
+                {!loadingFormats && !error && formats.length > 0 && (['audio', 'video'] as const).map((section) => {
                   const sectionFormats = formats.filter((format) => section === 'audio' ? !format.kind.includes('video') : format.kind.includes('video'))
                   if (!sectionFormats.length) return null
                   return (
                     <div key={section} className="space-y-3">
                       <h2 className="border-b border-card1/20 pb-2 text-sm font-bold uppercase tracking-wider text-rose-300">{section} formats</h2>
-                      {sectionFormats.map((format) => {
-                        const isPreparing = loadingFormat === format.itag;
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {sectionFormats.map((format) => {
+                          const isPreparing = loadingFormat === format.itag;
 
-                        return (
-                          <div key={`${format.itag}-${format.extension}-${format.outputBitrate || 'source'}`} className="rounded-xl border border-card1/20 bg-cardcl/70 p-4">
-                            <div className="flex items-center justify-between gap-4">
-                              <div>
-                                <p className="text-sm font-semibold text-primary">
-                                  {format.label} {format.extension.toUpperCase()}
-                                </p>
-                                <p className="mt-1 text-xs text-secondry">
-                                  {format.kind.replace('+', ' + ')}
-                                  {format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ''}
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={handleFormatButtonClick}
-                                data-itag={String(format.itag)}
-                                data-extension={format.extension}
-                                data-kind={format.kind}
-                                data-output-bitrate={format.outputBitrate != null ? String(format.outputBitrate) : undefined}
-                                data-size={format.size != null ? String(format.size) : undefined}
-                                data-label={format.label}
-                                disabled={loadingFormat !== null}
-                                className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-500 disabled:opacity-60 cursor-pointer"
-                              >
-                                <Download size={15} aria-hidden="true" />
-                                {isPreparing ? 'Preparing...' : 'Download'}
-                              </button>
-                            </div>
-                            {loadingFormat === format.itag && (
-                              <div
-                                className="mt-3"
-                                role="status"
-                                aria-label={downloadProgress ? `Download ${downloadProgress}% complete` : 'Download in progress'}
-                              >
-                                <div className="h-1.5 overflow-hidden rounded-full bg-card1/20">
-                                  <div
-                                    className={`h-full rounded-full bg-rose-500 transition-[width] duration-200 ${downloadProgress ? '' : 'w-1/3 animate-pulse'}`}
-                                    style={downloadProgress ? { width: `${downloadProgress}%` } : undefined}
-                                  />
+                          return (
+                            <div key={`${format.itag}-${format.extension}-${format.outputBitrate || 'source'}`} className="rounded-xl border border-card1/20 bg-cardcl/70 p-4">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-primary">
+                                    {format.label} {format.extension.toUpperCase()}
+                                  </p>
+                                  <p className="mt-1 text-xs text-secondry">
+                                    {format.kind.replace('+', ' + ')}
+                                    {format.size ? ` • ${(format.size / 1024 / 1024).toFixed(1)} MB` : ''}
+                                  </p>
                                 </div>
-                                <p className="mt-1 text-right text-[10px] text-secondry">
-                                  {downloadProgress ? `${downloadProgress}%` : 'Preparing download...'}
-                                </p>
+                                <button
+                                  type="button"
+                                  onClick={handleFormatButtonClick}
+                                  data-itag={String(format.itag)}
+                                  data-extension={format.extension}
+                                  data-kind={format.kind}
+                                  data-output-bitrate={format.outputBitrate != null ? String(format.outputBitrate) : undefined}
+                                  data-size={format.size != null ? String(format.size) : undefined}
+                                  data-label={format.label}
+                                  disabled={loadingFormat !== null}
+                                  className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <Download size={15} aria-hidden="true" />
+                                  {isPreparing ? 'Preparing...' : 'Download'}
+                                </button>
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                              {loadingFormat === format.itag && (
+                                <div
+                                  className="mt-3"
+                                  role="status"
+                                  aria-label={downloadProgress ? `Download ${downloadProgress}% complete` : 'Download in progress'}
+                                >
+                                  <div className="h-1.5 overflow-hidden rounded-full bg-card1/20">
+                                    <div
+                                      className={`h-full rounded-full bg-rose-500 transition-[width] duration-200 ${downloadProgress ? '' : 'w-1/3 animate-pulse'}`}
+                                      style={downloadProgress ? { width: `${downloadProgress}%` } : undefined}
+                                    />
+                                  </div>
+                                  <p className="mt-1 text-right text-[10px] text-secondry">
+                                    {downloadProgress ? `${downloadProgress}%` : 'Preparing download...'}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )
                 })}
