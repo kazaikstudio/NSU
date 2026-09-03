@@ -39,9 +39,11 @@ interface DownloadRowProps {
   onCancel?: (entry: DownloadEntry) => void;
   onRemove?: (entry: DownloadEntry) => void;
   onRetry?: (entry: DownloadEntry) => void;
+  onPreview?: (entry: DownloadEntry) => void;
+  onFormats?: (entry: DownloadEntry) => void;
 }
 
-export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, onRetry }: DownloadRowProps) {
+export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, onRetry, onPreview, onFormats }: DownloadRowProps) {
   const progressValue = typeof entry.progress === 'number' ? Math.max(0, Math.min(100, entry.progress)) : undefined;
   const isActive = entry.status === 'downloading';
   const canResume = Boolean(entry.sourceVideoId && typeof entry.sourceItag === 'number' && entry.sourceExtension);
@@ -102,6 +104,16 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
                           <X size={13} className="sm:h-3.5 sm:w-3.5" />
                         </button>
                       ) : null}
+                      {entry.sourceVideoId && onPreview ? (
+                        <button type="button" onClick={(event) => { event.stopPropagation(); onPreview(entry); }} aria-label="Preview video" title="Preview video" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-300 transition hover:border-sky-500/40 hover:bg-sky-500/20 sm:h-9 sm:w-9 sm:rounded-xl">
+                          <Play size={13} className="sm:h-3.5 sm:w-3.5" />
+                        </button>
+                      ) : null}
+                      {entry.sourceVideoId && onFormats ? (
+                        <button type="button" onClick={(event) => { event.stopPropagation(); onFormats(entry); }} aria-label="Show download formats" title="Download formats" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-300 transition hover:border-amber-500/40 hover:bg-amber-500/20 sm:h-9 sm:w-9 sm:rounded-xl">
+                          <Download size={13} className="sm:h-3.5 sm:w-3.5" />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -146,7 +158,10 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
       {entry.status === 'error' && onRetry ? (
         <button
           type="button"
-          onClick={() => onRetry(entry)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onRetry(entry);
+          }}
           aria-label="Retry download"
           title="Retry"
           className="inline-flex shrink-0 items-center justify-center gap-1 rounded-lg border border-rose-500/20 bg-rose-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-rose-300 transition-all duration-200 hover:border-rose-500/40 hover:bg-rose-500/20 hover:text-rose-200 sm:px-3"
@@ -165,6 +180,36 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
         >
           <Trash2 size={13} className="sm:h-3.5 sm:w-3.5" />
           <span className="hidden sm:inline">Remove</span>
+        </button>
+      ) : null}
+      {entry.sourceVideoId && onPreview ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onPreview(entry);
+          }}
+          aria-label="Preview video"
+          title="Preview video"
+          className="inline-flex shrink-0 items-center justify-center gap-1 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-sky-300 transition-all hover:border-sky-500/40 hover:bg-sky-500/20 hover:text-sky-200 sm:px-3"
+        >
+          <Play size={13} className="sm:h-3.5 sm:w-3.5" />
+          <span className="hidden sm:inline">Preview</span>
+        </button>
+      ) : null}
+      {entry.sourceVideoId && onFormats ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onFormats(entry);
+          }}
+          aria-label="Show download formats"
+          title="Download formats"
+          className="inline-flex shrink-0 items-center justify-center gap-1 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/20 hover:text-amber-200 sm:px-3"
+        >
+          <Download size={13} className="sm:h-3.5 sm:w-3.5" />
+          <span className="hidden sm:inline">Formats</span>
         </button>
       ) : null}
     </div>

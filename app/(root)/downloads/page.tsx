@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Download, Trash2, Inbox, Sparkles } from 'lucide-react';
+import { ArrowLeft, Download, Trash2, Inbox, Sparkles, X } from 'lucide-react';
 import DownloadRow, { DownloadEntry } from '../../../components/DownloadRow';
 import { startYoutubeDownload } from '@/lib/youtube-download-manager';
 
@@ -26,9 +26,23 @@ interface RetryDetail {
   outputBitrate?: number;
 }
 
+interface DownloadFormat {
+  itag: number;
+  label: string;
+  kind: string;
+  extension: string;
+  outputBitrate?: number;
+  size: number | null;
+}
+
 export default function DownloadsPage() {
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
   const [downloadNotice, setDownloadNotice] = useState<DownloadNotice | null>(null);
+  const [previewEntryId, setPreviewEntryId] = useState<string | null>(null);
+  const [formatEntryId, setFormatEntryId] = useState<string | null>(null);
+  const [formats, setFormats] = useState<DownloadFormat[]>([]);
+  const [formatsLoading, setFormatsLoading] = useState(false);
+  const [formatsError, setFormatsError] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeRetryRef = useRef<RetryDetail | null>(null);
 
@@ -91,7 +105,90 @@ export default function DownloadsPage() {
   const previousDownloads = downloadEntries.filter((entry) => entry.status !== 'downloading');
   const downloadedBytes = downloadEntries.reduce((sum, entry) => sum + (entry.downloadedBytes ?? 0), 0);
   const totalBytes = downloadEntries.reduce((sum, entry) => sum + (entry.totalBytes ?? 0), 0);
-  const previewEntry = downloadEntries.find((entry) => entry.sourceVideoId);
+  const previewEntry = downloadEntries.find((entry) => entry.id === previewEntryId);
+
+  const handlePreview = (entry: DownloadEntry) => {
+    setPreviewEntryId((currentId) => currentId === entry.id ? null : entry.id);
+  };
+
+  const handleFormats = async (entry: DownloadEntry) => {
+    if (!entry.sourceVideoId) return;
+    if (formatEntryId === entry.id) {
+      setFormatEntryId(null);
+      return;
+    }
+
+    setFormatEntryId(entry.id);
+    setFormats([]);
+    setFormatsError('');
+    setFormatsLoading(true);
+    try {
+      const response = await fetch(`/api/youtube/formats?id=${encodeURIComponent(entry.sourceVideoId)}`, { cache: 'no-store' });
+      const payload = await response.json() as { formats?: DownloadFormat[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Unable to fetch formats.');
+      setFormats(payload.formats || []);
+    } catch (error) {
+      setFormatsError(error instanceof Error ? error.message : 'Unable to fetch formats.');
+    } finally {
+      setFormatsLoading(false);
+    }
+  };
+
+  const handleFormatSelect = (entry: DownloadEntry, format: DownloadFormat) => {
+    if (!entry.sourceVideoId) return;
+    const title = entry.title || entry.sourceVideoId;
+    window.dispatchEvent(new CustomEvent('nsu-download-status', {
+      detail: {
+        status: 'downloading',
+        title,
+        progress: 0,
+        downloadedBytes: 0,
+        totalBytes: format.size ?? undefined,
+        paused: false,
+        sourceVideoId: entry.sourceVideoId,
+        sourceItag: format.itag,
+        sourceExtension: format.extension,
+        sourceOutputBitrate: format.outputBitrate,
+      },
+    }));
+    startYoutubeDownload({
+      title,
+      videoId: entry.sourceVideoId,
+      itag: format.itag,
+      extension: format.extension,
+      outputBitrate: format.outputBitrate,
+      totalBytes: format.size ?? undefined,
+    });
+    setFormatEntryId(null);
+    setFormats([]);
+  };
+
+  const renderFormats = (entry: DownloadEntry) => {
+    if (formatEntryId !== entry.id) return null;
+
+    return (
+      <div className="rounded-xl border border-amber-500/20 bg-slate-950/50 p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Download formats</p>
+          <button type="button" onClick={() => setFormatEntryId(null)} aria-label="Close formats" title="Close formats" className="text-slate-400 transition hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+        {formatsLoading ? <p className="text-xs text-slate-400">Loading formats...</p> : null}
+        {formatsError ? <p className="text-xs text-rose-300">{formatsError}</p> : null}
+        {!formatsLoading && !formatsError && formats.length > 0 ? (
+          <div className="space-y-2">
+            {formats.map((format) => (
+              <button key={`${format.itag}-${format.extension}-${format.outputBitrate || 'source'}`} type="button" onClick={() => handleFormatSelect(entry, format)} className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-left transition hover:border-amber-400/50 hover:bg-slate-800">
+                <span className="min-w-0 truncate text-xs font-semibold text-slate-100">{format.label}</span>
+                <span className="shrink-0 text-[10px] text-slate-400">{format.extension.toUpperCase()}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   const runRetryDownload = async (detail: RetryDetail, options?: { keepProgress?: boolean }) => {
     activeRetryRef.current = detail;
@@ -501,12 +598,16 @@ export default function DownloadsPage() {
                   <div className="space-y-2.5 sm:space-y-3">
                     <div className="space-y-2.5 sm:space-y-3">
                       {activeDownloads.map((entry) => (
-                        <DownloadRow
-                          key={entry.id}
-                          entry={entry}
-                          onTogglePause={handleTogglePause}
-                          onCancel={handleCancelDownload}
-                        />
+                        <div key={entry.id} className="space-y-2">
+                          <DownloadRow
+                            entry={entry}
+                            onTogglePause={handleTogglePause}
+                            onCancel={handleCancelDownload}
+                            onPreview={handlePreview}
+                            onFormats={handleFormats}
+                          />
+                          {renderFormats(entry)}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -521,7 +622,16 @@ export default function DownloadsPage() {
                   </span>
                   <div className="space-y-2">
                     {previousDownloads.map((entry) => (
-                      <DownloadRow key={entry.id} entry={entry} onRetry={handleRetry} onRemove={handleRemoveEntry} />
+                      <div key={entry.id} className="space-y-2">
+                        <DownloadRow
+                          entry={entry}
+                          onRetry={handleRetry}
+                          onRemove={handleRemoveEntry}
+                          onPreview={handlePreview}
+                          onFormats={handleFormats}
+                        />
+                        {renderFormats(entry)}
+                      </div>
                     ))}
                   </div>
                 </div>
