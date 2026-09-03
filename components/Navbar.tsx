@@ -228,12 +228,12 @@ const Navbar = () => {
           <div className="relative">
             <Link
               href="/downloads"
-              className="rounded-lg p-2 text-primary transition hover:bg-gray-700/10 dark:hover:bg-zinc-800"
+              className="relative rounded-lg p-2 text-primary transition hover:bg-gray-700/10 dark:hover:bg-zinc-800"
               aria-label="Open downloads"
             >
               <Download size={18} />
               {activeDownloads.length > 0 ? (
-                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-[9px] font-bold text-slate-950">
+                <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[9px] font-bold text-slate-950">
                   {activeDownloads.length}
                 </span>
               ) : null}
