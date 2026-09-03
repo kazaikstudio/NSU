@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getClientCachedData } from '@/lib/client-cache';
+import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
 
 interface RegisteredArtist {
   id: string;
@@ -15,7 +15,7 @@ interface RegisteredArtist {
 
 export default function ArtistList({ searchTerm }: { searchTerm: string }) {
   const [artists, setArtists] = useState<RegisteredArtist[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !hasClientCachedData('dashboard-artists'));
   const [error, setError] = useState('');
 
   useEffect(() => {

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import AudioPlayer from '@/components/AudioPlayer';
 import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 import { getArtistById } from '@/lib/artists';
-import { getClientCachedData } from '@/lib/client-cache';
+import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
 
 interface Artist {
   id: string;
@@ -62,7 +62,7 @@ export default function PublicArtistDetailPage() {
   const params = useParams<{ id: string }>();
   const [artist, setArtist] = useState<Artist | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !hasClientCachedData(`artist:${params.id}`));
   const [error, setError] = useState('');
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);

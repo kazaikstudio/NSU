@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Switchbutton from './Switchbutton';
+import ArtistList from './ArtistList';
 import { getClientCachedData } from '@/lib/client-cache';
 
 const FeaturedAudioCards = dynamic(() => import('./FeaturedAudioCards'), {
@@ -13,11 +14,6 @@ const FeaturedAudioCards = dynamic(() => import('./FeaturedAudioCards'), {
 const AudioTrackList = dynamic(() => import('./AudioTrackList'), {
   ssr: false,
   loading: () => <p className="col-span-full py-10 text-center text-sm text-slate-400">Loading music library...</p>,
-});
-
-const ArtistList = dynamic(() => import('./ArtistList'), {
-  ssr: false,
-  loading: () => <p className="col-span-full py-10 text-center text-sm text-slate-400">Loading artists...</p>,
 });
 
 const TrendingCard = dynamic(() => import('./TrendingCard'), {
