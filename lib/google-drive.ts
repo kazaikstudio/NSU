@@ -304,8 +304,8 @@ export async function uploadToGoogleDrive(upload: DriveUpload, config: DriveConf
   };
 }
 
-export async function deleteFromGoogleDrive(fileId: string) {
-  const accessToken = await getAccessToken();
+export async function deleteFromGoogleDrive(fileId: string, config: DriveConfig = getGoogleConfig()) {
+  const accessToken = await getAccessToken(config);
   const response = await fetchGoogle(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${accessToken}` },

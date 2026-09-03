@@ -29,7 +29,9 @@ async function ensureStorageTable() {
         title TEXT NOT NULL,
         type TEXT NOT NULL,
         file_url TEXT NOT NULL,
+        drive_file_id TEXT,
         thumbnail_url TEXT,
+        thumbnail_drive_file_id TEXT,
         source TEXT NOT NULL DEFAULT 'talk-show',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
@@ -40,6 +42,8 @@ async function ensureStorageTable() {
       ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'talk-show'
     `);
     await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
+    await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS drive_file_id TEXT`);
+    await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT`);
   } finally {
     client.release();
   }
@@ -164,6 +168,7 @@ export async function POST(request: Request) {
   }
 
   let publicUrl = fileUrl;
+  let uploadedDriveFileId: string | null = null;
   let uploadError: string | null = null;
 
   if (uploadedFile) {
@@ -178,6 +183,7 @@ export async function POST(request: Request) {
       );
 
       publicUrl = driveFile.publicUrl;
+  uploadedDriveFileId = driveFile.id;
     } catch (error) {
       uploadError = error instanceof Error ? error.message : String(error);
       console.warn('Talk Show Drive upload failed, falling back to local storage', uploadError);
@@ -221,11 +227,11 @@ export async function POST(request: Request) {
     const id = `storage-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const result = await pool.query(
       `
-        INSERT INTO storage_items (id, title, type, file_url, source)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO storage_items (id, title, type, file_url, drive_file_id, source)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id, title, type, file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", source, created_at AS "createdAt"
       `,
-      [id, title, type, publicUrl, source]
+      [id, title, type, publicUrl, uploadedDriveFileId, source]
     );
 
     const row = result.rows[0];
