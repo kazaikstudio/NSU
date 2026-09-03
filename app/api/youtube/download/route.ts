@@ -26,7 +26,15 @@ export const dynamic = "force-dynamic";
 
 configureYoutubeEvaluator();
 
-const YOUTUBE_CLIENT_TYPES = [ClientType.WEB, ClientType.WEB_EMBEDDED, ClientType.ANDROID_VR, ClientType.IOS] as const;
+const YOUTUBE_CLIENT_TYPES = [
+  ClientType.WEB,
+  ClientType.MWEB,
+  ClientType.TV,
+  ClientType.ANDROID,
+  ClientType.ANDROID_VR,
+  ClientType.WEB_EMBEDDED,
+  ClientType.IOS,
+] as const;
 
 async function getYoutubeVideoInfo(videoId: string) {
   let lastError: unknown;
@@ -40,9 +48,7 @@ async function getYoutubeVideoInfo(videoId: string) {
       });
       const info = await youtube.getBasicInfo(videoId);
       const formatCount = (info.streaming_data?.formats?.length ?? 0) + (info.streaming_data?.adaptive_formats?.length ?? 0);
-      const hasTitle = Boolean(info.basic_info?.title);
-
-      if (formatCount > 0 || hasTitle) {
+      if (formatCount > 0) {
         return { youtube, info, clientType };
       }
 
