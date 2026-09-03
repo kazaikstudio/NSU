@@ -14,6 +14,7 @@ export interface FeaturedAudioTrack {
   artist?: string;
   fileUrl: string;
   coverUrl?: string;
+  driveFileId?: string;
   duration?: string;
   likesCount?: number;
 }
@@ -34,12 +35,17 @@ function normalizeImageUrl(url?: string) {
   }
 }
 
-function placeholderCoverDataUrl(title?: string) {
-  const text = (title || 'Music').slice(0, 2).toUpperCase();
-  const bg = '#0f172a';
-  const fg = '#fbbf24';
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><rect width='100%' height='100%' fill='${bg}'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Inter, Roboto, Arial' font-size='160' fill='${fg}'>${text}</text></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+function getTrackThumbnailUrl(track: FeaturedAudioTrack) {
+  if (track.coverUrl) return track.coverUrl;
+
+  if (track.driveFileId) {
+    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(track.driveFileId)}&sz=w400`;
+  }
+
+  const fileId = track.fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
+  return fileId
+    ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId[1] || fileId[2])}&sz=w400`
+    : '/noll.jpg';
 }
 
 // Waveform bar height matrix
@@ -359,7 +365,7 @@ export default function FeaturedAudioCards() {
         }}
       >
         <div className="flex gap-6">
-          {tracks.map((track) => {
+                      src={normalizeImageUrl(getTrackThumbnailUrl(track))}
             const isSelected = activeTrackId === track.id;
             const isCurrentlyPlaying = isSelected && isPlaying;
             const progressRatio = isSelected && duration > 0 ? currentTime / duration : 0;

@@ -46,6 +46,7 @@ export async function GET() {
         media.album,
         media.file_name AS "fileName",
         media.file_url AS "fileUrl",
+        media.drive_file_id AS "driveFileId",
         media.created_at AS "createdAt",
         artist.id::text AS "artistId",
         artist.name AS "artistName",

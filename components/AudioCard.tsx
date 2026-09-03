@@ -8,6 +8,7 @@ export interface FeaturedAudioTrack {
   fileUrl: string;
   artistName: string;
   artistProfileUrl?: string | null;
+  thumbnailUrl?: string | null;
 }
 
 interface AudioCardProps {
@@ -138,15 +139,15 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
       >
         <div
           className="group relative flex aspect-4/4 sm:aspect-3/3 w-full items-end justify-between overflow-hidden rounded-xl border border-card1/20 bg-cardcl bg-cover bg-center p-4 transition-all duration-300 hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-400/10"
-            style={track.artistProfileUrl ? { backgroundImage: `url(${normalizeImageUrl(track.artistProfileUrl)})` } : undefined}
-            role={track.artistProfileUrl ? 'img' : undefined}
-            aria-label={track.artistProfileUrl ? `${track.artistName} profile` : undefined}
+            style={(track.thumbnailUrl || track.artistProfileUrl) ? { backgroundImage: `url(${normalizeImageUrl(track.thumbnailUrl || track.artistProfileUrl)})` } : undefined}
+            role={(track.thumbnailUrl || track.artistProfileUrl) ? 'img' : undefined}
+            aria-label={(track.thumbnailUrl || track.artistProfileUrl) ? (track.thumbnailUrl ? `${track.title} thumbnail` : `${track.artistName} profile`) : undefined}
         >
-          {!track.artistProfileUrl && (
+          {!track.thumbnailUrl && !track.artistProfileUrl && (
             <div className="absolute inset-0 flex items-center justify-center bg-linear-to-br from-cardcl to-card1/80">
-              <span className="text-5xl font-black text-amber-400/80 drop-shadow-md">
-                {track.artistName.charAt(0).toUpperCase()}
-              </span>
+              <svg className="h-16 w-16 text-amber-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
+              </svg>
             </div>
           )}
 
