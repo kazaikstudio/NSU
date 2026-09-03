@@ -89,6 +89,17 @@ function setDiagnosticHeaders(response: Response, diagnosticCode: string) {
   return response;
 }
 
+async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>>, selectedFormat: { itag: number; url?: string }) {
+  if (selectedFormat.url) {
+    const directResponse = await fetch(selectedFormat.url, { redirect: 'follow' });
+    if (directResponse.ok && directResponse.body) {
+      return directResponse.body;
+    }
+  }
+
+  return info.download({ itag: selectedFormat.itag });
+}
+
 async function createStoredDownloadPath(filename: string, category: "audio" | "video") {
   try {
     return await ensureDownloadStoragePath(filename, category);
@@ -225,11 +236,7 @@ export async function GET(req: Request) {
 
     let stream: ReadableStream<Uint8Array>;
     try {
-      stream = await info.download({
-        ...(Number.isInteger(itag) && itag > 0
-          ? { itag }
-          : { type: "video+audio", quality: "best", format: "mp4" }),
-      });
+      stream = await downloadSelectedFormat(info, selectedFormat);
     } catch (error) {
       throw new YoutubeDownloadError(502, {
         code: 'YOUTUBE_STREAM_FAILED',

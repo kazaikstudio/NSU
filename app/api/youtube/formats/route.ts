@@ -144,7 +144,7 @@ export async function GET(request: Request) {
       })),
       ...mergeOnlyVideoSources.map((video) => ({
         itag: video.itag,
-        label: `${video.quality_label || 'Video'} (server merged)`,
+        label: video.quality_label || 'Video',
         kind: 'video',
         mimeType: 'video/mp4',
         extension: 'mp4',
