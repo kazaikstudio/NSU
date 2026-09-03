@@ -365,7 +365,7 @@ export default function FeaturedAudioCards() {
         }}
       >
         <div className="flex gap-6">
-                      src={normalizeImageUrl(getTrackThumbnailUrl(track))}
+          {tracks.map((track) => {
             const isSelected = activeTrackId === track.id;
             const isCurrentlyPlaying = isSelected && isPlaying;
             const progressRatio = isSelected && duration > 0 ? currentTime / duration : 0;
@@ -392,7 +392,7 @@ export default function FeaturedAudioCards() {
                     className="relative group/btn w-16 h-16 rounded-full bg-zinc-800 overflow-hidden shrink-0 border-2 border-white/20 shadow-md focus:outline-none focus:ring-2 focus:ring-amber-400"
                   >
                     <img
-                      src={normalizeImageUrl(track.coverUrl) || placeholderCoverDataUrl(track.title)}
+                      src={normalizeImageUrl(getTrackThumbnailUrl(track))}
                       alt={track.title}
                       className="w-full h-full object-cover transition-transform duration-300 group-hover/btn:scale-110"
                     />
