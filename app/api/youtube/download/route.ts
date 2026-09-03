@@ -59,6 +59,15 @@ async function getYoutubeVideoInfo(videoId: string) {
   throw new Error(`Unable to fetch YouTube metadata for ${videoId}`);
 }
 
+async function getYoutubeInfoForClient(videoId: string, clientType: ClientType) {
+  const youtube = await Innertube.create({
+    ...getYoutubeSessionConfig(),
+    client_type: clientType,
+    retrieve_player: true,
+  });
+  return youtube.getBasicInfo(videoId);
+}
+
 function getFfmpegPath() {
   const localPath = join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg");
   return [process.env.FFMPEG_PATH, localPath, ffmpegPath].find((path): path is string => Boolean(path && existsSync(path)));
@@ -220,7 +229,7 @@ export async function GET(req: Request) {
       });
     }
 
-    const selectedFormat = availableFormats.find((format) => format.itag === itag);
+    let selectedFormat = availableFormats.find((format) => format.itag === itag);
     const ffmpegAvailable = Boolean(getFfmpegPath());
 
     if (!selectedFormat) {
@@ -234,27 +243,59 @@ export async function GET(req: Request) {
       });
     }
 
-    let stream: ReadableStream<Uint8Array>;
+    let stream: ReadableStream<Uint8Array> | undefined;
     try {
       stream = await downloadSelectedFormat(info, selectedFormat);
     } catch (error) {
+      let retryError: unknown = error;
+      let recovered = false;
+
+      for (const clientType of YOUTUBE_CLIENT_TYPES) {
+        try {
+          const retryInfo = await getYoutubeInfoForClient(id, clientType);
+          const retryFormat = [
+            ...(retryInfo.streaming_data?.formats || []),
+            ...(retryInfo.streaming_data?.adaptive_formats || []),
+          ].find((format) => format.itag === itag);
+          if (!retryFormat) continue;
+
+          stream = await downloadSelectedFormat(retryInfo, retryFormat);
+          info = retryInfo;
+          selectedFormat = retryFormat;
+          recovered = true;
+          break;
+        } catch (retryFailure) {
+          retryError = retryFailure;
+        }
+      }
+
+      if (!recovered) {
+        throw new YoutubeDownloadError(502, {
+          code: 'YOUTUBE_STREAM_FAILED',
+          message: 'The selected YouTube format could not be opened. Please refresh formats and try again.',
+          details: {
+            ...getRequestDiagnostics(id, itag, output),
+            cause: retryError instanceof Error ? retryError.message : String(retryError),
+            hasProofOfOriginToken: Boolean(process.env.YOUTUBE_PO_TOKEN),
+            hasVisitorData: Boolean(process.env.YOUTUBE_VISITOR_DATA),
+            hasCookie: Boolean(process.env.YOUTUBE_COOKIE),
+            selectedFormat: {
+              itag: selectedFormat.itag,
+              mimeType: selectedFormat.mime_type,
+              hasAudio: selectedFormat.has_audio,
+              hasVideo: selectedFormat.has_video,
+              bitrate: selectedFormat.bitrate,
+            },
+          },
+        });
+      }
+    }
+
+    if (!stream) {
       throw new YoutubeDownloadError(502, {
         code: 'YOUTUBE_STREAM_FAILED',
-        message: 'The YouTube media stream could not be opened on this server.',
-        details: {
-          ...getRequestDiagnostics(id, itag, output),
-          cause: error instanceof Error ? error.message : String(error),
-          hasProofOfOriginToken: Boolean(process.env.YOUTUBE_PO_TOKEN),
-          hasVisitorData: Boolean(process.env.YOUTUBE_VISITOR_DATA),
-          hasCookie: Boolean(process.env.YOUTUBE_COOKIE),
-          selectedFormat: {
-            itag: selectedFormat.itag,
-            mimeType: selectedFormat.mime_type,
-            hasAudio: selectedFormat.has_audio,
-            hasVideo: selectedFormat.has_video,
-            bitrate: selectedFormat.bitrate,
-          },
-        },
+        message: 'The selected YouTube format did not produce a readable stream.',
+        details: getRequestDiagnostics(id, itag, output),
       });
     }
 

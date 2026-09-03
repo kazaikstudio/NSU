@@ -178,9 +178,10 @@ function DownloadForm() {
     if (typeof window === 'undefined') return
 
     const handleDownloadStatus = (event: Event) => {
-      const detail = (event as CustomEvent<{ title?: string; status?: string; progress?: number }>).detail
+      const detail = (event as CustomEvent<{ title?: string; status?: string; progress?: number; error?: string }>).detail
       if (!detail?.title || detail.title !== title) return
       if (typeof detail.progress === 'number') setDownloadProgress(detail.progress)
+      if (detail.error) setError(detail.error)
       if (detail.status === 'done' || detail.status === 'error') setLoadingFormat(null)
     }
 

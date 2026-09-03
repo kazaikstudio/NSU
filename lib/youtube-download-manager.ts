@@ -10,6 +10,7 @@ export interface YoutubeDownloadJob {
 interface DownloadStatus {
   status: 'downloading' | 'done' | 'error';
   title: string;
+  error?: string;
   progress?: number;
   paused?: boolean;
   downloadedBytes?: number;
@@ -175,6 +176,7 @@ async function runDownload(job: YoutubeDownloadJob) {
     emit({
       status: 'error',
       title: job.title,
+      error: error instanceof Error ? error.message : 'Unable to download this format.',
       sourceVideoId: job.videoId,
       sourceItag: job.itag,
       sourceExtension: job.extension,
