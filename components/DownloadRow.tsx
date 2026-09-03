@@ -71,6 +71,7 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
                       {onTogglePause ? (
                         <button
                           type="button"
+                          disabled={!onTogglePause}
                           onClick={(event) => {
                             event.stopPropagation();
                             onTogglePause(entry);
@@ -89,6 +90,7 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
                       {onCancel ? (
                         <button
                           type="button"
+                          disabled={!onCancel}
                           onClick={(event) => {
                             event.stopPropagation();
                             onCancel(entry);

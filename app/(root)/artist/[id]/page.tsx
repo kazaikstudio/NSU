@@ -75,46 +75,52 @@ export default function PublicArtistDetailPage() {
 
     const loadArtist = async () => {
       try {
-        const [artistData, mediaData] = await Promise.all([
-          getClientCachedData(`artist:${params.id}`, async () => {
-            const response = await fetch(`/api/dashboard/artists/${params.id}`);
-            if (!response.ok) throw new Error('Artist not found');
-            return response.json();
-          }),
-          getClientCachedData(`artist-media:${params.id}`, async () => {
-            const response = await fetch(`/api/dashboard/artists/${params.id}/media`);
-            if (!response.ok) return { media: [] };
-            return response.json();
-          }),
-        ]);
+        const artistData = await getClientCachedData(`artist:${params.id}`, async () => {
+          const response = await fetch(`/api/dashboard/artists/${params.id}`);
+          if (!response.ok) throw new Error('Artist not found');
+          return response.json();
+        });
         if (!artistData.artist) throw new Error('Artist not found');
 
         if (!cancelled) {
           setArtist(artistData.artist);
-          const loadedTracks = (mediaData.media || []).filter((media: Track & { kind?: string }) => media.kind === 'track');
-          latestTrackId.current = loadedTracks[0]?.id || null;
-          setTracks(loadedTracks);
+          setLoading(false);
         }
 
         if (!cancelled) {
           void (async () => {
-            try {
-              const followResponse = await fetch(`/api/artists/${params.id}/follow`, {
-                headers: { 'x-subscriber-id': getSubscriberId() },
-              });
-              if (followResponse.ok) {
-                const followState = await followResponse.json();
-                if (!cancelled) {
-                  setIsFollowing(followState.following === true);
-                  setArtist((currentArtist) => currentArtist
-                    ? { ...currentArtist, followers: Number(followState.followerCount || 0) }
-                    : currentArtist);
+            const [mediaData] = await Promise.all([
+              getClientCachedData(`artist-media:${params.id}`, async () => {
+                const response = await fetch(`/api/dashboard/artists/${params.id}/media`);
+                if (!response.ok) return { media: [] };
+                return response.json();
+              }),
+              (async () => {
+                try {
+                  const followResponse = await fetch(`/api/artists/${params.id}/follow`, {
+                    headers: { 'x-subscriber-id': getSubscriberId() },
+                  });
+                  if (followResponse.ok) {
+                    const followState = await followResponse.json();
+                    if (!cancelled) {
+                      setIsFollowing(followState.following === true);
+                      setArtist((currentArtist) => currentArtist
+                        ? { ...currentArtist, followers: Number(followState.followerCount || 0) }
+                        : currentArtist);
+                    }
+                  }
+                } catch {
+                  // Following is optional; keep the artist page usable if the database is unavailable.
                 }
-              }
-            } catch {
-              // Following is optional; keep the artist page usable if the database is unavailable.
-            }
-          })();
+              })(),
+            ]);
+            if (cancelled) return;
+            const loadedTracks = (mediaData.media || []).filter((media: Track & { kind?: string }) => media.kind === 'track');
+            latestTrackId.current = loadedTracks[0]?.id || null;
+            setTracks(loadedTracks);
+          })().catch(() => {
+            // Media is optional; keep the artist profile available if it fails.
+          });
         }
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to load artist');
