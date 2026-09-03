@@ -87,7 +87,7 @@ function DownloadForm() {
     setLoadingFormats(true)
     setError('')
     try {
-      const response = await fetch(`/api/youtube/formats?id=${encodeURIComponent(videoId)}`)
+      const response = await fetch(`/api/youtube/formats?id=${encodeURIComponent(videoId)}`, { cache: 'no-store' })
       const payload = await response.json() as { title?: string; formats?: DownloadFormat[]; error?: string }
       if (!response.ok) throw new Error(payload.error || 'Unable to fetch downloadable formats.')
       setTitle(payload.title || '')

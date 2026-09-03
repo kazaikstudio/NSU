@@ -26,8 +26,38 @@ let activeController: AbortController | null = null;
 let paused = false;
 let cancelled = false;
 let controlsInstalled = false;
+let currentProgress = 0;
+let currentDownloadedBytes = 0;
+let currentTotalBytes: number | undefined;
 
 function emit(status: DownloadStatus) {
+  let previousEntries: Array<Record<string, unknown>> = [];
+  try {
+    const storedEntries = JSON.parse(window.localStorage.getItem('nsu-download-history') || '[]');
+    if (Array.isArray(storedEntries)) previousEntries = storedEntries;
+  } catch {
+    // Ignore malformed history and continue with the current download.
+  }
+  const previousEntry = previousEntries.find((entry) => entry.title === status.title);
+  const nextEntry = {
+    id: previousEntry?.id || `${status.title}-${Date.now()}`,
+    title: status.title,
+    status: status.status,
+    progress: status.progress ?? previousEntry?.progress,
+    downloadedBytes: status.downloadedBytes ?? previousEntry?.downloadedBytes,
+    totalBytes: status.totalBytes ?? previousEntry?.totalBytes,
+    paused: status.paused ?? false,
+    sourceVideoId: status.sourceVideoId,
+    sourceItag: status.sourceItag,
+    sourceExtension: status.sourceExtension,
+    sourceOutputBitrate: status.sourceOutputBitrate,
+    createdAt: previousEntry?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  window.localStorage.setItem('nsu-download-history', JSON.stringify([
+    nextEntry,
+    ...previousEntries.filter((entry) => entry.title !== status.title),
+  ].slice(0, 12)));
   window.dispatchEvent(new CustomEvent('nsu-download-status', { detail: status }));
 }
 
@@ -50,6 +80,9 @@ export function startYoutubeDownload(job: YoutubeDownloadJob) {
   activeJob = job;
   paused = false;
   cancelled = false;
+  currentProgress = 0;
+  currentDownloadedBytes = 0;
+  currentTotalBytes = job.totalBytes;
   void runDownload(job);
 }
 
@@ -86,9 +119,10 @@ function emitStatus(isPaused: boolean) {
   emit({
     status: 'downloading',
     title: activeJob.title,
-    progress: undefined,
     paused: isPaused,
-    totalBytes: activeJob.totalBytes,
+    progress: currentProgress,
+    downloadedBytes: currentDownloadedBytes,
+    totalBytes: currentTotalBytes,
     sourceVideoId: activeJob.videoId,
     sourceItag: activeJob.itag,
     sourceExtension: activeJob.extension,
@@ -115,6 +149,7 @@ async function runDownload(job: YoutubeDownloadJob) {
     }
 
     const totalBytes = Number(response.headers.get('content-length')) || job.totalBytes;
+    currentTotalBytes = totalBytes;
     const reader = response.body?.getReader();
     if (!reader) throw new Error('Unable to start download.');
 
@@ -131,8 +166,10 @@ async function runDownload(job: YoutubeDownloadJob) {
       if (!value) continue;
       chunks.push(value);
       downloadedBytes += value.length;
+      currentDownloadedBytes = downloadedBytes;
 
       const progress = totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : undefined;
+      if (typeof progress === 'number') currentProgress = progress;
       if (progress !== lastProgress || progress === undefined) {
         lastProgress = progress || lastProgress;
         emit({
@@ -151,7 +188,7 @@ async function runDownload(job: YoutubeDownloadJob) {
     }
 
     if (cancelled) return;
-    const blob = new Blob(chunks as BlobPart[], { type: 'audio/mpeg' });
+    const blob = new Blob(chunks as BlobPart[], { type: job.extension === 'mp3' ? 'audio/mpeg' : 'video/mp4' });
     const objectUrl = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = objectUrl;
@@ -187,5 +224,8 @@ async function runDownload(job: YoutubeDownloadJob) {
     activeJob = null;
     paused = false;
     cancelled = false;
+    currentProgress = 0;
+    currentDownloadedBytes = 0;
+    currentTotalBytes = undefined;
   }
 }
