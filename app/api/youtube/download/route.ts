@@ -13,6 +13,7 @@ import {
 import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { resolveAllowedOrigin } from '@/lib/request-origin';
 import { configureYoutubeEvaluator, getYoutubeSessionConfig } from '@/lib/youtube-client';
+import { getYoutubePageInfo, type YoutubePageInfo } from '@/lib/youtube-page';
 import {
   YoutubeDownloadError,
   getFfmpegDiagnostics,
@@ -59,7 +60,11 @@ async function getYoutubeVideoInfo(videoId: string) {
   }
 
   if (lastError) {
-    throw lastError;
+    try {
+      return { youtube: undefined, info: await getYoutubePageInfo(videoId), clientType: 'watch-page' as const };
+    } catch {
+      throw lastError;
+    }
   }
 
   throw new Error(`Unable to fetch YouTube metadata for ${videoId}`);
@@ -104,7 +109,7 @@ function setDiagnosticHeaders(response: Response, diagnosticCode: string) {
   return response;
 }
 
-async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>>, selectedFormat: { itag: number; url?: string }) {
+async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo, selectedFormat: { itag: number; url?: string }) {
   if (selectedFormat.url) {
     const directResponse = await fetch(selectedFormat.url, { redirect: 'follow' });
     if (directResponse.ok && directResponse.body) {
@@ -112,7 +117,8 @@ async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBas
     }
   }
 
-  return info.download({ itag: selectedFormat.itag });
+  if ('download' in info) return info.download({ itag: selectedFormat.itag });
+  throw new Error('The selected watch-page format has no direct stream URL.');
 }
 
 async function createStoredDownloadPath(filename: string, category: "audio" | "video") {
@@ -203,7 +209,7 @@ export async function GET(req: Request) {
       });
     }
 
-    let info: Awaited<ReturnType<Innertube['getBasicInfo']>>;
+    let info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo;
     try {
       ({ info } = await getYoutubeVideoInfo(id));
     } catch (error) {
@@ -451,7 +457,7 @@ export async function GET(req: Request) {
 
       let audioStream: ReadableStream<Uint8Array>;
       try {
-        audioStream = await info.download({ itag: audioSource.itag });
+        audioStream = await downloadSelectedFormat(info, audioSource);
       } catch (error) {
         throw new YoutubeDownloadError(502, {
           code: 'YOUTUBE_STREAM_FAILED',

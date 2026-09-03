@@ -5,6 +5,7 @@ import ffmpegPath from 'ffmpeg-static';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { configureYoutubeEvaluator, getYoutubeSessionConfig } from '@/lib/youtube-client';
+import { getYoutubePageInfo } from '@/lib/youtube-page';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,7 +45,11 @@ async function getYoutubeVideoInfo(videoId: string) {
   }
 
   if (lastError) {
-    throw lastError;
+    try {
+      return { youtube: undefined, info: await getYoutubePageInfo(videoId), clientType: 'watch-page' as const };
+    } catch {
+      throw lastError;
+    }
   }
 
   throw new Error(`Unable to fetch YouTube metadata for ${videoId}`);
