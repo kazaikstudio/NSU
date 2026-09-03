@@ -66,13 +66,15 @@ export async function getYoutubePageInfo(videoId: string): Promise<YoutubePageIn
   const pageUrls = [
     `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&hl=en`,
     `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?hl=en`,
+    `https://m.youtube.com/watch?v=${encodeURIComponent(videoId)}&hl=en`,
   ];
   let playerResponse: Record<string, unknown> | null = null;
   let lastError: Error | null = null;
 
-  for (const pageUrl of pageUrls) {
+  for (let attempt = 0; attempt < 2 && !playerResponse; attempt += 1) {
+    for (const pageUrl of pageUrls) {
     try {
-      const response = await fetch(pageUrl, {
+      const response = await fetch(`${pageUrl}${pageUrl.includes('?') ? '&' : '?'}_nsu=${Date.now()}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36' },
         cache: 'no-store',
       });
@@ -81,6 +83,7 @@ export async function getYoutubePageInfo(videoId: string): Promise<YoutubePageIn
       if (playerResponse) break;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
+    }
     }
   }
 
