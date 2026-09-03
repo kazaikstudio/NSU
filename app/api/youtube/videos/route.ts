@@ -19,17 +19,6 @@ type YouTubeVideo = {
   views?: number;
 };
 
-type Cached = {
-  expires: number;
-  data: {
-    videos: YouTubeVideo[];
-    shorts: YouTubeVideo[];
-  };
-};
-
-const cache = new Map<string, Cached>();
-const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
-
 let youtubeClientPromise: Promise<Innertube> | undefined;
 function getYoutubeClient() {
   youtubeClientPromise ??= Innertube.create({ client_type: ClientType.ANDROID_VR, retrieve_player: true });
@@ -45,6 +34,7 @@ async function fetchAllVideosWithInnertube(channelId: string): Promise<YouTubeVi
     if (channelId.startsWith("UC")) {
       const uploadPlaylistId = `UU${channelId.slice(2)}`;
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let pl = await (youtube as any).getPlaylist(uploadPlaylistId);
         const addItems = (items: unknown[]) => {
           for (const it of items) {
@@ -73,6 +63,7 @@ async function fetchAllVideosWithInnertube(channelId: string): Promise<YouTubeVi
 
     // If uploads not found or empty, fall back to searching the channel's name/id
     if (videos.length === 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let search = await (youtube as any).search(channelId);
       while (videos.length < 200) {
         const items = search?.contents || search?.results || search || [];
@@ -305,7 +296,7 @@ async function fetchAllVideos(channelId: string): Promise<YouTubeVideo[]> {
     }
 
     const res = await fetchWithTimeout(
-      `https://www.googleapis.com/youtube/v3/search?${params.toString()}`,
+      `https://www.googleapis.com/youtube/v3/playlistItems?${params.toString()}`,
       {},
       10000
     );
@@ -372,19 +363,12 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const channelId = url.searchParams.get("channelId") ?? DEFAULT_CHANNEL_ID;
 
-  const cached = cache.get(channelId);
-  const now = Date.now();
-  if (cached && cached.expires > now) {
-    return withCors(NextResponse.json({ videos: cached.data.videos, shorts: cached.data.shorts, fallback: false }), req);
-  }
-
   const apiKey = getYoutubeApiKey();
   if (!apiKey) {
     const videos = await fetchAllVideosWithInnertube(channelId);
     const rssVideos = videos.length > 0 ? videos : await fetchVideosFromRss(channelId).catch(() => []);
     const liveFeed = rssVideos.length > 0 ? { videos: rssVideos, shorts: [] } : null;
-    const fallbackFeed = liveFeed ?? cached?.data ?? getFallbackFeed();
-    cache.set(channelId, { expires: now + CACHE_TTL, data: fallbackFeed });
+    const fallbackFeed = liveFeed ?? getFallbackFeed();
     return withCors(
       NextResponse.json({ videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: !liveFeed }),
       req
@@ -397,14 +381,12 @@ export async function GET(req: Request) {
       videos,
       shorts: [],
     };
-    cache.set(channelId, { expires: now + CACHE_TTL, data: payload });
     return withCors(NextResponse.json({ videos: payload.videos, shorts: payload.shorts, fallback: false }), req);
   } catch (err: unknown) {
     const videos = await fetchAllVideosWithInnertube(channelId);
     const rssVideos = videos.length > 0 ? videos : await fetchVideosFromRss(channelId).catch(() => []);
     const liveFeed = rssVideos.length > 0 ? { videos: rssVideos, shorts: [] } : null;
-    const fallbackFeed = liveFeed ?? cached?.data ?? getFallbackFeed();
-    cache.set(channelId, { expires: now + CACHE_TTL, data: fallbackFeed });
+    const fallbackFeed = liveFeed ?? getFallbackFeed();
     const errorMessage =
       err instanceof Error ? err.message : "Unknown error occurred";
     console.warn(`YouTube videos fallback active: ${errorMessage}`);
