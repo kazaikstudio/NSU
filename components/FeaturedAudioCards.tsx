@@ -7,6 +7,7 @@ import {
   Play,
   Pause,
 } from 'lucide-react';
+import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
 
 export interface FeaturedAudioTrack {
   id: string;
@@ -88,7 +89,7 @@ export default function FeaturedAudioCards() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !hasClientCachedData('featured-audio'));
   const [isHovered, setIsHovered] = useState(false);
 
   // Like management states
@@ -103,8 +104,10 @@ export default function FeaturedAudioCards() {
 
     const loadFeaturedTracks = async () => {
       try {
-        const response = await fetch('/api/audio');
-        const data = await response.json();
+        const data = await getClientCachedData('featured-audio', async () => {
+          const response = await fetch('/api/audio');
+          return response.json();
+        });
         if (!cancelled) {
           const storageItems = Array.isArray(data.storageItems) ? data.storageItems : [];
           const loadedTracks: FeaturedAudioTrack[] =

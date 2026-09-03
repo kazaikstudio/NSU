@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Switchbutton from "../../components/Switchbutton";
 import HotComediesRowList from "../../components/HotComediesRowList";
 import DownloadModal from "../../components/DownloadModal";
+import { getClientCachedData, hasClientCachedData } from "@/lib/client-cache";
 
 type HomeMediaItem = {
   id: string;
@@ -46,7 +47,7 @@ const Home = () => {
   const [shortVideos, setShortVideos] = useState<HomeMediaItem[]>([]);
   const [talkShowUploads, setTalkShowUploads] = useState<HomeMediaItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<"official" | "short">("official");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !hasClientCachedData(`home:${CHANNEL_ID}`));
   const [error, setError] = useState("");
   const [activeDownloadVideoId, setActiveDownloadVideoId] = useState<string | null>(null);
   const [downloadPosition, setDownloadPosition] = useState<{ x: number; y: number } | null>(null);
@@ -95,29 +96,36 @@ const Home = () => {
         const endpoint = `/api/youtube/videos?channelId=${CHANNEL_ID}`;
         console.log("Fetching from:", endpoint);
 
-        const res = await fetch(endpoint);
-        const textResponse = await res.text();
+        const payload = await getClientCachedData(`home:${CHANNEL_ID}`, async () => {
+          const res = await fetch(endpoint);
+          const textResponse = await res.text();
 
-        let payload;
-        try {
-          payload = JSON.parse(textResponse);
-        } catch {
-          console.error("API did not return valid JSON:", textResponse);
-          throw new Error("API returned invalid JSON format (check server logs).");
-        }
+          let parsedPayload;
+          try {
+            parsedPayload = JSON.parse(textResponse);
+          } catch {
+            console.error("API did not return valid JSON:", textResponse);
+            throw new Error("API returned invalid JSON format (check server logs).");
+          }
 
-        if (!res.ok) {
-          throw new Error(payload?.error ?? `Server error status: ${res.status}`);
-        }
+          if (!res.ok) {
+            throw new Error(parsedPayload?.error ?? `Server error status: ${res.status}`);
+          }
 
-        const officialItems = (payload?.videos ?? []).map((v: Partial<HomeMediaItem> & { date?: string; source?: string }) => ({
+          const storageResponse = await fetch('/api/dashboard/storage?source=talk-show');
+          const storageData = (await storageResponse.json().catch(() => ({ items: [] }))) as { items?: TalkShowStorageItem[] };
+
+          return { payload: parsedPayload, storageItems: storageData.items || [] };
+        });
+
+        const officialItems = (payload.payload?.videos ?? []).map((v: Partial<HomeMediaItem> & { date?: string; source?: string }) => ({
           ...v,
           date: v.date ? new Date(v.date).toLocaleDateString("en-GB") : "",
           type: "official" as const,
           source: (v.source ?? "youtube") as HomeMediaItem["source"],
         })) as HomeMediaItem[];
 
-        const shortItems = (payload?.shorts ?? []).map((v: Partial<HomeMediaItem> & { date?: string }) => ({
+        const shortItems = (payload.payload?.shorts ?? []).map((v: Partial<HomeMediaItem> & { date?: string }) => ({
           ...v,
           date: v.date ? new Date(v.date).toLocaleDateString("en-GB") : "",
           type: "short" as const,
@@ -127,9 +135,7 @@ const Home = () => {
         setOfficialVideos(officialItems);
         setShortVideos(shortItems);
 
-        const storageResponse = await fetch('/api/dashboard/storage?source=talk-show');
-        const storageData = (await storageResponse.json().catch(() => ({ items: [] }))) as { items?: TalkShowStorageItem[] };
-        const uploads = (storageData.items || []).map((item) => ({
+        const uploads = payload.storageItems.map((item) => ({
           id: String(item.id),
           title: item.title || 'Talk Show Upload',
           thumbnail: getTalkShowThumbnailUrl(item.file_url) || 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" rx="32" fill="#111827"/><rect x="44" y="44" width="552" height="272" rx="24" fill="#1f2937"/><circle cx="320" cy="180" r="76" fill="#f43f5e"/><path d="M288 144l64 36-64 36z" fill="#fff"/><text x="320" y="270" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#f9fafb">Talk Show Upload</text></svg>`),

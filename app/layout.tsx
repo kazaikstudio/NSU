@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
+import ClientRequestCache from "@/components/ClientRequestCache";
 
 export const metadata: Metadata = {
   title: "Noll Studios - NSU | Creative Studio",
@@ -41,6 +42,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
+        <ClientRequestCache />
         {children}
       </body>
     </html>
