@@ -20,13 +20,17 @@ async function ensureMediaTable() {
       mime_type TEXT NOT NULL,
       file_url TEXT NOT NULL,
       drive_file_id TEXT,
+      thumbnail_url TEXT,
+      thumbnail_drive_file_id TEXT,
       download_count INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
   await pool.query(`
     ALTER TABLE artist_media
-    ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0
+    ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
+    ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT
   `);
 }
 
@@ -35,7 +39,7 @@ export async function GET(_request: Request, context: Context) {
   try {
     await ensureMediaTable();
     const { rows } = await pool.query(
-      `SELECT id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", download_count AS "downloadCount", created_at AS "createdAt"
+      `SELECT id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", download_count AS "downloadCount", created_at AS "createdAt"
        FROM artist_media WHERE artist_id = $1 ORDER BY created_at DESC`,
       [id]
     );
@@ -54,25 +58,61 @@ export async function PUT(request: Request, context: Context) {
       return NextResponse.json({ error: 'A media id is required' }, { status: 400 });
     }
 
-    const body = await request.json().catch(() => ({}));
-    const title = typeof body?.title === 'string' ? body.title.trim() : '';
-    const album = typeof body?.album === 'string' ? body.album.trim() : '';
+    const isMultipart = request.headers.get('content-type')?.includes('multipart/form-data');
+    const body = isMultipart ? await request.formData() : await request.json().catch(() => ({}));
+    const title = isMultipart
+      ? (body.get('title') as string | null)?.trim() || ''
+      : typeof body?.title === 'string' ? body.title.trim() : '';
+    const album = isMultipart
+      ? (body.get('album') as string | null)?.trim() || ''
+      : typeof body?.album === 'string' ? body.album.trim() : '';
+    const thumbnail = isMultipart ? body.get('thumbnail') : null;
 
-    if (!title) {
+    if (!title && !(thumbnail instanceof File)) {
       return NextResponse.json({ error: 'Track title is required' }, { status: 400 });
     }
 
     await ensureMediaTable();
-    const { rows } = await pool.query<{ id: string; kind: string; title: string; album: string | null; fileName: string; fileUrl: string; createdAt: string }>(
+    if (thumbnail instanceof File && !thumbnail.type.startsWith('image/')) {
+      return NextResponse.json({ error: 'Thumbnail must be an image' }, { status: 400 });
+    }
+
+    let thumbnailUrl: string | null = null;
+    let thumbnailDriveFileId: string | null = null;
+    if (thumbnail instanceof File) {
+      const driveFile = await uploadToGoogleDrive({
+        name: `artist-thumbnail-${Date.now()}-${thumbnail.name}`,
+        mimeType: thumbnail.type,
+        bytes: await thumbnail.arrayBuffer(),
+      });
+      thumbnailUrl = driveFile.publicUrl;
+      thumbnailDriveFileId = driveFile.id;
+    }
+
+    const previousThumbnail = thumbnail instanceof File
+      ? await pool.query<{ thumbnailUrl: string | null; thumbnailDriveFileId: string | null }>(
+        `SELECT thumbnail_url AS "thumbnailUrl", thumbnail_drive_file_id AS "thumbnailDriveFileId"
+         FROM artist_media WHERE id = $1 AND artist_id = $2`,
+        [mediaId, artistId]
+      )
+      : { rows: [] };
+
+    const { rows } = await pool.query<{ id: string; kind: string; title: string; album: string | null; fileName: string; fileUrl: string; thumbnailUrl: string | null; createdAt: string }>(
       `UPDATE artist_media
-       SET title = $1, album = $2
-       WHERE id = $3 AND artist_id = $4
-       RETURNING id, kind, title, album, file_name AS "fileName", file_url AS "fileUrl", created_at AS "createdAt"`,
-      [title, album || null, mediaId, artistId]
+       SET title = COALESCE(NULLIF($1, ''), title), album = COALESCE(NULLIF($2, ''), album),
+           thumbnail_url = COALESCE($3, thumbnail_url), thumbnail_drive_file_id = COALESCE($4, thumbnail_drive_file_id)
+       WHERE id = $5 AND artist_id = $6
+       RETURNING id, kind, title, album, file_name AS "fileName", file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", created_at AS "createdAt"`,
+      [title, album, thumbnailUrl, thumbnailDriveFileId, mediaId, artistId]
     );
 
     if (rows.length === 0) {
       return NextResponse.json({ error: 'Media not found' }, { status: 404 });
+    }
+
+    const previous = previousThumbnail.rows[0];
+    if (thumbnail instanceof File && previous?.thumbnailDriveFileId) {
+      await Promise.allSettled([deleteFromGoogleDrive(previous.thumbnailDriveFileId)]);
     }
 
     await recordActivity({
@@ -99,8 +139,8 @@ export async function DELETE(request: Request, context: Context) {
     }
 
     await ensureMediaTable();
-    const { rows } = await pool.query<{ id: string; driveFileId: string | null; kind: string }>(
-      `SELECT id, kind, drive_file_id AS "driveFileId" FROM artist_media WHERE id = $1 AND artist_id = $2`,
+    const { rows } = await pool.query<{ id: string; driveFileId: string | null; thumbnailDriveFileId: string | null; kind: string }>(
+      `SELECT id, kind, drive_file_id AS "driveFileId", thumbnail_drive_file_id AS "thumbnailDriveFileId" FROM artist_media WHERE id = $1 AND artist_id = $2`,
       [mediaId, artistId]
     );
 
@@ -109,8 +149,11 @@ export async function DELETE(request: Request, context: Context) {
     }
 
     const media = rows[0];
-    if (media.driveFileId) {
-      await Promise.allSettled([deleteFromGoogleDrive(media.driveFileId)]);
+    if (media.driveFileId || media.thumbnailDriveFileId) {
+      await Promise.allSettled([
+        ...(media.driveFileId ? [deleteFromGoogleDrive(media.driveFileId)] : []),
+        ...(media.thumbnailDriveFileId ? [deleteFromGoogleDrive(media.thumbnailDriveFileId)] : []),
+      ]);
     }
 
     await pool.query(`DELETE FROM artist_media WHERE id = $1 AND artist_id = $2`, [mediaId, artistId]);

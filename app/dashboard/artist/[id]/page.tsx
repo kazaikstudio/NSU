@@ -475,7 +475,7 @@ export default function ArtistDetailPage() {
 
       // Immediately update the UI with the new thumbnail URL
       if (data.media?.fileUrl) {
-        setTracks((prevTracks) => prevTracks.map((t) => t.id === track.id ? { ...t, fileUrl: data.media.fileUrl } : t));
+        setTracks((prevTracks) => prevTracks.map((t) => t.id === track.id ? { ...t, thumbnailUrl: data.media.thumbnailUrl } : t));
       }
 
       setProcessMessage('Thumbnail updated successfully.');
@@ -899,9 +899,9 @@ export default function ArtistDetailPage() {
                         <tr key={track.id} className="transition hover:bg-slate-900/40">
                           <td className="px-6 py-4">
                             <div className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800">
-                              {getAudioThumbnailUrl(track.fileUrl) ? (
+                              {(track.thumbnailUrl || getAudioThumbnailUrl(track.fileUrl)) ? (
                                 <img
-                                  src={getAudioThumbnailUrl(track.fileUrl) || undefined}
+                                  src={track.thumbnailUrl || getAudioThumbnailUrl(track.fileUrl) || undefined}
                                   alt={track.title}
                                   className="h-full w-full object-cover"
                                 />
