@@ -4,6 +4,8 @@ import { buildMegaShorts } from "@/lib/video-feed";
 import { resolveAllowedOrigin } from '@/lib/request-origin';
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const DEFAULT_CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
 
