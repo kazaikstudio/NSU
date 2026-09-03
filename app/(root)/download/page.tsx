@@ -275,7 +275,7 @@ function DownloadForm() {
                   <div className="aspect-video w-full">
                     <iframe
                       title={title ? `Preview of ${title}` : 'YouTube video preview'}
-                      src={`https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0`}
+                      src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0`}
                       className="h-full w-full"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                       allowFullScreen
