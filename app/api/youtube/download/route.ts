@@ -14,6 +14,7 @@ import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/downl
 import { resolveAllowedOrigin } from '@/lib/request-origin';
 import { configureYoutubeEvaluator, getYoutubeSessionConfig } from '@/lib/youtube-client';
 import { getYoutubePageInfo, type YoutubePageInfo } from '@/lib/youtube-page';
+import { getYoutubeDlpInfo, type DlpInfo } from '@/lib/youtube-dlp';
 import {
   YoutubeDownloadError,
   getFfmpegDiagnostics,
@@ -39,6 +40,13 @@ const YOUTUBE_CLIENT_TYPES = [
 
 async function getYoutubeVideoInfo(videoId: string) {
   let lastError: unknown;
+
+  try {
+    const info = await getYoutubeDlpInfo(videoId);
+    return { youtube: undefined, info, clientType: 'yt-dlp' as const };
+  } catch (error) {
+    lastError = error;
+  }
 
   try {
     const pageInfo = await getYoutubePageInfo(videoId);
@@ -130,7 +138,7 @@ function setDiagnosticHeaders(response: Response, diagnosticCode: string) {
   return response;
 }
 
-async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo, selectedFormat: { itag: number; url?: string }) {
+async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo | DlpInfo, selectedFormat: { itag: number; url?: string }) {
   if (selectedFormat.url) {
     const directResponse = await fetch(selectedFormat.url, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
@@ -233,7 +241,7 @@ export async function GET(req: Request) {
       });
     }
 
-    let info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo;
+    let info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo | DlpInfo;
     try {
       ({ info } = await getYoutubeVideoInfo(id));
     } catch (error) {

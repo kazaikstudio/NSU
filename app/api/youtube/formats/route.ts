@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { configureYoutubeEvaluator, getYoutubeSessionConfig } from '@/lib/youtube-client';
 import { getYoutubePageInfo } from '@/lib/youtube-page';
+import { getYoutubeDlpInfo } from '@/lib/youtube-dlp';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,13 @@ const YOUTUBE_CLIENT_TYPES = [
 
 async function getYoutubeVideoInfo(videoId: string) {
   let lastError: unknown;
+
+  try {
+    const info = await getYoutubeDlpInfo(videoId);
+    return { youtube: undefined, info, clientType: 'yt-dlp' as const };
+  } catch (error) {
+    lastError = error;
+  }
 
   try {
     const pageInfo = await getYoutubePageInfo(videoId);

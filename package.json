@@ -26,6 +26,7 @@
     "react-dom": "19.2.4",
     "shadcn": "^4.15.0",
     "tailwind-merge": "^3.6.0",
+    "youtube-dl-exec": "^3.1.14",
     "youtubei.js": "^18.0.0"
   },
   "devDependencies": {
