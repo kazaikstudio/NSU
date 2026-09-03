@@ -1,11 +1,42 @@
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://nollstudios.org',
+  'https://www.nollstudios.org',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ];
 
 function normalizeOrigin(origin: string) {
   return origin.trim().replace(/\/$/, '');
+}
+
+function expandHostnameVariants(value: string) {
+  const normalized = normalizeOrigin(value);
+  if (!normalized) return [];
+
+  try {
+    const url = new URL(normalized);
+    const host = url.hostname.toLowerCase();
+    const variants = new Set<string>([`${url.protocol}//${host}`]);
+
+    if (host === 'nollstudios.org') {
+      variants.add('https://nollstudios.org');
+      variants.add('https://www.nollstudios.org');
+    }
+
+    if (host === 'www.nollstudios.org') {
+      variants.add('https://nollstudios.org');
+      variants.add('https://www.nollstudios.org');
+    }
+
+    if (host.endsWith('.railway.app')) {
+      variants.add(`https://${host}`);
+      variants.add(`https://www.${host}`);
+    }
+
+    return Array.from(variants);
+  } catch {
+    return [normalized];
+  }
 }
 
 export function getAllowedOrigins() {
@@ -17,7 +48,8 @@ export function getAllowedOrigins() {
     process.env.APP_URL,
   ].filter((value): value is string => Boolean(value && value.trim()));
 
-  return Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...configured.map(normalizeOrigin)]));
+  const expanded = configured.flatMap(expandHostnameVariants);
+  return Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...expanded.map(normalizeOrigin)]));
 }
 
 export function resolveAllowedOrigin(origin: string | null) {
