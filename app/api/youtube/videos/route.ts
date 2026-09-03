@@ -84,6 +84,46 @@ async function fetchAllVideosWithInnertube(channelId: string): Promise<YouTubeVi
   }
 }
 
+function decodeXml(value: string) {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+async function fetchVideosFromRss(channelId: string): Promise<YouTubeVideo[]> {
+  const response = await fetchWithTimeout(
+    `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`,
+    { headers: { Accept: 'application/atom+xml' } },
+    10000,
+  );
+  if (!response.ok) throw new Error(`YouTube RSS returned status ${response.status}`);
+
+  const xml = await response.text();
+  return Array.from(xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)).map((match) => match[1]).flatMap((entry) => {
+    const videoId = entry.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)?.[1];
+    if (!videoId) return [];
+
+    const title = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] || videoId;
+    const published = entry.match(/<published>([^<]+)<\/published>/)?.[1] || '';
+    const thumbnail = entry.match(/<media:thumbnail[^>]+url="([^"]+)"/)?.[1] ||
+      `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+    return [{
+      id: videoId,
+      title: decodeXml(title),
+      subtitle: '',
+      thumbnail: decodeXml(thumbnail),
+      date: published,
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+      type: 'official' as const,
+      durationSeconds: 0,
+    }];
+  });
+}
+
 function getFallbackFeed() {
   const fallbackVideos: YouTubeVideo[] = [
     {
@@ -325,10 +365,13 @@ export async function GET(req: Request) {
 
   const apiKey = getYoutubeApiKey();
   if (!apiKey) {
-    const fallbackFeed = cached?.data ?? getFallbackFeed();
+    const videos = await fetchAllVideosWithInnertube(channelId);
+    const rssVideos = videos.length > 0 ? videos : await fetchVideosFromRss(channelId).catch(() => []);
+    const liveFeed = rssVideos.length > 0 ? { videos: rssVideos, shorts: [] } : null;
+    const fallbackFeed = liveFeed ?? cached?.data ?? getFallbackFeed();
     cache.set(channelId, { expires: now + CACHE_TTL, data: fallbackFeed });
     return withCors(
-      NextResponse.json({ videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: true }),
+      NextResponse.json({ videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: !liveFeed }),
       req
     );
   }
@@ -342,13 +385,16 @@ export async function GET(req: Request) {
     cache.set(channelId, { expires: now + CACHE_TTL, data: payload });
     return withCors(NextResponse.json({ videos: payload.videos, shorts: payload.shorts, fallback: false }), req);
   } catch (err: unknown) {
-    const fallbackFeed = cached?.data ?? getFallbackFeed();
+    const videos = await fetchAllVideosWithInnertube(channelId);
+    const rssVideos = videos.length > 0 ? videos : await fetchVideosFromRss(channelId).catch(() => []);
+    const liveFeed = rssVideos.length > 0 ? { videos: rssVideos, shorts: [] } : null;
+    const fallbackFeed = liveFeed ?? cached?.data ?? getFallbackFeed();
     cache.set(channelId, { expires: now + CACHE_TTL, data: fallbackFeed });
     const errorMessage =
       err instanceof Error ? err.message : "Unknown error occurred";
     console.warn(`YouTube videos fallback active: ${errorMessage}`);
     return withCors(
-      NextResponse.json({ videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: true, error: errorMessage }),
+      NextResponse.json({ videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: !liveFeed, error: errorMessage }),
       req
     );
   }
