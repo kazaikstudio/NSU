@@ -1,6 +1,7 @@
 'use client';
 
 import { useLayoutEffect } from 'react';
+import { installYoutubeDownloadControls } from '@/lib/youtube-download-manager';
 
 const cache = new Map<string, Promise<{ body: ArrayBuffer; headers: [string, string][]; status: number; statusText: string }>>();
 let originalFetch: typeof window.fetch | null = null;
@@ -48,6 +49,7 @@ function installFetchCache() {
 export default function ClientRequestCache() {
   useLayoutEffect(() => {
     installFetchCache();
+    installYoutubeDownloadControls();
   }, []);
 
   return null;

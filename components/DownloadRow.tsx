@@ -44,6 +44,7 @@ interface DownloadRowProps {
 export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, onRetry }: DownloadRowProps) {
   const progressValue = typeof entry.progress === 'number' ? Math.max(0, Math.min(100, entry.progress)) : undefined;
   const isActive = entry.status === 'downloading';
+  const canResume = Boolean(entry.sourceVideoId && typeof entry.sourceItag === 'number' && entry.sourceExtension);
   const progressLabel = entry.paused ? 'Paused' : typeof progressValue === 'number' ? `${Math.round(progressValue)}%` : 'Preparing...';
   const sizeLabel = entry.totalBytes
     ? `${formatBytes(entry.downloadedBytes)} / ${formatBytes(entry.totalBytes)}`
@@ -69,10 +70,13 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
                           {sizeLabel}
                         </div>
                       </div>
-                      {onTogglePause ? (
+                      {onTogglePause && canResume ? (
                         <button
                           type="button"
-                          onClick={() => onTogglePause(entry)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onTogglePause(entry);
+                          }}
                           aria-label={entry.paused ? 'Resume download' : 'Pause download'}
                           title={entry.paused ? 'Resume' : 'Pause'}
                           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-400/20 bg-amber-400/10 text-amber-300 transition-all duration-200 hover:scale-105 hover:border-amber-400/40 hover:bg-amber-400/20 hover:text-amber-200 active:scale-95 sm:h-9 sm:w-9 sm:rounded-xl"
@@ -87,9 +91,12 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
                       {onCancel ? (
                         <button
                           type="button"
-                          onClick={() => onCancel(entry)}
-                          aria-label="Cancel download"
-                          title="Cancel"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onCancel(entry);
+                          }}
+                          aria-label="Abort download"
+                          title="Abort"
                           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 transition-all duration-200 hover:scale-105 hover:border-rose-500/40 hover:bg-rose-500/20 hover:text-rose-200 active:scale-95 sm:h-9 sm:w-9 sm:rounded-xl"
                         >
                           <X size={13} className="sm:h-3.5 sm:w-3.5" />

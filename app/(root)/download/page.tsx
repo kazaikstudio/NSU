@@ -1,9 +1,10 @@
 'use client'
 
-import { FormEvent, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { FormEvent, Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Download, Link as LinkIcon } from 'lucide-react'
 import Switchbutton from '../../../components/Switchbutton'
+import { startYoutubeDownload } from '@/lib/youtube-download-manager'
 
 function getVideoId(value: string) {
   const trimmedValue = value.trim()
@@ -40,11 +41,6 @@ type DownloadFormat = {
   size: number | null
 }
 
-type DownloadControlDetail = {
-  title: string
-  action: 'pause' | 'resume' | 'cancel'
-}
-
 type DownloadRetryDetail = {
   title: string
   videoId: string
@@ -63,12 +59,6 @@ function DownloadForm() {
   const [loadingFormat, setLoadingFormat] = useState<number | null>(null)
   const [loadingDirectDownload, setLoadingDirectDownload] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
-  const progressRef = useRef(0)
-  const abortControllerRef = useRef<AbortController | null>(null)
-  const activeDownloadRef = useRef<{ title: string; format: DownloadFormat; videoId: string } | null>(null)
-  const chunksRef = useRef<Uint8Array[]>([])
-  const pausedRef = useRef(false)
-
   const emitDownloadHistory = (payload: {
     status: 'downloading' | 'done' | 'error'
     title: string
@@ -153,130 +143,45 @@ function DownloadForm() {
     }
   }, [source])
 
-  const handleDownload = useCallback(async (format: DownloadFormat, options?: { resume?: boolean; videoId?: string }) => {
+  const handleDownload = useCallback((format: DownloadFormat, options?: { resume?: boolean; videoId?: string }) => {
     const videoId = options?.videoId || getVideoId(source)
     if (!videoId) return
 
     const historyTitle = title || `youtube-${videoId}`
-    activeDownloadRef.current = { title: historyTitle, format, videoId }
-
     if (!options?.resume) {
-      chunksRef.current = []
       setLoadingFormat(format.itag)
       setDownloadProgress(0)
-      progressRef.current = 0
-      pausedRef.current = false
-      emitDownloadHistory({ status: 'downloading', title: historyTitle, progress: 0, paused: false, totalBytes: format.size ?? undefined, downloadedBytes: 0, sourceVideoId: videoId, sourceItag: format.itag, sourceExtension: format.extension, sourceOutputBitrate: format.outputBitrate })
-    } else {
-      setLoadingFormat(format.itag)
-      emitDownloadHistory({ status: 'downloading', title: historyTitle, progress: progressRef.current, paused: false, totalBytes: format.size ?? undefined, sourceVideoId: videoId, sourceItag: format.itag, sourceExtension: format.extension, sourceOutputBitrate: format.outputBitrate })
+      emitDownloadHistory({
+        status: 'downloading',
+        title: historyTitle,
+        progress: 0,
+        paused: false,
+        totalBytes: format.size ?? undefined,
+        downloadedBytes: 0,
+        sourceVideoId: videoId,
+        sourceItag: format.itag,
+        sourceExtension: format.extension,
+        sourceOutputBitrate: format.outputBitrate,
+      })
     }
-
-    try {
-      const downloadUrl = `/api/youtube/download?id=${encodeURIComponent(videoId)}&itag=${format.itag}&output=${format.extension}&bitrate=${format.outputBitrate || ''}`
-      const filename = `${historyTitle}.${format.extension || 'mp4'}`
-
-      const controller = new AbortController()
-      abortControllerRef.current = controller
-      const response = await fetch(downloadUrl, { signal: controller.signal, cache: 'no-store' })
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}))
-        throw new Error(payload.error || response.statusText || 'Unable to download this video.')
-      }
-
-      const total = Number(response.headers.get('content-length'))
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('Unable to start download.')
-
-      const chunks = chunksRef.current
-      let loaded = 0
-      let lastProgress = 0
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        if (value) {
-          chunks.push(value)
-          loaded += value.length
-          if (total && total > 0) {
-            const nextProgress = Math.min(100, Math.round((loaded / total) * 100))
-            if (nextProgress !== lastProgress) {
-              lastProgress = nextProgress
-              progressRef.current = nextProgress
-              setDownloadProgress(nextProgress)
-              emitDownloadHistory({ status: 'downloading', title: historyTitle, progress: nextProgress, paused: false, downloadedBytes: loaded, totalBytes: total || format.size || undefined, sourceVideoId: videoId, sourceItag: format.itag, sourceExtension: format.extension, sourceOutputBitrate: format.outputBitrate })
-            }
-          }
-        }
-      }
-
-      const blob = new Blob(chunks as BlobPart[])
-      const anchor = document.createElement('a')
-      anchor.href = URL.createObjectURL(blob)
-      anchor.download = filename
-      anchor.style.display = 'none'
-      document.body.appendChild(anchor)
-      anchor.click()
-      anchor.remove()
-      URL.revokeObjectURL(anchor.href)
-
-      setDownloadProgress(100)
-      progressRef.current = 100
-      chunksRef.current = []
-      activeDownloadRef.current = null
-      emitDownloadHistory({ status: 'done', title: historyTitle, progress: 100, paused: false, downloadedBytes: blob.size, totalBytes: blob.size, sourceVideoId: videoId, sourceItag: format.itag, sourceExtension: format.extension, sourceOutputBitrate: format.outputBitrate })
-    } catch (downloadError) {
-      if (downloadError instanceof Error && downloadError.name === 'AbortError' && pausedRef.current) {
-        return
-      }
-      const currentProgress = progressRef.current
-      setError(downloadError instanceof Error ? downloadError.message : 'Unable to download this video.')
-      chunksRef.current = []
-      activeDownloadRef.current = null
-      emitDownloadHistory({ status: 'error', title: historyTitle, progress: currentProgress, paused: false, sourceVideoId: videoId, sourceItag: format.itag, sourceExtension: format.extension, sourceOutputBitrate: format.outputBitrate })
-    } finally {
-      abortControllerRef.current = null
-      if (!pausedRef.current) {
-        setLoadingFormat(null)
-      }
-    }
+    startYoutubeDownload({
+      title: historyTitle,
+      videoId,
+      itag: format.itag,
+      extension: format.extension,
+      outputBitrate: format.outputBitrate,
+      totalBytes: format.size ?? undefined,
+    })
   }, [source, title])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const handleDownloadControl = (event: Event) => {
-      const detail = (event as CustomEvent<DownloadControlDetail>).detail
-      const activeDownload = activeDownloadRef.current
-      if (!detail || !activeDownload || detail.title !== activeDownload.title) return
-
-      if (detail.action === 'pause') {
-        pausedRef.current = true
-        abortControllerRef.current?.abort()
-        emitDownloadHistory({
-          status: 'downloading',
-          title: activeDownload.title,
-          progress: progressRef.current,
-          paused: true,
-        })
-        return
-      }
-
-      if (detail.action === 'cancel') {
-        pausedRef.current = false
-        abortControllerRef.current?.abort()
-        chunksRef.current = []
-        activeDownloadRef.current = null
-        setLoadingFormat(null)
-        setDownloadProgress(0)
-        progressRef.current = 0
-        return
-      }
-
-      if (detail.action === 'resume') {
-        pausedRef.current = false
-        void handleDownload(activeDownload.format, { resume: true })
-      }
+    const handleDownloadStatus = (event: Event) => {
+      const detail = (event as CustomEvent<{ title?: string; status?: string; progress?: number }>).detail
+      if (!detail?.title || detail.title !== title) return
+      if (typeof detail.progress === 'number') setDownloadProgress(detail.progress)
+      if (detail.status === 'done' || detail.status === 'error') setLoadingFormat(null)
     }
 
     const handleDownloadRetry = (event: Event) => {
@@ -298,13 +203,13 @@ function DownloadForm() {
       )
     }
 
-    window.addEventListener('nsu-download-control', handleDownloadControl as EventListener)
+    window.addEventListener('nsu-download-status', handleDownloadStatus as EventListener)
     window.addEventListener('nsu-download-retry', handleDownloadRetry as EventListener)
     return () => {
-      window.removeEventListener('nsu-download-control', handleDownloadControl as EventListener)
+      window.removeEventListener('nsu-download-status', handleDownloadStatus as EventListener)
       window.removeEventListener('nsu-download-retry', handleDownloadRetry as EventListener)
     }
-  }, [handleDownload])
+  }, [handleDownload, title])
 
   const handleFormatButtonClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
     const button = event.currentTarget
