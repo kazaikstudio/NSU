@@ -76,12 +76,21 @@ export async function getYoutubePageInfo(videoId: string): Promise<YoutubePageIn
   const mapFormats = (value: unknown) => Array.isArray(value)
     ? value.map((format) => normalizeFormat(format as Record<string, unknown>)).filter((format) => format.itag > 0)
     : [];
+  const formats = mapFormats(streamingData.formats);
+  const adaptiveFormats = mapFormats(streamingData.adaptiveFormats);
+  const serverAbrUrl = typeof streamingData.serverAbrStreamingUrl === 'string'
+    ? streamingData.serverAbrStreamingUrl.replaceAll('\\u0026', '&')
+    : undefined;
+  if (serverAbrUrl && !adaptiveFormats.some((format) => format.url)) {
+    const audioFormat = adaptiveFormats.find((format) => format.has_audio && !format.has_video);
+    if (audioFormat) audioFormat.url = serverAbrUrl;
+  }
 
   return {
     basic_info: { title: (playerResponse?.videoDetails as Record<string, unknown> | undefined)?.title as string | undefined },
     streaming_data: {
-      formats: mapFormats(streamingData.formats),
-      adaptive_formats: mapFormats(streamingData.adaptiveFormats),
+      formats,
+      adaptive_formats: adaptiveFormats,
     },
   };
 }

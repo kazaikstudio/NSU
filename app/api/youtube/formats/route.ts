@@ -35,7 +35,15 @@ async function getYoutubeVideoInfo(videoId: string) {
       const info = await youtube.getBasicInfo(videoId);
       const formatCount = (info.streaming_data?.formats?.length ?? 0) + (info.streaming_data?.adaptive_formats?.length ?? 0);
       if (formatCount > 0) {
-        return { youtube, info, clientType };
+        const formats = [...(info.streaming_data?.formats || []), ...(info.streaming_data?.adaptive_formats || [])];
+        if (formats.some((format) => format.url)) {
+          return { youtube, info, clientType };
+        }
+        try {
+          return { youtube: undefined, info: await getYoutubePageInfo(videoId), clientType: 'watch-page' as const };
+        } catch {
+          return { youtube, info, clientType };
+        }
       }
 
       lastError = new Error(`No playable stream metadata for ${videoId} using ${String(clientType)}`);
