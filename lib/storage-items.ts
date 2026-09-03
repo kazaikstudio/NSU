@@ -4,6 +4,7 @@ export interface StorageItemLike {
   type: string;
   file_url?: string;
   fileUrl?: string;
+  thumbnail_url?: string;
   created_at?: string;
   createdAt?: string;
 }

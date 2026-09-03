@@ -28,6 +28,7 @@ interface Track {
   album: string;
   fileName: string;
   fileUrl?: string;
+  thumbnailUrl?: string;
   createdAt?: string;
   uploadedAt: string;
 }
@@ -46,6 +47,15 @@ function getPlayableAudioUrl(url: string | null | undefined) {
 
   const match = url.match(/[?&]id=([^&]+)/);
   return match?.[1] ? `/api/dashboard/media/${match[1]}` : url;
+}
+
+function getAudioThumbnailUrl(fileUrl: string | null | undefined) {
+  if (!fileUrl) return null;
+
+  const match = fileUrl.match(/[?&]id=([^&]+)/) || fileUrl.match(/\/api\/dashboard\/media\/([^/?]+)/);
+  return match?.[1]
+    ? `https://drive.google.com/thumbnail?id=${match[1]}&sz=w320`
+    : null;
 }
 
 export default function ArtistDetailPage() {
@@ -119,6 +129,10 @@ export default function ArtistDetailPage() {
   const [trackTitleDraft, setTrackTitleDraft] = useState('');
   const [trackAlbumDraft, setTrackAlbumDraft] = useState('');
 
+  // Thumbnail editing state
+  const [changingThumbnailId, setChangingThumbnailId] = useState<string | null>(null);
+  const thumbnailInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
   useEffect(() => {
     let ignore = false;
 
@@ -169,6 +183,7 @@ export default function ArtistDetailPage() {
                 album: item.album || 'Single',
                 fileName: item.fileName,
                 fileUrl: item.fileUrl,
+                thumbnailUrl: item.thumbnailUrl,
                 uploadedAt: new Date(item.uploadedAt || item.createdAt || new Date().toISOString()).toISOString().split('T')[0],
               })));
             }
@@ -429,6 +444,41 @@ export default function ArtistDetailPage() {
     } catch (error) {
       setProcessMessage(error instanceof Error ? error.message : 'Unable to update track information.');
       setTimeout(() => setProcessMessage(''), 3000);
+    }
+  };
+
+  const handleThumbnailChange = async (track: Track, file: File) => {
+    if (!file.type.startsWith('image/')) {
+      window.alert('Please select a valid image file');
+      return;
+    }
+
+    setChangingThumbnailId(track.id);
+    const formData = new FormData();
+    formData.append('thumbnail', file);
+
+    try {
+      const response = await fetch(`/api/dashboard/artists/${params.id}/media?mediaId=${encodeURIComponent(track.id)}`, {
+        method: 'PUT',
+        body: formData,
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Unable to update thumbnail');
+
+      // Immediately update the UI with the new thumbnail URL
+      if (data.media?.fileUrl) {
+        setTracks((prevTracks) => prevTracks.map((t) => t.id === track.id ? { ...t, fileUrl: data.media.fileUrl } : t));
+      }
+
+      setProcessMessage('Thumbnail updated successfully.');
+      setTimeout(() => setProcessMessage(''), 3000);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Unable to update thumbnail');
+      setProcessMessage('Thumbnail update failed.');
+      setTimeout(() => setProcessMessage(''), 3000);
+    } finally {
+      setChangingThumbnailId(null);
     }
   };
 
@@ -815,6 +865,7 @@ export default function ArtistDetailPage() {
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-slate-800 bg-slate-900/50 text-xs uppercase tracking-wider text-slate-400">
                     <tr>
+                      <th className="px-6 py-3.5">Thumbnail</th>
                       <th className="px-6 py-3.5">Title</th>
                       <th className="px-6 py-3.5">Play</th>
                       <th className="px-6 py-3.5">Album</th>
@@ -826,7 +877,7 @@ export default function ArtistDetailPage() {
                   <tbody className="divide-y divide-slate-800">
                     {tracks.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <svg className="h-8 w-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
@@ -839,6 +890,45 @@ export default function ArtistDetailPage() {
                     ) : (
                       tracks.map((track) => (
                         <tr key={track.id} className="transition hover:bg-slate-900/40">
+                          <td className="px-6 py-4">
+                            <div className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800">
+                              {getAudioThumbnailUrl(track.fileUrl) ? (
+                                <img
+                                  src={getAudioThumbnailUrl(track.fileUrl) || undefined}
+                                  alt={track.title}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center text-slate-500">
+                                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                  </svg>
+                                </div>
+                              )}
+                              {/* Thumbnail Edit Overlay */}
+                              <label className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/70 opacity-0 transition group-hover:opacity-100 cursor-pointer text-[10px] font-medium text-white text-center px-1">
+                                <svg className="h-4 w-4 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                {changingThumbnailId === track.id ? 'Updating...' : 'Change'}
+                                <input
+                                  ref={(el) => {
+                                    if (el) thumbnailInputRefs.current[track.id] = el;
+                                  }}
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    if (e.target.files?.[0]) {
+                                      void handleThumbnailChange(track, e.target.files[0]);
+                                    }
+                                  }}
+                                  className="hidden"
+                                  disabled={changingThumbnailId !== null}
+                                />
+                              </label>
+                            </div>
+                          </td>
                           <td className="px-6 py-4 font-medium text-white">
                             {editingTrackId === track.id ? (
                               <div className="flex flex-col gap-2">
@@ -855,16 +945,9 @@ export default function ArtistDetailPage() {
                                 />
                               </div>
                             ) : (
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600/20 text-indigo-400">
-                                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
-                                  </svg>
-                                </div>
-                                <div>
-                                  <div>{track.title}</div>
-                                  <div className="text-xs text-slate-500">{track.album}</div>
-                                </div>
+                              <div>
+                                <div>{track.title}</div>
+                                <div className="text-xs text-slate-500">{track.album}</div>
                               </div>
                             )}
                           </td>

@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 import path from 'path';
 import os from 'os';
 import { promises as fs } from 'fs';
-import { deleteFromGoogleDrive } from '@/lib/google-drive';
+import { deleteFromGoogleDrive, getTalkShowGoogleConfig, saveFileLocally, uploadToGoogleDrive } from '@/lib/google-drive';
 import { deleteInMemoryStorageItem, updateInMemoryStorageItemTitle } from '@/lib/storage-items';
 import { getDatabaseConnectionString } from '@/lib/db';
 
@@ -24,10 +24,12 @@ async function ensureStorageTable() {
         type TEXT NOT NULL,
         file_url TEXT NOT NULL,
         source TEXT NOT NULL DEFAULT 'talk-show',
+        thumbnail_url TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
     await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'talk-show'`);
+    await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
   } finally {
     client.release();
   }
@@ -37,22 +39,38 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   const { id } = await context.params;
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
-  const body = await request.json().catch(() => ({}));
-  const title = typeof body?.title === 'string' ? body.title.trim() : '';
-  if (!title) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+  const isMultipart = request.headers.get('content-type')?.includes('multipart/form-data');
+  const body = isMultipart ? await request.formData() : await request.json().catch(() => ({}));
+  const title = isMultipart
+    ? (body.get('title') as string | null)?.trim() || ''
+    : typeof body?.title === 'string' ? body.title.trim() : '';
+  const thumbnail = isMultipart ? body.get('thumbnail') : null;
+  if (!title && !(thumbnail instanceof File)) return NextResponse.json({ error: 'Title or thumbnail is required' }, { status: 400 });
+
+  let thumbnailUrl: string | undefined;
+  if (thumbnail instanceof File) {
+    if (!thumbnail.type.startsWith('image/')) return NextResponse.json({ error: 'Thumbnail must be an image' }, { status: 400 });
+    try {
+      const driveFile = await uploadToGoogleDrive({ name: `thumbnail-${Date.now()}-${thumbnail.name}`, mimeType: thumbnail.type, bytes: await thumbnail.arrayBuffer() }, getTalkShowGoogleConfig());
+      thumbnailUrl = driveFile.publicUrl;
+    } catch {
+      const localFile = await saveFileLocally({ name: thumbnail.name, mimeType: thumbnail.type, bytes: await thumbnail.arrayBuffer() });
+      thumbnailUrl = localFile.publicUrl;
+    }
+  }
 
   if (!pool) {
     const updatedItem = updateInMemoryStorageItemTitle(id, title);
     if (!updatedItem) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    return NextResponse.json({ item: { id: updatedItem.id, title: updatedItem.title, type: updatedItem.type, file_url: updatedItem.file_url || updatedItem.fileUrl || '', created_at: updatedItem.created_at || updatedItem.createdAt || new Date().toISOString() } });
+    return NextResponse.json({ item: { id: updatedItem.id, title: updatedItem.title, type: updatedItem.type, file_url: updatedItem.file_url || updatedItem.fileUrl || '', thumbnail_url: thumbnailUrl || updatedItem.thumbnail_url, created_at: updatedItem.created_at || updatedItem.createdAt || new Date().toISOString() } });
   }
 
   try {
     await ensureStorageTable();
     const { rows } = await pool.query(
-      `UPDATE storage_items SET title = $1 WHERE id = $2 RETURNING id, title, type, file_url AS "fileUrl", source, created_at AS "createdAt"`,
-      [title, id]
+      `UPDATE storage_items SET title = COALESCE(NULLIF($1, ''), title), thumbnail_url = COALESCE($2, thumbnail_url) WHERE id = $3 RETURNING id, title, type, file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", source, created_at AS "createdAt"`,
+      [title, thumbnailUrl || null, id]
     );
 
     if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -64,6 +82,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         title: row.title,
         type: row.type,
         file_url: row.fileUrl,
+        thumbnail_url: row.thumbnailUrl,
         source: row.source,
         created_at: row.createdAt,
       },

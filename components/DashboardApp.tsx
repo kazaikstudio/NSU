@@ -4,7 +4,6 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LayoutDashboard, Users, History, HardDrive, LogOut, Video } from 'lucide-react';
 import { clampUploadProgress, formatUploadStatusMessage, shouldAutoUploadOnSelection } from '@/lib/talk-show-upload';
-import { updateStorageItemTitle } from '@/lib/storage-items';
 
 type NavPage = 'dashboard' | 'artists' | 'videos' | 'histories' | 'storage' | 'members';
 
@@ -39,6 +38,16 @@ interface StorageItem {
   type: string;
   file_url: string;
   created_at: string;
+  thumbnail_url?: string | null;
+}
+
+function getStorageThumbnailUrl(fileUrl: string, thumbnailUrl?: string | null) {
+  if (thumbnailUrl) return thumbnailUrl;
+
+  const driveId = fileUrl.match(/\/api\/dashboard\/media\/([^/?]+)/)?.[1]
+    || fileUrl.match(/[?&]id=([^&]+)/)?.[1];
+
+  return driveId ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveId)}&sz=w320` : null;
 }
 
 interface HistoryItem {
@@ -120,6 +129,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   const [editingStorageTitle, setEditingStorageTitle] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadMessage, setUploadMessage] = useState('');
+  const [changingThumbnailId, setChangingThumbnailId] = useState<string | null>(null);
   const [artistMessage, setArtistMessage] = useState('');
   const [memberMessage, setMemberMessage] = useState('');
 
@@ -355,7 +365,9 @@ export default function DashboardApp({ user }: { user?: User | null }) {
           throw new Error(data.error || 'Unable to update title');
         }
 
-        setStorageItems((prev) => updateStorageItemTitle(prev, editingStorageItemId, editingStorageTitle.trim() || itemToUpdate.title));
+        setStorageItems((prev) => prev.map((item) => item.id === editingStorageItemId
+          ? { ...item, title: editingStorageTitle.trim() || itemToUpdate.title }
+          : item));
         setEditingStorageItemId(null);
         setEditingStorageTitle('');
         setUploadTitle('');
@@ -406,6 +418,36 @@ export default function DashboardApp({ user }: { user?: User | null }) {
       setUploadMessage(error instanceof Error ? error.message : 'Unable to delete Talk Show upload.');
     }
   }, [editingStorageItemId]);
+
+  const handleThumbnailChange = useCallback(async (item: StorageItem, file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setUploadMessage('Thumbnail must be an image.');
+      return;
+    }
+
+    setChangingThumbnailId(item.id);
+    setUploadMessage('Uploading thumbnail...');
+    try {
+      const formData = new FormData();
+      formData.append('thumbnail', file);
+      const response = await fetch(`/api/dashboard/storage/${encodeURIComponent(item.id)}`, {
+        method: 'PUT',
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Unable to update thumbnail.');
+
+      setStorageItems((prev) => prev.map((current) => current.id === item.id
+        ? { ...current, thumbnail_url: data.item?.thumbnail_url || null }
+        : current));
+      setUploadMessage('Thumbnail updated successfully.');
+    } catch (error) {
+      setUploadMessage(error instanceof Error ? error.message : 'Unable to update thumbnail.');
+    } finally {
+      setChangingThumbnailId(null);
+    }
+  }, []);
 
   const handleUpdateStorageItem = useCallback(async (id: string) => {
     try {
@@ -923,6 +965,32 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                           isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-200 bg-white'
                         }`}
                       >
+                        <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-md border border-slate-700/60 bg-slate-900">
+                          {getStorageThumbnailUrl(item.file_url, item.thumbnail_url) ? (
+                            <img
+                              src={getStorageThumbnailUrl(item.file_url, item.thumbnail_url) || undefined}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-indigo-400" aria-hidden="true">
+                              <Video className="h-5 w-5" />
+                            </div>
+                          )}
+                          <label className="absolute inset-x-0 bottom-0 cursor-pointer bg-slate-950/80 px-1 py-0.5 text-center text-[9px] font-medium text-white opacity-0 transition hover:bg-slate-950 group-hover:opacity-100">
+                            {changingThumbnailId === item.id ? 'Uploading...' : 'Change thumbnail'}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={changingThumbnailId !== null}
+                              onChange={(event) => {
+                                void handleThumbnailChange(item, event.target.files?.[0]);
+                                event.target.value = '';
+                              }}
+                            />
+                          </label>
+                        </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="shrink-0 rounded bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-400">

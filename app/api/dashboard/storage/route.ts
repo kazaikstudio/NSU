@@ -29,6 +29,7 @@ async function ensureStorageTable() {
         title TEXT NOT NULL,
         type TEXT NOT NULL,
         file_url TEXT NOT NULL,
+        thumbnail_url TEXT,
         source TEXT NOT NULL DEFAULT 'talk-show',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
@@ -38,6 +39,7 @@ async function ensureStorageTable() {
       ALTER TABLE storage_items
       ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'talk-show'
     `);
+    await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
   } finally {
     client.release();
   }
@@ -90,7 +92,7 @@ export async function GET(request: Request) {
     await ensureStorageTable();
 
     let queryText = `
-      SELECT id, title, type, file_url AS "fileUrl", source, created_at AS "createdAt"
+      SELECT id, title, type, file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", source, created_at AS "createdAt"
       FROM storage_items`;
     const queryParams: string[] = [];
 
@@ -108,6 +110,7 @@ export async function GET(request: Request) {
         title: row.title,
         type: row.type,
         file_url: row.fileUrl,
+        thumbnail_url: row.thumbnailUrl,
           source: row.source,
         created_at: row.createdAt,
       })),
@@ -220,7 +223,7 @@ export async function POST(request: Request) {
       `
         INSERT INTO storage_items (id, title, type, file_url, source)
         VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, title, type, file_url AS "fileUrl", source, created_at AS "createdAt"
+        RETURNING id, title, type, file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", source, created_at AS "createdAt"
       `,
       [id, title, type, publicUrl, source]
     );
@@ -239,6 +242,7 @@ export async function POST(request: Request) {
         title: row.title,
         type: row.type,
         file_url: row.fileUrl,
+        thumbnail_url: row.thumbnailUrl,
         source: row.source,
         created_at: row.createdAt,
       },

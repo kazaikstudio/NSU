@@ -313,7 +313,7 @@ export default function AudioPlayer({
                 className={`flex-1 rounded-full transition-all duration-150 ${
                   isPassed
                     ? 'bg-amber-400 shadow-sm shadow-amber-400/30'
-                    : 'bg-Eltext1/60 group-hover:bg-card1/40'
+                    : 'bg-white'
                 } ${isPlaying && isPassed ? 'animate-pulse' : ''}`}
                 style={{ height: `${Math.max(20, height)}%` }}
               />
