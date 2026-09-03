@@ -1,6 +1,5 @@
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://nollstudios.org',
-  'https://www.nollstudios.org',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
 ];

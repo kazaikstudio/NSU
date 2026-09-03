@@ -73,7 +73,10 @@ export default function ArtistDetailPage() {
         if (!response.ok) {
           const isUnauthorized = response.status === 401 || response.status === 403;
           if (isUnauthorized && !cancelled) {
-            window.location.href = '/dashboard';
+            const storedUser = window.localStorage.getItem('nsu_user');
+            if (!storedUser) {
+              window.location.href = '/dashboard';
+            }
           }
           return;
         }
