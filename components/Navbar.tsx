@@ -10,6 +10,10 @@ interface DownloadNotice {
   status: 'downloading' | 'done' | 'error';
   title: string;
   progress?: number;
+  sourceVideoId?: string;
+  sourceItag?: number;
+  sourceExtension?: string;
+  sourceOutputBitrate?: number;
 }
 
 interface DownloadEntry {
@@ -17,6 +21,10 @@ interface DownloadEntry {
   title: string;
   status: 'downloading' | 'done' | 'error';
   progress?: number;
+  sourceVideoId?: string;
+  sourceItag?: number;
+  sourceExtension?: string;
+  sourceOutputBitrate?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,14 +73,19 @@ const Navbar = () => {
       setDownloadNotice(detail);
 
       setDownloadEntries((previousEntries) => {
+        const previousEntry = previousEntries.find((entry) => entry.title === detail.title);
         const nextEntries = previousEntries.filter((entry) => entry.title !== detail.title);
         const now = new Date().toISOString();
         const updatedEntry: DownloadEntry = {
-          id: previousEntries.find((entry) => entry.title === detail.title)?.id ?? `${detail.title}-${now}`,
+          id: previousEntry?.id ?? `${detail.title}-${now}`,
           title: detail.title,
           status: detail.status,
           progress: detail.progress,
-          createdAt: previousEntries.find((entry) => entry.title === detail.title)?.createdAt ?? now,
+          sourceVideoId: detail.sourceVideoId ?? previousEntry?.sourceVideoId,
+          sourceItag: detail.sourceItag ?? previousEntry?.sourceItag,
+          sourceExtension: detail.sourceExtension ?? previousEntry?.sourceExtension,
+          sourceOutputBitrate: detail.sourceOutputBitrate ?? previousEntry?.sourceOutputBitrate,
+          createdAt: previousEntry?.createdAt ?? now,
           updatedAt: now,
         };
 
