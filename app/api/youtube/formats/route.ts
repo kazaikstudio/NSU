@@ -4,9 +4,12 @@ import { getFfmpegDiagnostics, getRuntimeDiagnostics } from '@/lib/youtube-downl
 import ffmpegPath from 'ffmpeg-static';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { configureYoutubeEvaluator } from '@/lib/youtube-client';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+configureYoutubeEvaluator();
 
 const YOUTUBE_CLIENT_TYPES = [ClientType.ANDROID_VR, ClientType.WEB, ClientType.IOS] as const;
 

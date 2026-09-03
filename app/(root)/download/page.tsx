@@ -112,8 +112,8 @@ function DownloadForm() {
     void fetchFormats(videoId)
   }
 
-  const handleDownload = useCallback(async (format: DownloadFormat, options?: { resume?: boolean }) => {
-    const videoId = getVideoId(source)
+  const handleDownload = useCallback(async (format: DownloadFormat, options?: { resume?: boolean; videoId?: string }) => {
+    const videoId = options?.videoId || getVideoId(source)
     if (!videoId) return
 
     const historyTitle = title || `youtube-${videoId}`
@@ -244,14 +244,17 @@ function DownloadForm() {
 
       setSource(`https://www.youtube.com/watch?v=${detail.videoId}`)
       setTitle(detail.title)
-      void handleDownload({
-        itag: detail.itag,
-        label: detail.title,
-        kind: 'video',
-        extension: detail.extension,
-        outputBitrate: detail.outputBitrate,
-        size: null,
-      })
+      void handleDownload(
+        {
+          itag: detail.itag,
+          label: detail.title,
+          kind: 'video',
+          extension: detail.extension,
+          outputBitrate: detail.outputBitrate,
+          size: null,
+        },
+        { videoId: detail.videoId },
+      )
     }
 
     window.addEventListener('nsu-download-control', handleDownloadControl as EventListener)
@@ -337,7 +340,7 @@ function DownloadForm() {
                         const isPreparing = loadingFormat === format.itag;
 
                         return (
-                          <div key={`${format.itag}-${format.extension}`} className="rounded-xl border border-card1/20 bg-cardcl/70 p-4">
+                          <div key={`${format.itag}-${format.extension}-${format.outputBitrate || 'source'}`} className="rounded-xl border border-card1/20 bg-cardcl/70 p-4">
                             <div className="flex items-center justify-between gap-4">
                               <div>
                                 <p className="text-sm font-semibold text-primary">

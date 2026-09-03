@@ -12,6 +12,7 @@ import {
 } from "@/lib/download-storage";
 import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { resolveAllowedOrigin } from '@/lib/request-origin';
+import { configureYoutubeEvaluator } from '@/lib/youtube-client';
 import {
   YoutubeDownloadError,
   getFfmpegDiagnostics,
@@ -22,6 +23,8 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
+
+configureYoutubeEvaluator();
 
 const YOUTUBE_CLIENT_TYPES = [ClientType.ANDROID_VR, ClientType.WEB, ClientType.IOS] as const;
 

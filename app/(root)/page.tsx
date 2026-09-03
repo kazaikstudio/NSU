@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Switchbutton from "../../components/Switchbutton";
 import HotComediesRowList from "../../components/HotComediesRowList";
+import DownloadModal from "../../components/DownloadModal";
 
 type HomeMediaItem = {
   id: string;
@@ -38,6 +39,9 @@ const Home = () => {
   const [selectedCategory, setSelectedCategory] = useState<"official" | "short">("official");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeDownloadVideoId, setActiveDownloadVideoId] = useState<string | null>(null);
+  const [downloadPosition, setDownloadPosition] = useState<{ x: number; y: number } | null>(null);
+  const [downloadAnchor, setDownloadAnchor] = useState<HTMLElement | null>(null);
 
   const router = useRouter();
   const gridSectionRef = useRef<HTMLDivElement>(null);
@@ -50,6 +54,20 @@ const Home = () => {
     }
 
     router.push(`/video/${encodeURIComponent(video.id)}`);
+  };
+
+  const openDownloadModal = (event: React.MouseEvent<HTMLButtonElement>, videoId: string) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setActiveDownloadVideoId(videoId);
+    setDownloadPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+    setDownloadAnchor(event.currentTarget);
+  };
+
+  const closeDownloadModal = () => {
+    setActiveDownloadVideoId(null);
+    setDownloadPosition(null);
+    setDownloadAnchor(null);
   };
 
   const handleCategoryChange = (category: "official" | "short") => {
@@ -374,7 +392,7 @@ const Home = () => {
                     <div className="flex items-center gap-2 shrink-0">
                       <button
                         type="button"
-                        onClick={(e) => openDownloadModal(e, video.id)}
+                        onClick={(event) => openDownloadModal(event, video.id)}
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-card1/20 px-3 text-secondry hover:bg-blue-600 hover:text-white transition-all cursor-pointer"
                       >
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -390,6 +408,14 @@ const Home = () => {
           </div>
         </div>
       </div>
+
+      <DownloadModal
+        open={Boolean(activeDownloadVideoId)}
+        videoId={activeDownloadVideoId}
+        position={downloadPosition}
+        anchor={downloadAnchor}
+        onClose={closeDownloadModal}
+      />
 
     </main>
   );
