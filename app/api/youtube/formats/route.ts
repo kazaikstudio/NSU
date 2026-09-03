@@ -135,6 +135,9 @@ export async function GET(request: Request) {
       || allFormats
         .filter((format) => format.has_audio && !format.has_text && format.url)
         .sort((left, right) => right.bitrate - left.bitrate)[0];
+    const audioFormats = allFormats
+      .filter((format) => format.has_audio && !format.has_video && !format.has_text && format.url)
+      .sort((left, right) => right.bitrate - left.bitrate);
     const directVideoSources = allFormats
       .filter((format) => {
         const quality = Number(format.quality_label?.match(/^(\d+)p$/)?.[1] || 0);
@@ -172,6 +175,16 @@ export async function GET(request: Request) {
     const formats = [
       ...(ffmpegAvailable && audioSource ? [
         { itag: audioSource.itag, label: 'MP3 192 kbps', kind: 'audio', mimeType: 'audio/mpeg', extension: 'mp3', outputBitrate: 192, size: null, bitrate: 192000 },
+        ...audioFormats.map((audio) => ({
+          itag: audio.itag,
+          label: `${Math.round(audio.bitrate / 1000)} kbps M4A`,
+          kind: 'audio',
+          mimeType: 'audio/mp4',
+          extension: 'm4a',
+          outputBitrate: 192,
+          size: audio.content_length || null,
+          bitrate: audio.bitrate,
+        })),
       ] : []),
       ...directVideoSources.map((video) => ({
         itag: video.itag,
