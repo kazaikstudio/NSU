@@ -1,5 +1,3 @@
-'use client';
-
 import { AlertCircle, CheckCircle2, Download, Pause, Play, RotateCcw, Trash2, X } from 'lucide-react';
 
 export interface DownloadEntry {
@@ -101,11 +99,6 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
                           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 transition-all duration-200 hover:scale-105 hover:border-rose-500/40 hover:bg-rose-500/20 hover:text-rose-200 active:scale-95 sm:h-9 sm:w-9 sm:rounded-xl"
                         >
                           <X size={13} className="sm:h-3.5 sm:w-3.5" />
-                        </button>
-                      ) : null}
-                      {entry.sourceVideoId && onFormats ? (
-                        <button type="button" onClick={(event) => { event.stopPropagation(); onFormats(entry); }} aria-label="Show download formats" title="Download formats" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-300 transition hover:border-amber-500/40 hover:bg-amber-500/20 sm:h-9 sm:w-9 sm:rounded-xl">
-                          <Download size={13} className="sm:h-3.5 sm:w-3.5" />
                         </button>
                       ) : null}
                     </div>

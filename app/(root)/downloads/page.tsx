@@ -38,8 +38,6 @@ interface DownloadFormat {
 export default function DownloadsPage() {
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
   const [downloadNotice, setDownloadNotice] = useState<DownloadNotice | null>(null);
-  const [activeTab, setActiveTab] = useState<'downloads' | 'preview'>('downloads');
-  const [previewEntryId, setPreviewEntryId] = useState<string | null>(null);
   const [formatEntryId, setFormatEntryId] = useState<string | null>(null);
   const [formats, setFormats] = useState<DownloadFormat[]>([]);
   const [formatsLoading, setFormatsLoading] = useState(false);
@@ -106,19 +104,6 @@ export default function DownloadsPage() {
   const previousDownloads = downloadEntries.filter((entry) => entry.status !== 'downloading');
   const downloadedBytes = downloadEntries.reduce((sum, entry) => sum + (entry.downloadedBytes ?? 0), 0);
   const totalBytes = downloadEntries.reduce((sum, entry) => sum + (entry.totalBytes ?? 0), 0);
-  const previewableEntries = downloadEntries.filter((entry) => entry.sourceVideoId);
-  const previewEntry = downloadEntries.find((entry) => entry.id === previewEntryId) ?? previewableEntries[0] ?? null;
-
-  useEffect(() => {
-    if (!previewEntryId && previewableEntries[0]) {
-      setPreviewEntryId(previewableEntries[0].id);
-    }
-  }, [previewEntryId, previewableEntries]);
-
-  const handlePreview = (entry: DownloadEntry) => {
-    setActiveTab('preview');
-    setPreviewEntryId(entry.id);
-  };
 
   const handleFormats = async (entry: DownloadEntry) => {
     if (!entry.sourceVideoId) return;
@@ -561,135 +546,65 @@ export default function DownloadsPage() {
             </div>
           )}
 
-          <div className="relative mt-5 flex flex-wrap gap-2 rounded-full border border-slate-800/80 bg-slate-950/40 p-1.5">
-            {(['downloads', 'preview'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`flex-1 rounded-full px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] transition ${
-                  activeTab === tab
-                    ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
-                    : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
-                }`}
-              >
-                {tab === 'downloads' ? 'Downloads' : 'Preview'}
-              </button>
-            ))}
-          </div>
-
-          {activeTab === 'preview' ? (
-            <div className="mt-5 space-y-4">
-              {previewableEntries.length > 0 ? (
-                <>
-                  <div className="flex flex-wrap gap-2">
-                    {previewableEntries.map((entry) => (
-                      <button
-                        key={entry.id}
-                        type="button"
-                        onClick={() => handlePreview(entry)}
-                        className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition ${
-                          previewEntry?.id === entry.id
-                            ? 'border-sky-500/40 bg-sky-500/10 text-sky-200'
-                            : 'border-slate-700 bg-slate-900/70 text-slate-300 hover:border-slate-600 hover:text-white'
-                        }`}
-                      >
-                        {entry.title}
-                      </button>
-                    ))}
+          {downloadEntries.length === 0 ? (
+            <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-950/30 px-4 py-8 text-center sm:mt-8 sm:rounded-2xl sm:px-6 sm:py-12">
+              <div className="mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/50 text-slate-500 sm:mb-3 sm:h-12 sm:w-12 sm:rounded-2xl">
+                <Inbox size={20} className="sm:h-6 sm:w-6" />
+              </div>
+              <p className="text-xs font-medium text-slate-400 sm:text-sm">No downloads yet</p>
+              <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">Your downloaded files will appear here.</p>
+            </div>
+          ) : (
+            <div className="mt-7 space-y-5 sm:mt-8 sm:space-y-6">
+              {activeDownloads.length > 0 && (
+                <div className="space-y-2.5 sm:space-y-3">
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-400 sm:text-xs sm:tracking-wider">
+                      Active Downloads
+                    </span>
+                    <span className="inline-flex w-fit max-w-full rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300 sm:px-2.5 sm:text-xs">
+                      {activeDownloads.length} active
+                    </span>
                   </div>
 
-                  {previewEntry?.sourceVideoId && (
-                    <div className="overflow-hidden rounded-2xl border border-slate-800/80 bg-black/30">
-                      <div className="border-b border-slate-800/80 px-3 py-2.5 sm:px-4">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Video preview</p>
-                        <p className="mt-1 truncate text-xs font-semibold text-slate-200">{previewEntry.title}</p>
-                      </div>
-                      <div className="aspect-video w-full bg-black">
-                        <iframe
-                          src={`https://www.youtube.com/embed/${encodeURIComponent(previewEntry.sourceVideoId)}`}
-                          title={`Preview of ${previewEntry.title}`}
-                          className="h-full w-full"
-                          loading="lazy"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                          allowFullScreen
-                        />
-                      </div>
+                  <div className="space-y-2.5 sm:space-y-3">
+                    <div className="space-y-2.5 sm:space-y-3">
+                      {activeDownloads.map((entry) => (
+                        <div key={entry.id} className="space-y-2">
+                          <DownloadRow
+                            entry={entry}
+                            onTogglePause={handleTogglePause}
+                            onCancel={handleCancelDownload}
+                          />
+                          {renderFormats(entry)}
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/30 px-4 py-8 text-center text-sm text-slate-400">
-                  No downloadable videos are available to preview yet.
+                  </div>
+                </div>
+              )}
+
+              {previousDownloads.length > 0 && (
+                <div className="space-y-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Recent Activity
+                  </span>
+                  <div className="space-y-2">
+                    {previousDownloads.map((entry) => (
+                      <div key={entry.id} className="space-y-2">
+                        <DownloadRow
+                          entry={entry}
+                          onRetry={handleRetry}
+                          onRemove={handleRemoveEntry}
+                          onFormats={handleFormats}
+                        />
+                        {renderFormats(entry)}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          ) : null}
-
-          {activeTab === 'downloads' && (
-            <>
-              {downloadEntries.length === 0 ? (
-                <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-950/30 px-4 py-8 text-center sm:mt-8 sm:rounded-2xl sm:px-6 sm:py-12">
-                  <div className="mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/50 text-slate-500 sm:mb-3 sm:h-12 sm:w-12 sm:rounded-2xl">
-                    <Inbox size={20} className="sm:h-6 sm:w-6" />
-                  </div>
-                  <p className="text-xs font-medium text-slate-400 sm:text-sm">No downloads yet</p>
-                  <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">Your downloaded files will appear here.</p>
-                </div>
-              ) : (
-                <div className="mt-7 space-y-5 sm:mt-8 sm:space-y-6">
-                  {activeDownloads.length > 0 && (
-                    <div className="space-y-2.5 sm:space-y-3">
-                      <div className="flex flex-wrap items-center gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-400 sm:text-xs sm:tracking-wider">
-                          Active Downloads
-                        </span>
-                        <span className="inline-flex w-fit max-w-full rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-300 sm:px-2.5 sm:text-xs">
-                          {activeDownloads.length} active
-                        </span>
-                      </div>
-
-                      <div className="space-y-2.5 sm:space-y-3">
-                        <div className="space-y-2.5 sm:space-y-3">
-                          {activeDownloads.map((entry) => (
-                            <div key={entry.id} className="space-y-2">
-                              <DownloadRow
-                                entry={entry}
-                                onTogglePause={handleTogglePause}
-                                onCancel={handleCancelDownload}
-                                onFormats={handleFormats}
-                              />
-                              {renderFormats(entry)}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {previousDownloads.length > 0 && (
-                    <div className="space-y-3">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                        Recent Activity
-                      </span>
-                      <div className="space-y-2">
-                        {previousDownloads.map((entry) => (
-                          <div key={entry.id} className="space-y-2">
-                            <DownloadRow
-                              entry={entry}
-                              onRetry={handleRetry}
-                              onRemove={handleRemoveEntry}
-                              onFormats={handleFormats}
-                            />
-                            {renderFormats(entry)}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
           )}
         </section>
       </div>
