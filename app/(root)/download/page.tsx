@@ -2,9 +2,11 @@
 
 import { FormEvent, Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Download, Link as LinkIcon } from 'lucide-react'
+import { Download, Link as LinkIcon, X } from 'lucide-react'
 import Switchbutton from '../../../components/Switchbutton'
 import { startYoutubeDownload } from '@/lib/youtube-download-manager'
+
+const SAVED_DOWNLOAD_LINK_KEY = 'nsu-download-link'
 
 function getVideoId(value: string) {
   const trimmedValue = value.trim()
@@ -51,7 +53,13 @@ type DownloadRetryDetail = {
 
 function DownloadForm() {
   const searchParams = useSearchParams()
-  const [source, setSource] = useState(() => searchParams.get('video') || '')
+  const [source, setSource] = useState(() => {
+    const querySource = searchParams.get('video')
+    if (querySource) return querySource
+
+    if (typeof window === 'undefined') return ''
+    return window.localStorage.getItem(SAVED_DOWNLOAD_LINK_KEY) || ''
+  })
   const [error, setError] = useState('')
   const [title, setTitle] = useState('')
   const [formats, setFormats] = useState<DownloadFormat[]>([])
@@ -110,6 +118,15 @@ function DownloadForm() {
     }
 
     if (videoId) void fetchFormats(videoId)
+  }
+
+  const handleClearSource = () => {
+    setSource('')
+    setTitle('')
+    setFormats([])
+    setError('')
+    setLoadingFormats(false)
+    window.localStorage.removeItem(SAVED_DOWNLOAD_LINK_KEY)
   }
 
   const handleDirectDownload = useCallback(async () => {
@@ -260,8 +277,14 @@ function DownloadForm() {
                       type="text"
                       value={source}
                       onChange={(event) => {
-                        setSource(event.target.value)
-                        if (!getVideoId(event.target.value)) {
+                        const nextSource = event.target.value
+                        setSource(nextSource)
+                        if (nextSource.trim()) {
+                          window.localStorage.setItem(SAVED_DOWNLOAD_LINK_KEY, nextSource)
+                        } else {
+                          window.localStorage.removeItem(SAVED_DOWNLOAD_LINK_KEY)
+                        }
+                        if (!getVideoId(nextSource)) {
                           setFormats([])
                           setTitle('')
                           setError('')
@@ -272,6 +295,17 @@ function DownloadForm() {
                       className="min-w-0 flex-1 bg-transparent py-4 text-sm text-primary outline-none placeholder:text-secondry/60"
                       aria-describedby={error ? 'download-error' : undefined}
                     />
+                    {source ? (
+                      <button
+                        type="button"
+                        onClick={handleClearSource}
+                        aria-label="Clear pasted link"
+                        title="Clear link"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-secondry transition hover:bg-card1/10 hover:text-primary"
+                      >
+                        <X size={16} aria-hidden="true" />
+                      </button>
+                    ) : null}
                   </span>
                 </label>
 
