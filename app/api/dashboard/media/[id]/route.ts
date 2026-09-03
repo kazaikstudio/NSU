@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import pool, { ensureDatabaseReady } from '@/lib/db';
 import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { incrementMediaPlayCount } from '@/lib/media-play';
 
@@ -56,7 +55,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   if (searchParams.get('play') === '1') {
     try {
-      await incrementMediaPlayCount(id);
+      const trackDownloads = await incrementMediaPlayCount(id);
+      return NextResponse.json({ trackDownloads });
     } catch (error) {
       console.error('Unable to record artist play:', error);
     }

@@ -75,52 +75,42 @@ export default function PublicArtistDetailPage() {
 
     const loadArtist = async () => {
       try {
-        const artistData = await getClientCachedData(`artist:${params.id}`, async () => {
-          const response = await fetch(`/api/dashboard/artists/${params.id}`);
-          if (!response.ok) throw new Error('Artist not found');
-          return response.json();
-        });
+        const [artistData, mediaData, followState] = await Promise.all([
+          getClientCachedData(`artist:${params.id}`, async () => {
+            const response = await fetch(`/api/dashboard/artists/${params.id}`);
+            if (!response.ok) throw new Error('Artist not found');
+            return response.json();
+          }),
+          getClientCachedData(`artist-media:${params.id}`, async () => {
+            const response = await fetch(`/api/dashboard/artists/${params.id}/media`);
+            if (!response.ok) return { media: [] };
+            return response.json();
+          }),
+          (async () => {
+            try {
+              const followResponse = await fetch(`/api/artists/${params.id}/follow`, {
+                headers: { 'x-subscriber-id': getSubscriberId() },
+              });
+              return followResponse.ok ? await followResponse.json() : null;
+            } catch {
+              return null;
+            }
+          })(),
+        ]);
         if (!artistData.artist) throw new Error('Artist not found');
 
         if (!cancelled) {
           setArtist(artistData.artist);
+          if (followState) {
+            setIsFollowing(followState.following === true);
+            setArtist((currentArtist) => currentArtist
+              ? { ...currentArtist, followers: Number(followState.followerCount || 0) }
+              : currentArtist);
+          }
+          const loadedTracks = (mediaData.media || []).filter((media: Track & { kind?: string }) => media.kind === 'track');
+          latestTrackId.current = loadedTracks[0]?.id || null;
+          setTracks(loadedTracks);
           setLoading(false);
-        }
-
-        if (!cancelled) {
-          void (async () => {
-            const [mediaData] = await Promise.all([
-              getClientCachedData(`artist-media:${params.id}`, async () => {
-                const response = await fetch(`/api/dashboard/artists/${params.id}/media`);
-                if (!response.ok) return { media: [] };
-                return response.json();
-              }),
-              (async () => {
-                try {
-                  const followResponse = await fetch(`/api/artists/${params.id}/follow`, {
-                    headers: { 'x-subscriber-id': getSubscriberId() },
-                  });
-                  if (followResponse.ok) {
-                    const followState = await followResponse.json();
-                    if (!cancelled) {
-                      setIsFollowing(followState.following === true);
-                      setArtist((currentArtist) => currentArtist
-                        ? { ...currentArtist, followers: Number(followState.followerCount || 0) }
-                        : currentArtist);
-                    }
-                  }
-                } catch {
-                  // Following is optional; keep the artist page usable if the database is unavailable.
-                }
-              })(),
-            ]);
-            if (cancelled) return;
-            const loadedTracks = (mediaData.media || []).filter((media: Track & { kind?: string }) => media.kind === 'track');
-            latestTrackId.current = loadedTracks[0]?.id || null;
-            setTracks(loadedTracks);
-          })().catch(() => {
-            // Media is optional; keep the artist profile available if it fails.
-          });
         }
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to load artist');
@@ -341,7 +331,7 @@ export default function PublicArtistDetailPage() {
           </div>
           <div className="min-w-0">
             <span className="block text-base xs:text-lg sm:text-2xl font-black text-primary truncate">
-              {activeTrackId ? formatNumber(activeTrackDownloads) : '—'}
+              {activeTrackId ? formatNumber(activeTrackDownloads) : formatNumber(artist.totalDownloads)}
             </span>
             <span className="text-[10px] sm:text-xs font-medium text-secondry block truncate">Downloads</span>
           </div>
@@ -392,7 +382,6 @@ export default function PublicArtistDetailPage() {
                     artistName={artist.name}
                     artistGenre={artist.genre}
                     onPlay={() => void syncPlayCount(track.id, track.fileUrl || '')}
-                    onDownload={() => void syncPlayCount(track.id, track.fileUrl || '')}
                   />
                 );
               })}
