@@ -17,11 +17,11 @@ export type YoutubePageInfo = {
 };
 
 function extractPlayerResponse(html: string) {
-  const marker = 'ytInitialPlayerResponse = ';
-  const start = html.indexOf(marker);
-  if (start < 0) return null;
+  const markerMatch = html.match(/(?:var\s+)?ytInitialPlayerResponse\s*=\s*/);
+  if (!markerMatch || markerMatch.index === undefined) return null;
 
-  const jsonStart = start + marker.length;
+  const start = markerMatch.index + markerMatch[0].length;
+  const jsonStart = start;
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -63,13 +63,28 @@ function normalizeFormat(format: Record<string, unknown>): YoutubePageFormat {
 }
 
 export async function getYoutubePageInfo(videoId: string): Promise<YoutubePageInfo> {
-  const response = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    cache: 'no-store',
-  });
-  if (!response.ok) throw new Error(`YouTube watch page returned ${response.status}`);
+  const pageUrls = [
+    `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&hl=en`,
+    `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?hl=en`,
+  ];
+  let playerResponse: Record<string, unknown> | null = null;
+  let lastError: Error | null = null;
 
-  const playerResponse = extractPlayerResponse(await response.text());
+  for (const pageUrl of pageUrls) {
+    try {
+      const response = await fetch(pageUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36' },
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error(`YouTube page returned ${response.status}`);
+      playerResponse = extractPlayerResponse(await response.text());
+      if (playerResponse) break;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  if (!playerResponse) throw lastError || new Error('YouTube page did not include player metadata.');
   const streamingData = playerResponse?.streamingData as Record<string, unknown> | undefined;
   if (!streamingData) throw new Error('YouTube watch page did not include stream metadata.');
 
