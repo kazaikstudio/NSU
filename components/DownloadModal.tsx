@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import { useRouter } from 'next/navigation';
 import { getDownloadPath, inferDownloadCategoryFromFilename } from '@/lib/download';
+import { startYoutubeDownload } from '@/lib/youtube-download-manager';
 type DownloadFormat = {
   itag: number;
   label: string;
@@ -51,6 +53,7 @@ type DownloadRetryDetail = {
 };
 
 const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: DownloadModalProps) => {
+  const router = useRouter();
   const [loadingFormat, setLoadingFormat] = useState<string | null>(null);
   const [formats, setFormats] = useState<DownloadFormat[]>([]);
   const [title, setTitle] = useState("");
@@ -176,6 +179,34 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     if (typeof window === "undefined") return;
     window.dispatchEvent(new CustomEvent<DownloadHistoryPayload>("nsu-download-status", { detail: payload }));
   }, []);
+
+  const handleFormatSelect = useCallback((format: DownloadFormat) => {
+    if (!videoId) return;
+
+    const historyTitle = title || videoId || format.label;
+    emitDownloadHistory({
+      status: 'downloading',
+      title: historyTitle,
+      progress: 0,
+      downloadedBytes: 0,
+      totalBytes: format.size ?? undefined,
+      paused: false,
+      sourceVideoId: videoId,
+      sourceItag: format.itag,
+      sourceExtension: format.extension,
+      sourceOutputBitrate: format.outputBitrate,
+    });
+    startYoutubeDownload({
+      title: historyTitle,
+      videoId,
+      itag: format.itag,
+      extension: format.extension,
+      outputBitrate: format.outputBitrate,
+      totalBytes: format.size ?? undefined,
+    });
+    onClose?.();
+    router.push('/downloads');
+  }, [emitDownloadHistory, onClose, router, title, videoId]);
 
   const handleDownload = useCallback(async (format: DownloadFormat, options?: { skipReset?: boolean }) => {
     const formatKey = getFormatKey(format);
@@ -422,7 +453,7 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
                         type="button"
                         onClick={(event) => {
                           event.preventDefault();
-                          void handleDownload(format);
+                          handleFormatSelect(format);
                         }}
                         disabled={loadingFormat !== null}
                         className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50"
