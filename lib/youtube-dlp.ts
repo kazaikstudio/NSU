@@ -21,12 +21,13 @@ export interface DlpInfo {
 type RawFormat = {
   format_id?: string;
   url?: string;
+  manifest_url?: string;
   ext?: string;
   format_note?: string;
   height?: number;
-  tbr?: number;
-  abr?: number;
-  vbr?: number;
+  tbr?: number | null;
+  abr?: number | null;
+  vbr?: number | null;
   filesize?: number;
   filesize_approx?: number;
   acodec?: string;
@@ -35,21 +36,38 @@ type RawFormat = {
 
 type RawInfo = { title?: string; formats?: RawFormat[] };
 
-function normalizeFormat(format: RawFormat): DlpFormat {
-  const hasAudio = Boolean(format.acodec && format.acodec !== 'none');
-  const hasVideo = Boolean(format.vcodec && format.vcodec !== 'none');
-  const extension = format.ext || 'mp4';
+export function normalizeFormat(format: RawFormat): DlpFormat {
+  const url = typeof format.url === 'string' ? format.url : undefined;
+  const manifestUrl = typeof format.manifest_url === 'string' ? format.manifest_url : undefined;
+  const formatId = String(format.format_id || '');
+  const isStoryboard = /^sb\d+$/i.test(formatId);
+  const isManifestPlaceholder = Boolean(
+    (url && /manifest\.googlevideo\.com|\/api\/manifest\//i.test(url)) ||
+    (manifestUrl && /manifest\.googlevideo\.com|\/api\/manifest\//i.test(manifestUrl)) ||
+    isStoryboard,
+  );
+  const hasAudio = Boolean(
+    (format.acodec && format.acodec !== 'none') ||
+    (typeof format.abr === 'number' && Number.isFinite(format.abr) && format.abr > 0),
+  );
+  const hasVideo = Boolean(
+    (format.vcodec && format.vcodec !== 'none') ||
+    (typeof format.height === 'number' && Number.isFinite(format.height) && format.height > 0),
+  );
+  const extension = format.ext || (hasVideo ? 'mp4' : hasAudio ? 'm4a' : 'mp4');
+  const isPlayable = !isManifestPlaceholder && Boolean(url) && (hasAudio || hasVideo);
+
   return {
     itag: Number(format.format_id),
-    url: format.url,
-    mime_type: `${hasAudio && !hasVideo ? 'audio' : 'video'}/${extension}`,
-    bitrate: Math.round((format.tbr || format.abr || format.vbr || 0) * 1000),
+    url: isPlayable ? url : undefined,
+    mime_type: hasAudio && hasVideo ? `video/${extension}` : hasAudio ? `audio/${extension}` : hasVideo ? `video/${extension}` : '',
+    bitrate: Math.round((format.tbr ?? format.abr ?? format.vbr ?? 0) * 1000),
     content_length: format.filesize || format.filesize_approx,
     quality_label: format.height ? `${format.height}p` : format.format_note,
     has_audio: hasAudio,
     has_video: hasVideo,
     has_text: false,
-    is_original: true,
+    is_original: isPlayable,
   };
 }
 
@@ -63,7 +81,7 @@ export async function getYoutubeDlpInfo(videoId: string): Promise<DlpInfo> {
   }) as RawInfo;
   const formats = (raw.formats || [])
     .map(normalizeFormat)
-    .filter((format) => format.itag > 0 && format.url);
+    .filter((format) => format.itag > 0 && format.url && (format.has_audio || format.has_video));
 
   if (!formats.length) throw new Error('yt-dlp returned no playable formats.');
 
