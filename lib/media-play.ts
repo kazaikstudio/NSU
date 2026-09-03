@@ -2,6 +2,22 @@ import pool, { ensureDatabaseReady } from '@/lib/db';
 
 export type MediaPlayQuery = (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
 
+export async function getMediaDownloadCount(
+  driveFileId: string,
+  queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),
+) {
+  await ensureDatabaseReady();
+
+  const result = await queryFn(
+    `SELECT download_count AS "trackDownloads"
+     FROM artist_media
+     WHERE drive_file_id = $1 AND kind = 'track'`,
+    [driveFileId],
+  );
+
+  return Number(result.rows[0]?.trackDownloads ?? 0);
+}
+
 export async function incrementMediaPlayCount(
   driveFileId: string,
   queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),

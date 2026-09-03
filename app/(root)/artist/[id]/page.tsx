@@ -181,24 +181,31 @@ export default function PublicArtistDetailPage() {
     const driveFileId = getDriveFileId(fileUrl);
     if (!driveFileId) return;
 
-    const nextDownloadCount = (tracks.find((track) => track.id === trackId)?.downloadCount ?? 0) + 1;
     setActiveTrackId(trackId);
-    setActiveTrackDownloads(nextDownloadCount);
-    setTracks((currentTracks) => currentTracks.map((track) => track.id === trackId
-      ? { ...track, downloadCount: Number(track.downloadCount || 0) + 1 }
-      : track));
+    setActiveTrackDownloads(Number(tracks.find((track) => track.id === trackId)?.downloadCount || 0));
 
     try {
       const response = await fetch(`/api/dashboard/media/${driveFileId}?play=1`, { method: 'GET', cache: 'no-store' });
       if (!response.ok) return;
       const result = await response.json();
-      const updatedCount = Number(result.trackDownloads || nextDownloadCount || 0);
+      const updatedCount = Number(result.trackDownloads || 0);
       setActiveTrackDownloads(updatedCount);
       setTracks((currentTracks) => currentTracks.map((track) => track.id === trackId
         ? { ...track, downloadCount: updatedCount }
         : track));
     } catch {
       // Playback continues even if the DB result is delayed; the UI already updated optimistically.
+    }
+  };
+
+  const totalTrackDownloads = tracks.reduce((total, track) => total + Number(track.downloadCount || 0), 0);
+
+  const syncDownloadCount = (trackId: string) => {
+    setTracks((currentTracks) => currentTracks.map((track) => track.id === trackId
+      ? { ...track, downloadCount: Number(track.downloadCount || 0) + 1 }
+      : track));
+    if (activeTrackId === trackId) {
+      setActiveTrackDownloads((count) => count + 1);
     }
   };
 
@@ -331,7 +338,7 @@ export default function PublicArtistDetailPage() {
           </div>
           <div className="min-w-0">
             <span className="block text-base xs:text-lg sm:text-2xl font-black text-primary truncate">
-              {activeTrackId ? formatNumber(activeTrackDownloads) : formatNumber(artist.totalDownloads)}
+              {activeTrackId ? formatNumber(activeTrackDownloads) : formatNumber(totalTrackDownloads)}
             </span>
             <span className="text-[10px] sm:text-xs font-medium text-secondry block truncate">Downloads</span>
           </div>
@@ -382,6 +389,7 @@ export default function PublicArtistDetailPage() {
                     artistName={artist.name}
                     artistGenre={artist.genre}
                     onPlay={() => void syncPlayCount(track.id, track.fileUrl || '')}
+                    onDownload={() => syncDownloadCount(track.id)}
                   />
                 );
               })}

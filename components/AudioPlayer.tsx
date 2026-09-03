@@ -164,7 +164,6 @@ export default function AudioPlayer({
     window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
       detail: { status: 'downloading', title, progress: 0, downloadedBytes: 0 },
     }));
-    onDownload?.();
 
     const progressSteps = [12, 24, 38, 52, 68, 82, 92];
     let progressIndex = 0;
@@ -182,6 +181,7 @@ export default function AudioPlayer({
       if (!response.ok) {
         throw new Error(`Download failed with status ${response.status}`);
       }
+      onDownload?.();
 
       const total = Number(response.headers.get('content-length')) || 0;
       const reader = response.body?.getReader();
