@@ -31,9 +31,30 @@ async function ensureMediaTable() {
       mime_type TEXT NOT NULL,
       file_url TEXT NOT NULL,
       drive_file_id TEXT,
+      thumbnail_url TEXT,
+      thumbnail_drive_file_id TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query(`
+    ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
+    ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT;
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS storage_items (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      type TEXT NOT NULL,
+      file_url TEXT NOT NULL,
+      drive_file_id TEXT,
+      thumbnail_url TEXT,
+      thumbnail_drive_file_id TEXT,
+      source TEXT NOT NULL DEFAULT 'talk-show',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
 }
 
 export async function GET() {
@@ -47,6 +68,8 @@ export async function GET() {
         media.file_name AS "fileName",
         media.file_url AS "fileUrl",
         media.drive_file_id AS "driveFileId",
+        media.thumbnail_url AS "thumbnailUrl",
+        media.thumbnail_drive_file_id AS "thumbnailDriveFileId",
         media.created_at AS "createdAt",
         artist.id::text AS "artistId",
         artist.name AS "artistName",
@@ -57,12 +80,18 @@ export async function GET() {
       WHERE media.kind = 'track'
       ORDER BY media.created_at DESC
     `);
+    const { rows: storageRows } = await pool.query(`
+      SELECT title, file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl"
+      FROM storage_items
+      WHERE LOWER(type) = 'music'
+      ORDER BY created_at DESC
+    `);
 
     if (!rows?.length) {
-      return NextResponse.json({ tracks: fallbackTracks, fallback: true });
+      return NextResponse.json({ tracks: fallbackTracks, storageItems: storageRows, fallback: true });
     }
 
-    return NextResponse.json({ tracks: rows, fallback: false });
+    return NextResponse.json({ tracks: rows, storageItems: storageRows, fallback: false });
   } catch (error) {
     console.error('Audio route failed, falling back to demo tracks.', error);
     return NextResponse.json({ tracks: fallbackTracks, fallback: true });

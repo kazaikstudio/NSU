@@ -15,6 +15,8 @@ export interface FeaturedAudioTrack {
   fileUrl: string;
   coverUrl?: string;
   driveFileId?: string;
+  thumbnailUrl?: string;
+  thumbnailDriveFileId?: string;
   duration?: string;
   likesCount?: number;
 }
@@ -36,7 +38,12 @@ function normalizeImageUrl(url?: string) {
 }
 
 function getTrackThumbnailUrl(track: FeaturedAudioTrack) {
+  if (track.thumbnailUrl) return track.thumbnailUrl;
   if (track.coverUrl) return track.coverUrl;
+
+  if (track.thumbnailDriveFileId) {
+    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(track.thumbnailDriveFileId)}&sz=w400`;
+  }
 
   if (track.driveFileId) {
     return `https://drive.google.com/thumbnail?id=${encodeURIComponent(track.driveFileId)}&sz=w400`;
@@ -53,6 +60,25 @@ const WAVEFORM_HEIGHTS = [
   40, 60, 80, 50, 70, 95, 55, 40, 75, 90, 100, 50, 80, 60,
   90, 70, 40, 55, 90, 100, 75, 50, 85, 95, 60, 45, 70, 85,
   55, 75, 95, 40, 60, 80, 50
+];
+
+const exampleTracks: FeaturedAudioTrack[] = [
+  {
+    id: '1',
+    title: 'Echoes of Midnight',
+    artist: 'Michael John, 1978 Mvc studio',
+    fileUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+    coverUrl: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?q=80&w=300&auto=format&fit=crop',
+    likesCount: 12,
+  },
+  {
+    id: '2',
+    title: 'Sample Track Two',
+    artist: 'Unknown Artist',
+    fileUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+    coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=300&auto=format&fit=crop',
+    likesCount: 5,
+  },
 ];
 
 export default function FeaturedAudioCards() {
@@ -72,25 +98,6 @@ export default function FeaturedAudioCards() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sliderRef = useRef<HTMLDivElement | null>(null);
 
-  const exampleTracks: FeaturedAudioTrack[] = [
-    {
-      id: '1',
-      title: 'Echoes of Midnight',
-      artist: 'Michael John, 1978 Mvc studio',
-      fileUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-      coverUrl: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?q=80&w=300&auto=format&fit=crop',
-      likesCount: 12,
-    },
-    {
-      id: '2',
-      title: 'Sample Track Two',
-      artist: 'Unknown Artist',
-      fileUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=300&auto=format&fit=crop',
-      likesCount: 5,
-    }
-  ];
-
   useEffect(() => {
     let cancelled = false;
 
@@ -99,12 +106,20 @@ export default function FeaturedAudioCards() {
         const response = await fetch('/api/audio');
         const data = await response.json();
         if (!cancelled) {
+          const storageItems = Array.isArray(data.storageItems) ? data.storageItems : [];
           const loadedTracks: FeaturedAudioTrack[] =
             data.tracks && data.tracks.length > 0
-              ? (data.tracks || []).slice(0, 5).map((track: FeaturedAudioTrack) => ({
-                  ...track,
-                  fileUrl: getPlayableAudioUrl(track.fileUrl),
-                }))
+              ? (data.tracks || []).slice(0, 5).map((track: FeaturedAudioTrack) => {
+                  const dashboardItem = storageItems.find((item: { title?: string; fileUrl?: string; thumbnailUrl?: string }) =>
+                    item.fileUrl === track.fileUrl || item.title?.trim().toLowerCase() === track.title?.trim().toLowerCase()
+                  );
+
+                  return {
+                    ...track,
+                    fileUrl: getPlayableAudioUrl(track.fileUrl),
+                    thumbnailUrl: dashboardItem?.thumbnailUrl || track.thumbnailUrl,
+                  };
+                })
               : exampleTracks;
 
           setTracks(loadedTracks);
@@ -161,14 +176,14 @@ export default function FeaturedAudioCards() {
 
   // Auto-slide effect every 5 seconds
   useEffect(() => {
-    if (tracks.length <= 1 || isHovered) return;
+    if (tracks.length <= 1 || isHovered || (activeTrackId !== null && isPlaying)) return;
 
     const interval = setInterval(() => {
       const container = sliderRef.current;
       if (!container) return;
 
       const nextIndex = (currentIndex + 1) % tracks.length;
-      const cardWidth = container.firstElementChild?.clientWidth || container.clientWidth;
+      const cardWidth = container.firstElementChild?.firstElementChild?.clientWidth || container.clientWidth;
 
       container.scrollTo({
         left: nextIndex * cardWidth,
@@ -179,7 +194,7 @@ export default function FeaturedAudioCards() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [currentIndex, tracks.length, isHovered]);
+  }, [activeTrackId, currentIndex, isPlaying, tracks.length, isHovered]);
 
   // Play / Pause Toggle Trigger
   const handleTogglePlay = (track: FeaturedAudioTrack) => {
@@ -357,7 +372,7 @@ export default function FeaturedAudioCards() {
         className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-1"
         onScroll={(event) => {
           const cardWidth =
-            event.currentTarget.firstElementChild?.clientWidth ||
+            event.currentTarget.firstElementChild?.firstElementChild?.clientWidth ||
             event.currentTarget.clientWidth;
           setCurrentIndex(
             Math.round(event.currentTarget.scrollLeft / cardWidth)
