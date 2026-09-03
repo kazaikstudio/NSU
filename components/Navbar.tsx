@@ -6,16 +6,6 @@ import { Download } from 'lucide-react';
 import { useClickOutside } from "./useClickOutside";
 import { usePathname } from 'next/navigation';
 
-interface DownloadNotice {
-  status: 'downloading' | 'done' | 'error';
-  title: string;
-  progress?: number;
-  sourceVideoId?: string;
-  sourceItag?: number;
-  sourceExtension?: string;
-  sourceOutputBitrate?: number;
-}
-
 interface DownloadEntry {
   id: string;
   title: string;
@@ -32,9 +22,7 @@ interface DownloadEntry {
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
-  const [downloadNotice, setDownloadNotice] = useState<DownloadNotice | null>(null);
   const navRef = useRef<HTMLHeadingElement>(null);
-  const noticeTimerRef = useRef<number | null>(null);
   const pathname = usePathname();
 
   useClickOutside(navRef, () => {
@@ -63,14 +51,8 @@ const Navbar = () => {
     if (typeof window === 'undefined') return;
 
     const handleDownloadStatus = (event: Event) => {
-      const detail = (event as CustomEvent<DownloadNotice>).detail;
+      const detail = (event as CustomEvent<DownloadEntry>).detail;
       if (!detail) return;
-
-      if (noticeTimerRef.current) {
-        window.clearTimeout(noticeTimerRef.current);
-      }
-
-      setDownloadNotice(detail);
 
       setDownloadEntries((previousEntries) => {
         const previousEntry = previousEntries.find((entry) => entry.title === detail.title);
@@ -94,17 +76,11 @@ const Navbar = () => {
         return mergedEntries;
       });
 
-      if (detail.status !== 'downloading') {
-        noticeTimerRef.current = window.setTimeout(() => setDownloadNotice(null), 2200);
-      }
     };
 
     window.addEventListener('nsu-download-status', handleDownloadStatus as EventListener);
     return () => {
       window.removeEventListener('nsu-download-status', handleDownloadStatus as EventListener);
-      if (noticeTimerRef.current) {
-        window.clearTimeout(noticeTimerRef.current);
-      }
     };
   }, []);
 
@@ -123,7 +99,7 @@ const Navbar = () => {
       text-primary shadow-2xl shadow-zinc-300/20 backdrop-blur-xl
       dark:border-zinc-800/80 dark:shadow-zinc-950/50"
     >
-      <nav className="flex items-center justify-between px-4 py-2 sm:px-6 max-w-7xl mx-auto">
+      <nav className="flex h-12 items-center justify-between px-4 sm:px-6 max-w-7xl mx-auto">
         {/* Logo & Brand Name */}
         <Link
           href="#"
@@ -301,15 +277,6 @@ const Navbar = () => {
           </button>
         </div>
       </nav>
-
-      {downloadNotice && (
-        <div className="mx-4 mb-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] font-semibold text-amber-300 shadow-sm shadow-amber-400/10 md:hidden">
-          <div className="flex items-center gap-2">
-            <span className="shrink-0">{downloadNotice.status === 'downloading' ? '⬇' : downloadNotice.status === 'done' ? '✓' : '!'}</span>
-            <span className="truncate">{downloadNotice.status === 'downloading' ? `Downloading ${downloadNotice.title}` : downloadNotice.status === 'done' ? `Downloaded ${downloadNotice.title}` : 'Download failed'}</span>
-          </div>
-        </div>
-      )}
 
       {/* Mobile Dropdown Menu */}
       {isOpen && (
