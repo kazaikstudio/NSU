@@ -91,6 +91,7 @@ export default function DownloadsPage() {
   const previousDownloads = downloadEntries.filter((entry) => entry.status !== 'downloading');
   const downloadedBytes = downloadEntries.reduce((sum, entry) => sum + (entry.downloadedBytes ?? 0), 0);
   const totalBytes = downloadEntries.reduce((sum, entry) => sum + (entry.totalBytes ?? 0), 0);
+  const previewEntry = downloadEntries.find((entry) => entry.sourceVideoId);
 
   const runRetryDownload = async (detail: RetryDetail, options?: { keepProgress?: boolean }) => {
     activeRetryRef.current = detail;
@@ -451,6 +452,25 @@ export default function DownloadsPage() {
                   ? `Downloaded ${downloadNotice.title}`
                   : 'Download failed'}
               </span>
+            </div>
+          )}
+
+          {previewEntry?.sourceVideoId && (
+            <div className="relative mt-5 overflow-hidden rounded-2xl border border-slate-800/80 bg-black/30">
+              <div className="border-b border-slate-800/80 px-3 py-2.5 sm:px-4">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Video preview</p>
+                <p className="mt-1 truncate text-xs font-semibold text-slate-200">{previewEntry.title}</p>
+              </div>
+              <div className="aspect-video w-full bg-black">
+                <iframe
+                  src={`https://www.youtube.com/embed/${encodeURIComponent(previewEntry.sourceVideoId)}`}
+                  title={`Preview of ${previewEntry.title}`}
+                  className="h-full w-full"
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
             </div>
           )}
 
