@@ -51,15 +51,6 @@ function getPlayableAudioUrl(url: string | null | undefined) {
   return match?.[1] ? `/api/dashboard/media/${match[1]}` : url;
 }
 
-function getAudioThumbnailUrl(fileUrl: string | null | undefined) {
-  if (!fileUrl) return null;
-
-  const match = fileUrl.match(/[?&]id=([^&]+)/) || fileUrl.match(/\/api\/dashboard\/media\/([^/?]+)/);
-  return match?.[1]
-    ? `https://drive.google.com/thumbnail?id=${match[1]}&sz=w320`
-    : null;
-}
-
 export default function ArtistDetailPage() {
   const params = useParams<{ id: string }>();
   const [artist, setArtist] = useState<Artist | null>(null);
@@ -902,7 +893,7 @@ export default function ArtistDetailPage() {
                           <td className="px-6 py-4">
                             <div className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800">
                               <img
-                                src={track.thumbnailUrl || getAudioThumbnailUrl(track.fileUrl) || DEFAULT_TRACK_THUMBNAIL}
+                                src={track.thumbnailUrl || DEFAULT_TRACK_THUMBNAIL}
                                 alt={track.title}
                                 className="h-full w-full object-cover"
                               />

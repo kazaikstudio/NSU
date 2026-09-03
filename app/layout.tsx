@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     "Noll Studios (NSU) - Your description here. Discover our work and services.",
   metadataBase: new URL("https://nollstudios.org"),
   icons: {
-    icon: [{ url: "/NollPage-v2.svg", type: "image/svg+xml" }],
+    icon: [{ url: "/NollPage-v3.svg", type: "image/svg+xml" }],
   },
   openGraph: {
     title: "Noll Studios - NSU | Creative Studio",
