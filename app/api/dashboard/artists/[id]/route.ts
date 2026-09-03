@@ -10,6 +10,7 @@ export const runtime = 'nodejs';
 const connectionString = getDatabaseConnectionString();
 
 let pool: Pool | null = null;
+let artistsTableReady = false;
 
 if (connectionString) {
   pool = new Pool({
@@ -22,6 +23,8 @@ async function ensureArtistsTable() {
   if (!pool) {
     return;
   }
+
+  if (artistsTableReady) return;
 
   const client = await pool.connect();
 
@@ -67,6 +70,8 @@ async function ensureArtistsTable() {
   } finally {
     client.release();
   }
+
+  artistsTableReady = true;
 }
 
 async function ensureArtistMediaTable() {

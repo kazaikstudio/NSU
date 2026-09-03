@@ -6,8 +6,11 @@ import { recordActivity } from '@/lib/activity';
 export const runtime = 'nodejs';
 
 type Context = { params: Promise<{ id: string }> };
+let mediaTableReady = false;
 
 async function ensureMediaTable() {
+  if (mediaTableReady) return;
+
   await ensureDatabaseReady();
   await pool.query(`
     CREATE TABLE IF NOT EXISTS artist_media (
@@ -32,6 +35,8 @@ async function ensureMediaTable() {
     ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
     ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT
   `);
+
+  mediaTableReady = true;
 }
 
 export async function GET(_request: Request, context: Context) {
