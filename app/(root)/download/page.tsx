@@ -22,6 +22,15 @@ function getVideoId(value: string) {
   return ''
 }
 
+function getDirectUrl(value: string) {
+  try {
+    const url = new URL(value.trim())
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : ''
+  } catch {
+    return ''
+  }
+}
+
 type DownloadFormat = {
   itag: number
   label: string
@@ -52,6 +61,7 @@ function DownloadForm() {
   const [formats, setFormats] = useState<DownloadFormat[]>([])
   const [loadingFormats, setLoadingFormats] = useState(false)
   const [loadingFormat, setLoadingFormat] = useState<number | null>(null)
+  const [loadingDirectDownload, setLoadingDirectDownload] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const progressRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -104,13 +114,44 @@ function DownloadForm() {
     event.preventDefault()
     const videoId = getVideoId(source)
 
-    if (!videoId) {
-      setError('Enter a valid YouTube video URL or 11-character video ID.')
+    if (!videoId && !getDirectUrl(source)) {
+      setError('Enter a valid public media URL or YouTube video link.')
       return
     }
 
-    void fetchFormats(videoId)
+    if (videoId) void fetchFormats(videoId)
   }
+
+  const handleDirectDownload = useCallback(async () => {
+    const directUrl = getDirectUrl(source)
+    if (!directUrl) {
+      setError('Enter a complete public HTTP or HTTPS media URL.')
+      return
+    }
+
+    setLoadingDirectDownload(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/download?url=${encodeURIComponent(directUrl)}`, { cache: 'no-store' })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as { error?: string }
+        throw new Error(payload.error || 'Unable to download this file.')
+      }
+
+      const blob = await response.blob()
+      const anchor = document.createElement('a')
+      anchor.href = URL.createObjectURL(blob)
+      anchor.download = 'download'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(anchor.href)
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : 'Unable to download this file.')
+    } finally {
+      setLoadingDirectDownload(false)
+    }
+  }, [source])
 
   const handleDownload = useCallback(async (format: DownloadFormat, options?: { resume?: boolean; videoId?: string }) => {
     const videoId = options?.videoId || getVideoId(source)
@@ -318,6 +359,7 @@ function DownloadForm() {
                           setFormats([])
                           setTitle('')
                           setError('')
+                          setLoadingFormats(false)
                         }
                       }}
                       placeholder="https://youtube.com/watch?v=..."
@@ -330,6 +372,17 @@ function DownloadForm() {
                 {error && <p id="download-error" className="text-sm text-red-400" role="alert">{error}</p>}
                 {loadingFormats && <p className="text-sm text-secondry">Checking available formats...</p>}
                 {title && <p className="text-sm font-semibold text-primary">{title}</p>}
+                {!getVideoId(source) && getDirectUrl(source) && !loadingFormats && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDirectDownload()}
+                    disabled={loadingDirectDownload}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <Download size={16} aria-hidden="true" />
+                    {loadingDirectDownload ? 'Downloading...' : 'Download file'}
+                  </button>
+                )}
                 {!loadingFormats && !error && (['audio', 'video'] as const).map((section) => {
                   const sectionFormats = formats.filter((format) => section === 'audio' ? !format.kind.includes('video') : format.kind.includes('video'))
                   if (!sectionFormats.length) return null

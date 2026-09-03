@@ -12,7 +12,7 @@ import {
 } from "@/lib/download-storage";
 import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { resolveAllowedOrigin } from '@/lib/request-origin';
-import { configureYoutubeEvaluator } from '@/lib/youtube-client';
+import { configureYoutubeEvaluator, getYoutubeSessionConfig } from '@/lib/youtube-client';
 import {
   YoutubeDownloadError,
   getFfmpegDiagnostics,
@@ -26,14 +26,18 @@ export const dynamic = "force-dynamic";
 
 configureYoutubeEvaluator();
 
-const YOUTUBE_CLIENT_TYPES = [ClientType.ANDROID_VR, ClientType.WEB, ClientType.IOS] as const;
+const YOUTUBE_CLIENT_TYPES = [ClientType.WEB, ClientType.WEB_EMBEDDED, ClientType.ANDROID_VR, ClientType.IOS] as const;
 
 async function getYoutubeVideoInfo(videoId: string) {
   let lastError: unknown;
 
   for (const clientType of YOUTUBE_CLIENT_TYPES) {
     try {
-      const youtube = await Innertube.create({ client_type: clientType, retrieve_player: true });
+      const youtube = await Innertube.create({
+        ...getYoutubeSessionConfig(),
+        client_type: clientType,
+        retrieve_player: true,
+      });
       const info = await youtube.getBasicInfo(videoId);
       const formatCount = (info.streaming_data?.formats?.length ?? 0) + (info.streaming_data?.adaptive_formats?.length ?? 0);
       const hasTitle = Boolean(info.basic_info?.title);
@@ -233,6 +237,9 @@ export async function GET(req: Request) {
         details: {
           ...getRequestDiagnostics(id, itag, output),
           cause: error instanceof Error ? error.message : String(error),
+          hasProofOfOriginToken: Boolean(process.env.YOUTUBE_PO_TOKEN),
+          hasVisitorData: Boolean(process.env.YOUTUBE_VISITOR_DATA),
+          hasCookie: Boolean(process.env.YOUTUBE_COOKIE),
           selectedFormat: {
             itag: selectedFormat.itag,
             mimeType: selectedFormat.mime_type,

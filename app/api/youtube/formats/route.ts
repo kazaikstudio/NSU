@@ -4,21 +4,25 @@ import { getFfmpegDiagnostics, getRuntimeDiagnostics } from '@/lib/youtube-downl
 import ffmpegPath from 'ffmpeg-static';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { configureYoutubeEvaluator } from '@/lib/youtube-client';
+import { configureYoutubeEvaluator, getYoutubeSessionConfig } from '@/lib/youtube-client';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 configureYoutubeEvaluator();
 
-const YOUTUBE_CLIENT_TYPES = [ClientType.ANDROID_VR, ClientType.WEB, ClientType.IOS] as const;
+const YOUTUBE_CLIENT_TYPES = [ClientType.WEB, ClientType.WEB_EMBEDDED, ClientType.ANDROID_VR, ClientType.IOS] as const;
 
 async function getYoutubeVideoInfo(videoId: string) {
   let lastError: unknown;
 
   for (const clientType of YOUTUBE_CLIENT_TYPES) {
     try {
-      const youtube = await Innertube.create({ client_type: clientType, retrieve_player: true });
+      const youtube = await Innertube.create({
+        ...getYoutubeSessionConfig(),
+        client_type: clientType,
+        retrieve_player: true,
+      });
       const info = await youtube.getBasicInfo(videoId);
       const formatCount = (info.streaming_data?.formats?.length ?? 0) + (info.streaming_data?.adaptive_formats?.length ?? 0);
       const hasTitle = Boolean(info.basic_info?.title);
