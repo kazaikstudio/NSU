@@ -75,41 +75,15 @@ export default function PublicArtistDetailPage() {
 
     const loadArtist = async () => {
       try {
-        const [artistData, mediaData, followState] = await Promise.all([
-          getClientCachedData(`artist:${params.id}`, async () => {
-            const response = await fetch(`/api/dashboard/artists/${params.id}`);
-            if (!response.ok) throw new Error('Artist not found');
-            return response.json();
-          }),
-          getClientCachedData(`artist-media:${params.id}`, async () => {
-            const response = await fetch(`/api/dashboard/artists/${params.id}/media`);
-            if (!response.ok) return { media: [] };
-            return response.json();
-          }),
-          (async () => {
-            try {
-              const followResponse = await fetch(`/api/artists/${params.id}/follow`, {
-                headers: { 'x-subscriber-id': getSubscriberId() },
-              });
-              return followResponse.ok ? await followResponse.json() : null;
-            } catch {
-              return null;
-            }
-          })(),
-        ]);
+        const artistData = await getClientCachedData(`artist:${params.id}`, async () => {
+          const response = await fetch(`/api/dashboard/artists/${params.id}`);
+          if (!response.ok) throw new Error('Artist not found');
+          return response.json();
+        });
         if (!artistData.artist) throw new Error('Artist not found');
 
         if (!cancelled) {
           setArtist(artistData.artist);
-          if (followState) {
-            setIsFollowing(followState.following === true);
-            setArtist((currentArtist) => currentArtist
-              ? { ...currentArtist, followers: Number(followState.followerCount || 0) }
-              : currentArtist);
-          }
-          const loadedTracks = (mediaData.media || []).filter((media: Track & { kind?: string }) => media.kind === 'track');
-          latestTrackId.current = loadedTracks[0]?.id || null;
-          setTracks(loadedTracks);
           setLoading(false);
         }
       } catch (loadError) {
@@ -119,7 +93,45 @@ export default function PublicArtistDetailPage() {
       }
     };
 
-    if (params.id) void loadArtist();
+    const loadMedia = async () => {
+      try {
+        const mediaData = await getClientCachedData(`artist-media:${params.id}`, async () => {
+          const response = await fetch(`/api/dashboard/artists/${params.id}/media`);
+          if (!response.ok) return { media: [] };
+          return response.json();
+        });
+        if (!cancelled) {
+          const loadedTracks = (mediaData.media || []).filter((media: Track & { kind?: string }) => media.kind === 'track');
+          latestTrackId.current = loadedTracks[0]?.id || null;
+          setTracks(loadedTracks);
+        }
+      } catch {
+        // Media is supplementary; the artist profile remains usable without it.
+      }
+    };
+
+    const loadFollowState = async () => {
+      try {
+        const followResponse = await fetch(`/api/artists/${params.id}/follow`, {
+          headers: { 'x-subscriber-id': getSubscriberId() },
+        });
+        if (!cancelled && followResponse.ok) {
+          const followState = await followResponse.json();
+          setIsFollowing(followState.following === true);
+          setArtist((currentArtist) => currentArtist
+            ? { ...currentArtist, followers: Number(followState.followerCount || 0) }
+            : currentArtist);
+        }
+      } catch {
+        // Follow status is supplementary and should not delay the profile.
+      }
+    };
+
+    if (params.id) {
+      void loadArtist();
+      void loadMedia();
+      void loadFollowState();
+    }
     return () => { cancelled = true; };
   }, [params.id]);
 
@@ -388,6 +400,7 @@ export default function PublicArtistDetailPage() {
                     createdAt={track.createdAt}
                     artistName={artist.name}
                     artistGenre={artist.genre}
+                    downloadCount={track.downloadCount}
                     onPlay={() => void syncPlayCount(track.id, track.fileUrl || '')}
                     onDownload={() => syncDownloadCount(track.id)}
                   />
