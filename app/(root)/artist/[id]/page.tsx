@@ -76,9 +76,17 @@ export default function PublicArtistDetailPage() {
     const loadArtist = async () => {
       try {
         const artistData = await getClientCachedData(`artist:${params.id}`, async () => {
-          const response = await fetch(`/api/dashboard/artists/${params.id}`);
-          if (!response.ok) throw new Error('Artist not found');
-          return response.json();
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            const response = await fetch(`/api/dashboard/artists/${params.id}`);
+            if (response.ok) return response.json();
+            if (response.status === 404) throw new Error('Artist not found');
+            if (attempt < 2) {
+              await new Promise((resolve) => window.setTimeout(resolve, 300 * (attempt + 1)));
+              continue;
+            }
+            throw new Error('Unable to load artist');
+          }
+          throw new Error('Unable to load artist');
         });
         if (!artistData.artist) throw new Error('Artist not found');
 

@@ -186,6 +186,9 @@ export async function GET(
   } catch (error) {
     console.warn('Falling back to the seeded artist because PostgreSQL is unavailable', error);
     const fallbackArtist = artistsSeed.find((artist) => artist.id === id);
+    if (!fallbackArtist) {
+      return NextResponse.json({ error: 'Artist service temporarily unavailable' }, { status: 503 });
+    }
     return NextResponse.json({ artist: fallbackArtist ? {
       id: fallbackArtist.id,
       name: fallbackArtist.name,
