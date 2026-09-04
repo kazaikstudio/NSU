@@ -82,13 +82,6 @@ const TrendingCard: React.FC<TrendingCardProps> = ({ artist, isTop }) => {
         {artist.name || 'Unknown Artist'}
       </span>
 
-      {/* Downloads count */}
-      {typeof artist.downloads === 'number' && (
-        <p
-          className="text-secondary text-[11px] sm:text-xs w-full truncate">
-          {artist.downloads.toLocaleString()} downloads
-        </p>
-      )}
     </div>
   );
 };
