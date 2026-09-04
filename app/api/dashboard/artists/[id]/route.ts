@@ -11,6 +11,7 @@ const connectionString = getDatabaseConnectionString();
 
 let pool: Pool | null = null;
 let artistsTableReady = false;
+let artistsTableSetup: Promise<void> | null = null;
 
 if (connectionString) {
   pool = new Pool({
@@ -26,52 +27,65 @@ async function ensureArtistsTable() {
 
   if (artistsTableReady) return;
 
-  const client = await pool.connect();
-
-  try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS artists (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        genre TEXT NOT NULL,
-        tracks_count INTEGER NOT NULL DEFAULT 0,
-        status TEXT NOT NULL DEFAULT 'Active',
-        bio TEXT DEFAULT '',
-        followers INTEGER DEFAULT 0,
-        featured_track TEXT DEFAULT '',
-        monthly_listeners INTEGER DEFAULT 0,
-        banner_url TEXT,
-        profile_url TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await client.query(`
-      ALTER TABLE artists
-      ADD COLUMN IF NOT EXISTS artist_id TEXT,
-      ADD COLUMN IF NOT EXISTS email TEXT,
-      ADD COLUMN IF NOT EXISTS tracks_count INTEGER NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Active',
-      ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT '',
-      ADD COLUMN IF NOT EXISTS followers INTEGER DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS total_downloads INTEGER NOT NULL DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS featured_track TEXT DEFAULT '',
-      ADD COLUMN IF NOT EXISTS monthly_listeners INTEGER DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS banner_url TEXT,
-      ADD COLUMN IF NOT EXISTS profile_url TEXT
-    `);
-
-    await client.query(`
-      ALTER TABLE artists
-      ALTER COLUMN artist_id DROP NOT NULL,
-      ALTER COLUMN email DROP NOT NULL
-    `);
-  } finally {
-    client.release();
+  if (artistsTableSetup) {
+    await artistsTableSetup;
+    return;
   }
 
-  artistsTableReady = true;
+  artistsTableSetup = (async () => {
+    const client = await pool!.connect();
+
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS artists (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          genre TEXT NOT NULL,
+          tracks_count INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'Active',
+          bio TEXT DEFAULT '',
+          followers INTEGER DEFAULT 0,
+          featured_track TEXT DEFAULT '',
+          monthly_listeners INTEGER DEFAULT 0,
+          banner_url TEXT,
+          profile_url TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+
+      await client.query(`
+        ALTER TABLE artists
+        ADD COLUMN IF NOT EXISTS artist_id TEXT,
+        ADD COLUMN IF NOT EXISTS email TEXT,
+        ADD COLUMN IF NOT EXISTS tracks_count INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Active',
+        ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS followers INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS total_downloads INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS featured_track TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS monthly_listeners INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS banner_url TEXT,
+        ADD COLUMN IF NOT EXISTS profile_url TEXT
+      `);
+
+      await client.query(`
+        ALTER TABLE artists
+        ALTER COLUMN artist_id DROP NOT NULL,
+        ALTER COLUMN email DROP NOT NULL
+      `);
+    } finally {
+      client.release();
+    }
+
+    artistsTableReady = true;
+  })();
+
+  try {
+    await artistsTableSetup;
+  } finally {
+    artistsTableSetup = null;
+  }
 }
 
 async function ensureArtistMediaTable() {
@@ -88,8 +102,13 @@ async function ensureArtistMediaTable() {
       mime_type TEXT NOT NULL,
       file_url TEXT NOT NULL,
       drive_file_id TEXT,
+      download_count INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  await pool.query(`
+    ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0
   `);
 }
 
