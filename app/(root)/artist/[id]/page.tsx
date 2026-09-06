@@ -419,7 +419,7 @@ export default function PublicArtistDetailPage() {
                     artistGenre={artist.genre}
                     downloadCount={track.downloadCount}
                     onPlay={() => void syncPlayCount(track.id, track.fileUrl || '')}
-                    onDownload={() => syncDownloadCount(track.id)}
+                    onDownload={(serverDownloadCount) => syncDownloadCount(track.id, serverDownloadCount)}
                   />
                 );
               })}

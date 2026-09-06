@@ -937,9 +937,14 @@ export default function ArtistDetailPage() {
                                 artistName={artist.name}
                                 showDownload={false}
                                 downloadCount={track.downloadCount}
-                                onDownload={() => {
+                                onDownload={(serverDownloadCount) => {
                                   setTracks((currentTracks) => currentTracks.map((currentTrack) => currentTrack.id === track.id
-                                    ? { ...currentTrack, downloadCount: Number(currentTrack.downloadCount || 0) + 1 }
+                                    ? {
+                                      ...currentTrack,
+                                      downloadCount: Number.isFinite(serverDownloadCount)
+                                        ? serverDownloadCount
+                                        : Number(currentTrack.downloadCount || 0) + 1,
+                                    }
                                     : currentTrack));
                                 }}
                               />
