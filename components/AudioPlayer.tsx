@@ -45,6 +45,39 @@ function getDownloadUrl(fileUrl: string | undefined, fileName: string | undefine
   return `/api/dashboard/media/${fileId}?download=1&filename=${encodeURIComponent(fileName || `${title}.mp3`)}`;
 }
 
+async function getDownloadRegion() {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return undefined;
+
+  const position = await new Promise<GeolocationPosition | undefined>((resolve) => {
+    navigator.geolocation.getCurrentPosition(resolve, () => resolve(undefined), {
+      enableHighAccuracy: false,
+      timeout: 4000,
+      maximumAge: 300000,
+    });
+  });
+  if (!position) return undefined;
+
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${position.coords.latitude}&lon=${position.coords.longitude}`,
+      { headers: { Accept: 'application/json' } },
+    );
+    if (!response.ok) return undefined;
+
+    const data = await response.json() as { address?: Record<string, string | undefined> };
+    const addressText = Object.values(data.address || {}).filter(Boolean).join(' ').toLowerCase();
+    if (addressText.includes('kampala')) return 'Kampala';
+    if (/(northern|gulu|lira|kitgum|west nile|arua|karamoja|moroto)/.test(addressText)) return 'Northern';
+    if (/(eastern|jinja|mbale|tororo|soroti|busia)/.test(addressText)) return 'Eastern';
+    if (/(western|mbarara|kasese|fort portal|kabale|hoima)/.test(addressText)) return 'Western';
+    if (/(central|wakiso|mukono|mpigi|masaka|masindi)/.test(addressText)) return 'Central';
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
 export default function AudioPlayer({
   src,
   title,
@@ -181,7 +214,10 @@ export default function AudioPlayer({
     }, 180);
 
     try {
-      const response = await fetch(downloadUrl, { cache: 'no-store' });
+      const region = await getDownloadRegion();
+      const requestUrl = new URL(downloadUrl, window.location.origin);
+      if (region) requestUrl.searchParams.set('region', region);
+      const response = await fetch(requestUrl, { cache: 'no-store' });
       if (!response.ok) {
         throw new Error(`Download failed with status ${response.status}`);
       }

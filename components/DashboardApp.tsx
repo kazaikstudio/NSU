@@ -4,6 +4,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LayoutDashboard, Users, History, HardDrive, LogOut, Video } from 'lucide-react';
 import { clampUploadProgress, formatUploadStatusMessage, shouldAutoUploadOnSelection } from '@/lib/talk-show-upload';
+import DashboardCharts from '@/components/DashboardCharts';
 
 type NavPage = 'dashboard' | 'artists' | 'videos' | 'histories' | 'storage' | 'members';
 
@@ -18,6 +19,7 @@ interface Artist {
   name: string;
   genre: string;
   tracksCount: number;
+  totalDownloads: number;
   status: 'Active' | 'Inactive' | 'Pending';
   profileUrl?: string | null;
 }
@@ -612,37 +614,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                  <h3 className="mb-4 text-base font-semibold">Streams Over Time</h3>
-                  <div className="flex h-48 items-end justify-between gap-2 pt-4">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => {
-                      const heights = ['h-24', 'h-32', 'h-16', 'h-40', 'h-36', 'h-48', 'h-44'];
-                      return (
-                        <div key={day} className="flex flex-1 flex-col items-center gap-2">
-                          <div className={`w-full rounded-t-md bg-indigo-600 transition-all hover:bg-indigo-500 ${heights[i]}`} />
-                          <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{day}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                  <h3 className="mb-4 text-base font-semibold">Revenue Analytics</h3>
-                  <div className="flex h-48 items-end justify-between gap-2 pt-4">
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'].map((month, i) => {
-                      const heights = ['h-20', 'h-28', 'h-36', 'h-30', 'h-42', 'h-48', 'h-40'];
-                      return (
-                        <div key={month} className="flex flex-1 flex-col items-center gap-2">
-                          <div className={`w-full rounded-t-md bg-emerald-500 transition-all hover:bg-emerald-400 ${heights[i]}`} />
-                          <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{month}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+              <DashboardCharts isDarkMode={isDarkMode} artists={artists} />
             </div>
           )}
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
-import { getMediaDownloadCount, incrementMediaPlayCount } from '@/lib/media-play';
+import { getMediaDownloadCount, incrementMediaPlayCount, recordDownloadRegion } from '@/lib/media-play';
 
 export const runtime = 'nodejs';
 
@@ -44,11 +44,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const range = request.headers.get('range');
   const searchParams = new URL(request.url).searchParams;
   const requestedFilename = searchParams.get('filename');
+  const downloadRegion = searchParams.get('region');
   let updatedDownloadCount: number | null = null;
 
   if (searchParams.get('download') === '1') {
     try {
       updatedDownloadCount = await incrementMediaPlayCount(id);
+      if (downloadRegion) {
+        await recordDownloadRegion(downloadRegion);
+      }
     } catch (error) {
       console.error('Unable to record artist download:', error);
     }

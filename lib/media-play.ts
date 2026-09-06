@@ -48,3 +48,45 @@ export async function incrementMediaPlayCount(
   const nextValue = Number(result.rows[0]?.trackDownloads ?? 0);
   return nextValue;
 }
+
+export async function recordDownloadRegion(
+  region: string,
+  queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),
+) {
+  const normalizedRegion = region.trim().slice(0, 100);
+  if (!normalizedRegion) return;
+
+  await ensureDatabaseReady();
+  await queryFn(`
+    CREATE TABLE IF NOT EXISTS download_regions (
+      region TEXT PRIMARY KEY,
+      download_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await queryFn(
+    `INSERT INTO download_regions (region, download_count)
+     VALUES ($1, 1)
+     ON CONFLICT (region) DO UPDATE
+     SET download_count = download_regions.download_count + 1, updated_at = NOW()`,
+    [normalizedRegion],
+  );
+}
+
+export async function getDownloadRegions(
+  queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),
+) {
+  await ensureDatabaseReady();
+  await queryFn(`
+    CREATE TABLE IF NOT EXISTS download_regions (
+      region TEXT PRIMARY KEY,
+      download_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  const result = await queryFn(
+    `SELECT region AS name, download_count AS downloads
+     FROM download_regions ORDER BY download_count DESC, region ASC LIMIT 5`,
+  );
+  return result.rows.map((row) => ({ name: String(row.name), downloads: Number(row.downloads || 0) }));
+}
