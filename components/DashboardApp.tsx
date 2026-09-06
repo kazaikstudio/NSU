@@ -1177,7 +1177,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                     if (editingStorageItemId) {
                       void handleUpdateStorageItem(editingStorageItemId);
                     } else if (uploadFile) {
-                      void submitUpload(uploadFile, uploadTitle.trim() || uploadFile.name.replace(/\.[^/.]+$/, ""), uploadType);
+                      void submitUpload(uploadFile, uploadTitle.trim() || uploadFile.name.replace(/\.[^/.]+$/, ""), 'video');
                     }
                   }}
                   className="mt-5"
