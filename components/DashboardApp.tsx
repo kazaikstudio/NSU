@@ -117,7 +117,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [newMemberContact, setNewMemberContact] = useState('');
   const [newMemberProfilePic, setNewMemberProfilePic] = useState('');
-  const [newMemberProfileFile, setNewMemberProfileFile] = useState<File | null>(null);
   const [newMemberCategory, setNewMemberCategory] = useState<'Board Members' | 'Artists' | 'Dancers' | 'Regular Members'>('Regular Members');
   const [newMemberStatus, setNewMemberStatus] = useState<Member['status']>('Active');
   const [savingMember, setSavingMember] = useState(false);
@@ -148,6 +147,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
+        await fetch('/api/dashboard/storage/member-profiles', { method: 'DELETE' });
         const [artistsResponse, membersResponse, mediaResponse, historyResponse, storageResponse, regionsResponse] = await Promise.all([
           fetch('/api/dashboard/artists'),
           fetch('/api/members'),
@@ -195,7 +195,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
     setNewMemberEmail(member.email);
     setNewMemberContact(member.contact || '');
     setNewMemberProfilePic(member.profilePic || '');
-    setNewMemberProfileFile(null);
     setNewMemberCategory(member.category);
     setNewMemberStatus(member.status);
     setIsMemberModalOpen(true);
@@ -242,27 +241,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
     if (response.ok) setArtists((prev) => prev.filter((artist) => artist.id !== id));
   }, []);
 
-  const uploadMemberProfileImage = useCallback(async (file: File, memberName: string) => {
-    const formData = new FormData();
-    formData.append('title', `Member profile - ${memberName.trim()}`);
-    formData.append('type', 'image');
-    formData.append('source', 'talk-show');
-    formData.append('file', file);
-
-    const response = await fetch('/api/dashboard/storage', {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await response.json().catch(() => ({})) as UploadResponsePayload;
-
-    if (!response.ok || !data.item?.file_url) {
-      throw new Error(data.error || data.message || 'Unable to save profile image to Talk Show storage.');
-    }
-
-    setStorageItems((prev) => [data.item as StorageItem, ...prev]);
-    return data.item.file_url;
-  }, []);
-
   const handleAddMember = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (savingMember || !newMemberName.trim() || !newMemberEmail.trim()) {
@@ -272,12 +250,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
     setMemberMessage('');
     setSavingMember(true);
     try {
-      let profilePic = newMemberProfilePic;
-      if (newMemberProfileFile) {
-        setMemberMessage('Saving profile image to Talk Show storage...');
-        profilePic = await uploadMemberProfileImage(newMemberProfileFile, newMemberName);
-      }
-
       const response = await fetch(editingMember ? `/api/members/${editingMember.id}` : '/api/members', {
         method: editingMember ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -285,7 +257,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
           name: newMemberName,
           email: newMemberEmail,
           contact: newMemberContact,
-          profilePic,
+          profilePic: newMemberProfilePic,
           category: newMemberCategory,
           status: newMemberStatus,
         }),
@@ -301,7 +273,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
       setNewMemberEmail('');
       setNewMemberContact('');
       setNewMemberProfilePic('');
-      setNewMemberProfileFile(null);
       setIsMemberModalOpen(false);
       setMemberMessage(editingMember ? 'Member updated successfully.' : 'Member added successfully.');
     } catch (error) {
@@ -309,7 +280,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
     } finally {
       setSavingMember(false);
     }
-  }, [newMemberName, newMemberEmail, newMemberContact, newMemberProfilePic, newMemberProfileFile, newMemberCategory, newMemberStatus, editingMember, savingMember, uploadMemberProfileImage]);
+  }, [newMemberName, newMemberEmail, newMemberContact, newMemberProfilePic, newMemberCategory, newMemberStatus, editingMember, savingMember]);
 
   const handleDeleteMember = useCallback(async (id: string) => {
     const response = await fetch(`/api/members/${id}`, { method: 'DELETE' });
@@ -725,7 +696,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                       setNewMemberCategory('Regular Members');
                       setNewMemberStatus('Active');
                       setNewMemberProfilePic('');
-                      setNewMemberProfileFile(null);
                       setIsMemberModalOpen(true);
                     }}
                     className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4.5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 active:scale-95"
@@ -894,8 +864,9 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    setNewMemberProfileFile(file);
-                                    setNewMemberProfilePic(URL.createObjectURL(file));
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => setNewMemberProfilePic(reader.result as string);
+                                    reader.readAsDataURL(file);
                                   }
                                 }}
                               />
@@ -1842,9 +1813,9 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) {
-                            setNewMemberProfileFile(file);
-                            const previewUrl = URL.createObjectURL(file);
-                            setNewMemberProfilePic(previewUrl);
+                            const reader = new FileReader();
+                            reader.onloadend = () => setNewMemberProfilePic(reader.result as string);
+                            reader.readAsDataURL(file);
                           }
                         }}
                       />
@@ -1854,7 +1825,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                         type="button"
                         onClick={() => {
                           setNewMemberProfilePic('');
-                          setNewMemberProfileFile(null);
                         }}
                         className="text-xs font-medium text-red-400 hover:text-red-300 px-2 py-1"
                       >
