@@ -15,6 +15,11 @@ type WebkitVideoElement = HTMLVideoElement & {
   webkitDisplayingFullscreen?: boolean;
 };
 
+type ScreenOrientationWithLock = ScreenOrientation & {
+  lock?: (orientation: "landscape") => Promise<void>;
+  unlock?: () => void;
+};
+
 function formatTime(timeInSeconds: number) {
   if (Number.isNaN(timeInSeconds)) return "00:00";
   const minutes = Math.floor(timeInSeconds / 60);
@@ -72,10 +77,18 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
     };
 
     const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      const fullscreen = Boolean(document.fullscreenElement);
+      setIsFullscreen(fullscreen);
+      if (!fullscreen) {
+        (screen.orientation as ScreenOrientationWithLock).unlock?.();
+      }
     };
     const handleWebkitFullscreenChange = () => {
-      setIsFullscreen(Boolean((video as WebkitVideoElement).webkitDisplayingFullscreen));
+      const fullscreen = Boolean((video as WebkitVideoElement).webkitDisplayingFullscreen);
+      setIsFullscreen(fullscreen);
+      if (!fullscreen) {
+        (screen.orientation as ScreenOrientationWithLock).unlock?.();
+      }
     };
 
     video.addEventListener("timeupdate", handleTimeUpdate);
@@ -244,16 +257,27 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
     const video = videoRef.current as WebkitVideoElement | null;
     if (!container || !video) return;
 
+    const lockLandscape = () => {
+      if (!isMobile) return;
+      const lock = (screen.orientation as ScreenOrientationWithLock).lock;
+      if (lock) {
+        void lock.call(screen.orientation, "landscape").catch(() => undefined);
+      }
+    };
+
     if (!document.fullscreenElement) {
       if (isMobile && video.webkitEnterFullscreen) {
         video.webkitEnterFullscreen();
+        window.setTimeout(lockLandscape, 100);
       } else {
-        container.requestFullscreen().catch(() => {
+        void container.requestFullscreen().then(lockLandscape).catch(() => {
           video.webkitEnterFullscreen?.();
+          window.setTimeout(lockLandscape, 100);
         });
       }
     } else {
       document.exitFullscreen().catch(() => undefined);
+      (screen.orientation as ScreenOrientationWithLock).unlock?.();
     }
     revealControls();
   };

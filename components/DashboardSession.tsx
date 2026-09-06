@@ -11,11 +11,6 @@ export default function DashboardSession() {
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      setIsHydrated(true);
-      return;
-    }
-
     const readStoredUser = () => {
       try {
         const rawUser = window.localStorage.getItem('nsu_user');
@@ -42,8 +37,10 @@ export default function DashboardSession() {
 
     const storedUser = readStoredUser();
     if (storedUser) {
-      setSessionUser(storedUser);
-      setIsHydrated(true);
+      queueMicrotask(() => {
+        setSessionUser(storedUser);
+        setIsHydrated(true);
+      });
       return;
     }
 
