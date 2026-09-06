@@ -37,7 +37,7 @@ export default function RootLayout({
               (() => {
                 try {
                   const savedTheme = localStorage.getItem('nsu-theme') || localStorage.getItem('theme_mode');
-                  if (savedTheme !== 'light') document.documentElement.classList.add('dark');
+                  document.documentElement.classList.toggle('dark', savedTheme === 'dark');
                 } catch {}
               })();
             `,

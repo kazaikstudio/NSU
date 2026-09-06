@@ -10,6 +10,11 @@ type ModernVideoPlayerProps = {
   onEndedAction?: () => void;
 };
 
+type WebkitVideoElement = HTMLVideoElement & {
+  webkitEnterFullscreen?: () => void;
+  webkitDisplayingFullscreen?: boolean;
+};
+
 function formatTime(timeInSeconds: number) {
   if (Number.isNaN(timeInSeconds)) return "00:00";
   const minutes = Math.floor(timeInSeconds / 60);
@@ -69,15 +74,22 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
     const handleFullscreenChange = () => {
       setIsFullscreen(Boolean(document.fullscreenElement));
     };
+    const handleWebkitFullscreenChange = () => {
+      setIsFullscreen(Boolean((video as WebkitVideoElement).webkitDisplayingFullscreen));
+    };
 
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
+    video.addEventListener("webkitbeginfullscreen", handleWebkitFullscreenChange);
+    video.addEventListener("webkitendfullscreen", handleWebkitFullscreenChange);
 
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      video.removeEventListener("webkitbeginfullscreen", handleWebkitFullscreenChange);
+      video.removeEventListener("webkitendfullscreen", handleWebkitFullscreenChange);
     };
   }, [src]);
 
@@ -229,10 +241,17 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
 
   const toggleFullscreen = () => {
     const container = containerRef.current;
-    if (!container) return;
+    const video = videoRef.current as WebkitVideoElement | null;
+    if (!container || !video) return;
 
     if (!document.fullscreenElement) {
-      container.requestFullscreen().catch(() => undefined);
+      if (isMobile && video.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+      } else {
+        container.requestFullscreen().catch(() => {
+          video.webkitEnterFullscreen?.();
+        });
+      }
     } else {
       document.exitFullscreen().catch(() => undefined);
     }
@@ -244,7 +263,7 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
     width: "100%",
     aspectRatio: "16 / 9",
     overflow: "hidden",
-    borderRadius: isMobile ? 22 : 28,
+    borderRadius: isFullscreen ? 0 : isMobile ? 22 : 28,
     background: "radial-gradient(circle at top, rgba(92, 100, 255, 0.24), transparent 42%), linear-gradient(180deg, #101322 0%, #06070d 100%)",
     border: "1px solid rgba(255, 255, 255, 0.08)",
     boxShadow: "0 24px 70px rgba(0, 0, 0, 0.38)",

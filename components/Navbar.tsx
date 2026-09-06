@@ -34,16 +34,27 @@ const Navbar = () => {
 
   useEffect(() => {
     const root = document.documentElement;
-    const syncTheme = () => setIsDark(root.classList.contains('dark'));
-    const observer = new MutationObserver(syncTheme);
+    const syncTheme = (storedTheme?: string | null) => {
+      const savedTheme = storedTheme ?? window.localStorage.getItem('nsu-theme') ?? window.localStorage.getItem('theme_mode');
+      const nextIsDark = savedTheme === 'dark';
+      root.classList.toggle('dark', nextIsDark);
+      setIsDark(nextIsDark);
+    };
+    const observer = new MutationObserver(() => syncTheme());
 
     observer.observe(root, { attributes: true, attributeFilter: ['class'] });
-    window.addEventListener('storage', syncTheme);
     syncTheme();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'nsu-theme' || event.key === 'theme_mode') {
+        syncTheme(event.key === 'nsu-theme' ? event.newValue : null);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
 
     return () => {
       observer.disconnect();
-      window.removeEventListener('storage', syncTheme);
+      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 
@@ -104,9 +115,10 @@ const Navbar = () => {
 
   const handleThemeToggle = () => {
     const root = document.documentElement;
-    const isDark = root.classList.toggle('dark');
-    setIsDark(isDark);
-    window.localStorage.setItem('nsu-theme', isDark ? 'dark' : 'light');
+    const nextIsDark = !root.classList.contains('dark');
+    root.classList.toggle('dark', nextIsDark);
+    setIsDark(nextIsDark);
+    window.localStorage.setItem('nsu-theme', nextIsDark ? 'dark' : 'light');
   };
 
   const activeDownloads = downloadEntries.filter((entry) => entry.status === 'downloading');
