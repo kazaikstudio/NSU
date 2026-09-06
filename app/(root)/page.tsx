@@ -24,20 +24,9 @@ type HomeMediaItem = {
 type TalkShowStorageItem = {
   id: string | number;
   title?: string;
-  type?: string;
   file_url?: string;
-  fileUrl?: string;
   created_at?: string;
 };
-
-function isTalkShowVideo(item: TalkShowStorageItem) {
-  const normalizedType = item.type?.trim().toLowerCase() || '';
-  if (normalizedType.startsWith('image')) return false;
-  if (normalizedType.startsWith('video')) return true;
-
-  const fileUrl = (item.file_url || item.fileUrl)?.split(/[?#]/)[0] || '';
-  return /\.(mp4|webm|mov|m4v|avi|mkv)$/i.test(fileUrl);
-}
 
 function getTalkShowThumbnailUrl(fileUrl: string | undefined) {
   if (!fileUrl) return null;
@@ -146,13 +135,13 @@ const Home = () => {
         setOfficialVideos(officialItems);
         setShortVideos(shortItems);
 
-        const uploads = payload.storageItems.filter(isTalkShowVideo).map((item) => ({
+        const uploads = payload.storageItems.map((item) => ({
           id: String(item.id),
           title: item.title || 'Talk Show Upload',
-          thumbnail: getTalkShowThumbnailUrl(item.file_url || item.fileUrl) || 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" rx="32" fill="#111827"/><rect x="44" y="44" width="552" height="272" rx="24" fill="#1f2937"/><circle cx="320" cy="180" r="76" fill="#f43f5e"/><path d="M288 144l64 36-64 36z" fill="#fff"/><text x="320" y="270" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#f9fafb">Talk Show Upload</text></svg>`),
+          thumbnail: getTalkShowThumbnailUrl(item.file_url) || 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" rx="32" fill="#111827"/><rect x="44" y="44" width="552" height="272" rx="24" fill="#1f2937"/><circle cx="320" cy="180" r="76" fill="#f43f5e"/><path d="M288 144l64 36-64 36z" fill="#fff"/><text x="320" y="270" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" fill="#f9fafb">Talk Show Upload</text></svg>`),
           date: item.created_at ? new Date(item.created_at).toLocaleDateString('en-GB') : '',
-          url: item.file_url || item.fileUrl || '',
-          fileUrl: item.file_url || item.fileUrl || '',
+          url: item.file_url || '',
+          fileUrl: item.file_url || '',
           type: 'talk-show' as const,
           source: 'talk-show' as const,
         })) as HomeMediaItem[];
