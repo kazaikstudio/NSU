@@ -8,12 +8,6 @@ import DashboardCharts from '@/components/DashboardCharts';
 
 type NavPage = 'dashboard' | 'artists' | 'videos' | 'histories' | 'storage' | 'members';
 
-interface User {
-  email: string;
-  full_name: string;
-  role: string;
-}
-
 interface Artist {
   id: string;
   name: string;
@@ -87,7 +81,7 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
-export default function DashboardApp({ user }: { user?: User | null }) {
+export default function DashboardApp() {
   const router = useRouter();
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -108,7 +102,6 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   const [isMegaUploadOpen, setIsMegaUploadOpen] = useState(false);
 
   const [artists, setArtists] = useState<Artist[]>([]);
-
   const [members, setMembers] = useState<Member[]>([]);
   const [memberCategoryFilter, setMemberCategoryFilter] = useState<string>('All');
 
@@ -207,28 +200,28 @@ export default function DashboardApp({ user }: { user?: User | null }) {
   );
 
   const handleAddArtist = useCallback(async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newArtistName || !newArtistGenre) return;
+    e.preventDefault();
+    if (!newArtistName || !newArtistGenre) return;
 
-        setArtistMessage('');
-        try {
-          const response = await fetch('/api/dashboard/artists', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newArtistName, genre: newArtistGenre }),
-          });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error || 'Unable to save artist');
+    setArtistMessage('');
+    try {
+      const response = await fetch('/api/dashboard/artists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newArtistName, genre: newArtistGenre }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to save artist');
 
-          setArtists((prev) => [data.artist, ...prev]);
-          setNewArtistName('');
-          setNewArtistGenre('');
-          setIsModalOpen(false);
-          setArtistMessage('Artist added successfully.');
-        } catch (error) {
-          setArtistMessage(error instanceof Error ? error.message : 'Unable to save artist');
-        }
-    }, [newArtistName, newArtistGenre]);
+      setArtists((prev) => [data.artist, ...prev]);
+      setNewArtistName('');
+      setNewArtistGenre('');
+      setIsModalOpen(false);
+      setArtistMessage('Artist added successfully.');
+    } catch (error) {
+      setArtistMessage(error instanceof Error ? error.message : 'Unable to save artist');
+    }
+  }, [newArtistName, newArtistGenre]);
 
   const handleDeleteArtist = useCallback(async (id: string) => {
     const response = await fetch(`/api/dashboard/artists/${id}`, { method: 'DELETE' });
@@ -501,43 +494,52 @@ export default function DashboardApp({ user }: { user?: User | null }) {
       }
     }
   }, [router]);
-
+  const [newMemberStatus, setNewMemberStatus] = useState<'Active' | 'Inactive' | 'Pending'>('Active');
   return (
     <div
-      className={`flex min-h-screen ${
+      className={`flex h-screen overflow-hidden ${
         isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'
       } transition-colors duration-300`}
-    >
-      <aside
-        className={`flex w-64 flex-col justify-between border-r p-4 ${
-          isDarkMode ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-white'
-        }`}
       >
+      <aside
+        className={`sticky top-0 flex h-screen w-64 flex-col justify-between border-r p-4 overflow-y-auto backdrop-blur-xl transition-all duration-300 ${
+          isDarkMode ? 'border-slate-800/80 bg-slate-900/90 shadow-2xl shadow-black/40' : 'border-slate-200/80 bg-white/90 shadow-xl shadow-slate-200/50'
+        }`}
+        >
         <div>
-          <div className="mb-6 flex items-center gap-3 border-b border-slate-700/50 px-3 py-4">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 font-bold text-white">N</div>
+          {/* Brand Logo Header */}
+          <div className={`mb-6 flex items-center gap-3 border-b px-3 py-4 ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200/80'}`}>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-indigo-500 to-indigo-700 font-bold text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30">
+              N
+            </div>
             <div>
-              <h2 className="text-base font-semibold leading-none">Noll Music</h2>
-              <span className="text-xs text-indigo-400">Uganda</span>
+              <h2 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Noll Music</h2>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                Uganda
+              </span>
             </div>
           </div>
 
-          <nav className="space-y-1">
+          {/* Navigation Links */}
+          <nav className="space-y-1.5">
             {navItems.map((item) => {
               const isActive = activePage === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => setActivePage(item.id)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+                  className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all ${
                     isActive
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                      ? 'bg-linear-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30'
                       : isDarkMode
                       ? 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
-                  {item.icon}
+                  <span className={isActive ? 'text-white' : isDarkMode ? 'text-slate-400' : 'text-slate-500'}>
+                    {item.icon}
+                  </span>
                   <span>{item.label}</span>
                 </button>
               );
@@ -545,42 +547,59 @@ export default function DashboardApp({ user }: { user?: User | null }) {
           </nav>
         </div>
 
-        <div className="space-y-2 border-t border-slate-700/50 pt-4">
+        {/* Footer Controls: Logout & Theme Toggle */}
+        <div className={`space-y-3 border-t pt-4 ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200/80'}`}>
           <button
             onClick={handleLogout}
-            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+            className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-semibold transition-all border ${
               isDarkMode
-                ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300'
-                : 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
+                ? 'border-rose-500/20 bg-rose-500/5 text-rose-400 hover:bg-rose-500/15 hover:border-rose-500/30'
+                : 'border-rose-200 bg-rose-50/50 text-rose-600 hover:bg-rose-100 hover:border-rose-300'
             }`}
           >
             <LogOut className="h-5 w-5" />
             <span>Log Out</span>
           </button>
+
           <div
-            className={`flex items-center justify-between rounded-xl border p-3 ${
-              isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-200 bg-slate-100'
+            className={`flex items-center justify-between rounded-xl border p-3.5 transition-all ${
+              isDarkMode ? 'border-slate-800/80 bg-slate-950/50 shadow-inner' : 'border-slate-200/80 bg-slate-100/70 shadow-inner'
             }`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               {isDarkMode ? (
-                <svg className="h-5 w-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                </div>
               ) : (
-                <svg className="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </div>
               )}
-              <span className="text-xs font-medium">{isDarkMode ? 'Dark Mode' : 'Light Mode'}</span>
+              <span className={`text-xs font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                {isDarkMode ? 'Dark Mode' : 'Light Mode'}
+              </span>
             </div>
 
-            <button onClick={() => {
-              const nextMode = !isDarkMode;
-              setIsDarkMode(nextMode);
-              window.localStorage.setItem('nsu-theme', nextMode ? 'dark' : 'light');
-            }} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-1'}`} />
+            <button
+              onClick={() => {
+                const nextMode = !isDarkMode;
+                setIsDarkMode(nextMode);
+                window.localStorage.setItem('nsu-theme', nextMode ? 'dark' : 'light');
+              }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ring-2 ring-indigo-500/20 ${
+                isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${
+                  isDarkMode ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
             </button>
           </div>
         </div>
@@ -591,54 +610,116 @@ export default function DashboardApp({ user }: { user?: User | null }) {
           <div className="mb-8 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-indigo-400">{activePage.replace('-', ' ')}</p>
-              <h1 className="mt-1 text-3xl font-semibold">Welcome back, {user?.full_name || 'User'}</h1>
             </div>
           </div>
 
           {activePage === 'dashboard' && (
             <div className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Artists</p>
-                  <p className="mt-2 text-lg font-medium">{artists.length}</p>
+              {/* Metric Cards Grid */}
+              <div className="grid gap-6 md:grid-cols-3">
+                {/* Total Artists Card */}
+                <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30 hover:border-slate-700' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50 hover:border-slate-300'}`}>
+                  <div className="flex items-center justify-between">
+                    <p className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Artists</p>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shadow-sm">
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className={`mt-4 text-3xl font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{artists.length}</p>
+                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-emerald-400">
+                    <span className="inline-flex items-center rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5">Active Noll Artists</span>
+                  </div>
                 </div>
 
-                <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Uploads</p>
-                  <p className="mt-2 text-lg font-medium">{totalUploads}</p>
+                {/* Total Uploads Card */}
+                <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30 hover:border-slate-700' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50 hover:border-slate-300'}`}>
+                  <div className="flex items-center justify-between">
+                    <p className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Uploads</p>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shadow-sm">
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className={`mt-4 text-3xl font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{totalUploads}</p>
+                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-indigo-400">
+                    <span className="inline-flex items-center rounded-md bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5">Cloud Media files</span>
+                  </div>
                 </div>
 
-                <div className={`rounded-xl border p-5 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Members</p>
-                  <p className="mt-2 text-lg font-medium">{members.length}</p>
+                {/* Total Members Card */}
+                <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30 hover:border-slate-700' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50 hover:border-slate-300'}`}>
+                  <div className="flex items-center justify-between">
+                    <p className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Members</p>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shadow-sm">
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <p className={`mt-4 text-3xl font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{members.length}</p>
+                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-emerald-400">
+                    <span className="inline-flex items-center rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5">Platform Community</span>
+                  </div>
                 </div>
               </div>
 
-              <DashboardCharts isDarkMode={isDarkMode} artists={artists} />
+              {/* Charts Section */}
+              <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
+                <DashboardCharts isDarkMode={isDarkMode} artists={artists} />
+              </div>
             </div>
           )}
 
           {activePage === 'members' && (
             <div className="space-y-6">
-              <div className={`flex flex-col gap-4 rounded-xl border p-6 sm:flex-row sm:items-center sm:justify-between ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <div>
-                  <h2 className="text-xl font-semibold">Members Management</h2>
-                  <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>View platform team members across Board Members, Artists, Dancers, and Regular Members.</p>
+              {/* Page Header */}
+              <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight">Members Management</h2>
+                    <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      View platform team members across Board Members, Artists, Dancers, and Regular Members.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingMember(null);
+                      setNewMemberName('');
+                      setNewMemberEmail('');
+                      setNewMemberContact('');
+                      setNewMemberCategory('Regular Members');
+                      setNewMemberStatus('Active');
+                      setNewMemberProfilePic('');
+                      setIsMemberModalOpen(true);
+                    }}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4.5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 active:scale-95"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add New Member
+                  </button>
                 </div>
-                <button onClick={() => { setEditingMember(null); setNewMemberName(''); setNewMemberEmail(''); setNewMemberContact(''); setNewMemberProfilePic(''); setIsMemberModalOpen(true); }} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
-                  Add New Member
-                </button>
               </div>
 
-              {memberMessage ? <p className="text-sm text-emerald-400">{memberMessage}</p> : null}
+              {memberMessage && (
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm font-medium text-emerald-400">
+                  {memberMessage}
+                </div>
+              )}
 
+              {/* Category Filter Pills */}
               <div className="flex flex-wrap gap-2">
                 {['All', 'Board Members', 'Artists', 'Dancers', 'Regular Members'].map((cat) => (
                   <button
                     key={cat}
+                    type="button"
                     onClick={() => setMemberCategoryFilter(cat)}
-                    className={`rounded-xl px-4 py-2 text-xs font-medium transition-all shadow-sm ${
+                    className={`rounded-xl px-4 py-2 text-xs font-semibold transition-all shadow-sm ${
                       memberCategoryFilter === cat
                         ? 'bg-indigo-600 text-white shadow-indigo-600/30'
                         : isDarkMode
@@ -651,56 +732,378 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                 ))}
               </div>
 
-              <div className={`overflow-hidden rounded-xl border ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+              {/* Members Table */}
+              <div className={`overflow-hidden rounded-2xl border backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
-                    <thead className={`border-b text-xs uppercase tracking-wider ${isDarkMode ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+                    <thead className={`border-b text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'border-slate-800/80 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50/70 text-slate-500'}`}>
                       <tr>
-                        <th className="px-6 py-3.5">Name</th>
-                        <th className="px-6 py-3.5">Email</th>
-                        <th className="px-6 py-3.5">Contact</th>
-                        <th className="px-6 py-3.5">Category</th>
-                        <th className="px-6 py-3.5">Status</th>
-                        <th className="px-6 py-3.5 text-right">Actions</th>
+                        <th className="px-6 py-4">Name</th>
+                        <th className="px-6 py-4">Email</th>
+                        <th className="px-6 py-4">Contact</th>
+                        <th className="px-6 py-4">Category</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
+                    <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/80' : 'divide-slate-200/80'}`}>
                       {filteredMembers.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                            <p className="text-sm font-medium text-slate-400">No members found in this category</p>
+                          <td colSpan={6} className="px-6 py-16 text-center">
+                            <div className="flex flex-col items-center justify-center">
+                              <div className={`mb-3 flex h-12 w-12 items-center justify-center rounded-full border ${isDarkMode ? 'border-slate-800 bg-slate-800/50 text-slate-500' : 'border-slate-200 bg-slate-100 text-slate-400'}`}>
+                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                </svg>
+                              </div>
+                              <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>No members found in this category</p>
+                              <p className="mt-1 text-xs text-slate-500">Try selecting a different filter or add a new member.</p>
+                            </div>
                           </td>
                         </tr>
                       ) : (
                         filteredMembers.map((member) => (
-                          <tr key={member.id} onClick={() => handleOpenEditMember(member)} className={`cursor-pointer transition-colors ${isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}`}>
-                            <td className="px-6 py-4 font-medium">
+                          <tr
+                            key={member.id}
+                            onClick={() => handleOpenEditMember(member)}
+                            className={`cursor-pointer transition-colors duration-150 ${isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/80'}`}
+                          >
+                            <td className={`px-6 py-4 font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                               <div className="flex items-center gap-3">
                                 {member.profilePic ? (
-                                  <img src={member.profilePic} alt={member.name} className="h-8 w-8 rounded-full object-cover" />
+                                  <img src={member.profilePic} alt={member.name} className="h-9 w-9 rounded-full object-cover shadow-sm border border-slate-700/50" />
                                 ) : (
-                                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600/20 text-xs font-semibold text-indigo-400">
+                                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600/20 border border-indigo-500/30 text-xs font-bold text-indigo-400 shadow-sm">
                                     {member.name.charAt(0)}
                                   </div>
                                 )}
-                                {member.name}
+                                <span className="font-semibold">{member.name}</span>
                               </div>
                             </td>
-                            <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{member.email}</td>
-                            <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{member.contact || 'N/A'}</td>
+                            <td className={`px-6 py-4 text-xs font-mono ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{member.email}</td>
+                            <td className={`px-6 py-4 text-xs ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{member.contact || 'N/A'}</td>
                             <td className="px-6 py-4">
-                              <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-0.5 text-xs font-medium text-indigo-400">
+                              <span className="inline-flex items-center rounded-md border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-0.5 text-xs font-semibold text-indigo-400">
                                 {member.category}
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+                              <span className="inline-flex items-center rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">
                                 {member.status}
                               </span>
                             </td>
                             <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                              <button onClick={() => handleDeleteMember(member.id)} className="text-xs font-medium text-red-400 transition hover:text-red-300">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMember(member.id)}
+                                className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-2.5 py-1 text-xs font-semibold text-rose-400 transition hover:bg-rose-500/15 hover:border-rose-500/30 active:scale-95"
+                              >
                                 Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Modern Add / Edit Member Modal Panel */}
+              {isMemberModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                  <div className={`relative w-full max-w-lg rounded-3xl border p-6 sm:p-8 shadow-2xl transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
+
+                    <div className="flex items-center justify-between pb-4 border-b border-slate-700/50">
+                      <div>
+                        <h3 className="text-xl font-bold tracking-tight">
+                          {editingMember ? 'Edit Team Member' : 'Add New Member'}
+                        </h3>
+                        <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {editingMember ? 'Update member details and privileges' : 'Register a new member to the platform roster'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsMemberModalOpen(false)}
+                        className={`flex h-8 w-8 items-center justify-center rounded-full border transition hover:scale-105 ${isDarkMode ? 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white' : 'border-slate-200 bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="mt-6 space-y-4">
+
+                      {/* Profile Picture Upload Section */}
+                      <div>
+                        <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Profile Picture
+                        </label>
+                        <div className="flex items-center gap-4">
+                          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-indigo-500/30 bg-indigo-600/10 flex items-center justify-center shadow-inner">
+                            {newMemberProfilePic ? (
+                              <img src={newMemberProfilePic} alt="Preview" className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="text-lg font-bold text-indigo-400">
+                                {newMemberName ? newMemberName.charAt(0).toUpperCase() : 'N'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-xs font-semibold shadow-sm transition hover:scale-[1.02] active:scale-95 ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
+                              <svg className="h-4 w-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                              </svg>
+                              <span>Upload Image File</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      setNewMemberProfilePic(reader.result as string);
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                              />
+                            </label>
+                            <p className={`mt-1 text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                              PNG, JPG, or WEBP up to 5MB.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Full Name */}
+                      <div>
+                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Full Name
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. John Doe"
+                          value={newMemberName}
+                          onChange={(e) => setNewMemberName(e.target.value)}
+                          className={`w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/60 text-white placeholder-slate-600' : 'border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400'}`}
+                        />
+                      </div>
+
+                      {/* Email Address */}
+                      <div>
+                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Email Address
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="e.g. john@domain.com"
+                          value={newMemberEmail}
+                          onChange={(e) => setNewMemberEmail(e.target.value)}
+                          className={`w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/60 text-white placeholder-slate-600' : 'border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400'}`}
+                        />
+                      </div>
+
+                      {/* Contact Number */}
+                      <div>
+                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Contact Number
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. +1 234 567 890"
+                          value={newMemberContact}
+                          onChange={(e) => setNewMemberContact(e.target.value)}
+                          className={`w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/60 text-white placeholder-slate-600' : 'border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400'}`}
+                        />
+                      </div>
+
+                      {/* Category Dropdown */}
+                      <div>
+                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Member Category
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={newMemberCategory || 'Regular Members'}
+                            onChange={(e) => setNewMemberCategory(e.target.value as any)}
+                            className={`w-full appearance-none rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/80 text-white' : 'border-slate-200 bg-slate-50 text-slate-900'}`}
+                          >
+                            <option value="Board Members">Board Members</option>
+                            <option value="Artists">Artists</option>
+                            <option value="Dancers">Dancers</option>
+                            <option value="Regular Members">Regular Members</option>
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Status Dropdown */}
+                      <div>
+                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Account Status
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={newMemberStatus}
+                            onChange={(e) => setNewMemberStatus(e.target.value as any)}
+                            className={`w-full appearance-none rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/80 text-white' : 'border-slate-200 bg-slate-50 text-slate-900'}`}
+                          >
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                            <option value="Pending">Pending</option>
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    <div className="mt-8 flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsMemberModalOpen(false)}
+                        className={`rounded-xl border px-5 py-2.5 text-xs font-semibold transition ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          handleAddMember(e as any);
+                        }}
+                        className="rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 active:scale-95"
+                      >
+                        {editingMember ? 'Save Changes' : 'Create Member'}
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activePage === 'artists' && (
+            <div className="space-y-6">
+              {/* Fixed Position Top Panel */}
+              <div className="sticky top-0 z-20 space-y-4 pb-2 pt-1">
+                <div className={`flex flex-col gap-4 rounded-2xl border p-6 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-2xl shadow-black/40' : 'border-slate-200/80 bg-white/85 shadow-xl shadow-slate-200/50'}`}>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                      <h2 className="text-xl font-bold tracking-tight">Noll Artists</h2>
+                    </div>
+                    <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manage your custom artists and add new profiles.</p>
+                  </div>
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="group relative inline-flex shrink-0 items-center justify-center gap-2 overflow-hidden rounded-xl bg-linear-to-r from-indigo-600 to-violet-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition-all duration-300 hover:from-indigo-500 hover:to-violet-500 hover:shadow-indigo-600/50 active:scale-[0.98]"
+                  >
+                    <span className="absolute inset-0 bg-white/20 opacity-0 transition-opacity group-hover:opacity-100"></span>
+                    <svg className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    <span>Add New Artist</span>
+                  </button>
+                </div>
+
+                {artistMessage && (
+                  <div className={`flex items-center gap-2 rounded-xl border p-4 text-sm animate-fadeIn ${isDarkMode ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-emerald-500/20 bg-emerald-50 text-emerald-700'}`}>
+                    <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
+                    <span>{artistMessage}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className={`overflow-hidden rounded-2xl border backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/60 shadow-2xl shadow-black/40' : 'border-slate-200/80 bg-white/80 shadow-xl shadow-slate-200/50'}`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead className={`border-b text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'border-slate-800/80 bg-slate-950/60 text-slate-400' : 'border-slate-200/80 bg-slate-50/80 text-slate-500'}`}>
+                      <tr>
+                        <th className="px-6 py-4">Artist Name</th>
+                        <th className="px-6 py-4">Genre</th>
+                        <th className="px-6 py-4">Tracks</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/60' : 'divide-slate-200/60'}`}>
+                      {artists.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-16 text-center text-slate-500">
+                            <div className="flex flex-col items-center justify-center gap-3">
+                              <div className={`flex h-12 w-12 items-center justify-center rounded-2xl border ${isDarkMode ? 'border-slate-800 bg-slate-950/50 text-slate-500' : 'border-slate-200 bg-slate-100 text-slate-400'}`}>
+                                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-slate-300">No artists added yet</p>
+                                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Click &quot;Add New Artist&quot; above to create your custom artist profile.</p>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        artists.map((artist) => (
+                          <tr
+                            key={artist.id}
+                            onClick={() => router.push(`/dashboard/artist/${artist.id}`)}
+                            className={`group cursor-pointer transition-all duration-200 ${isDarkMode ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50/80'}`}
+                          >
+                            <td className="px-6 py-4 font-medium">
+                              <div className="flex items-center gap-3.5">
+                                {artist.profileUrl ? (
+                                  <img src={artist.profileUrl} alt="" className="h-10 w-10 rounded-xl object-cover ring-2 ring-indigo-500/20 transition group-hover:ring-indigo-500/40" />
+                                ) : (
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-indigo-500/20 to-violet-500/20 text-xs font-bold text-indigo-400 ring-2 ring-indigo-500/20 transition group-hover:ring-indigo-500/40">
+                                    {artist.name.charAt(0)}
+                                  </div>
+                                )}
+                                <span className="font-semibold tracking-tight">{artist.name}</span>
+                              </div>
+                            </td>
+                            <td className={`px-6 py-4 font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                              <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-medium border ${isDarkMode ? 'border-slate-800 bg-slate-950/40 text-slate-300' : 'border-slate-200 bg-slate-100/60 text-slate-700'}`}>
+                                {artist.genre}
+                              </span>
+                            </td>
+                            <td className={`px-6 py-4 font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                              <span className="inline-flex items-center gap-1.5">
+                                <svg className={`h-3.5 w-3.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+                                {artist.tracksCount} tracks
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${
+                                artist.status === 'Active'
+                                  ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 shadow-emerald-500/5'
+                                  : 'border border-amber-500/20 bg-amber-500/10 text-amber-400 shadow-amber-500/5'
+                              }`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${artist.status === 'Active' ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                                {artist.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => handleDeleteArtist(artist.id)}
+                                className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 ${
+                                  isDarkMode
+                                    ? 'text-rose-400 hover:bg-rose-500/10 hover:text-rose-300'
+                                    : 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
+                                }`}
+                              >
+                                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                Delete
                               </button>
                             </td>
                           </tr>
@@ -713,87 +1116,30 @@ export default function DashboardApp({ user }: { user?: User | null }) {
             </div>
           )}
 
-          {activePage === 'artists' && (
-            <div className="space-y-6">
-              <div className={`flex flex-col gap-4 rounded-xl border p-6 sm:flex-row sm:items-center sm:justify-between ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <div>
-                  <h2 className="text-xl font-semibold">Noll Artists</h2>
-                  <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manage your custom artists and add new profiles.</p>
-                </div>
-                <button onClick={() => setIsModalOpen(true)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
-                  Add New Artist
-                </button>
-              </div>
-
-              {artistMessage ? <p className="text-sm text-emerald-400">{artistMessage}</p> : null}
-
-              <div className={`overflow-hidden rounded-xl border ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className={`border-b text-xs uppercase tracking-wider ${isDarkMode ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
-                      <tr>
-                        <th className="px-6 py-3.5">Artist Name</th>
-                        <th className="px-6 py-3.5">Genre</th>
-                        <th className="px-6 py-3.5">Tracks</th>
-                        <th className="px-6 py-3.5">Status</th>
-                        <th className="px-6 py-3.5 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
-                      {artists.length === 0 ? (
-                                              <tr>
-                                                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                                                  <div className="flex flex-col items-center justify-center gap-2">
-                                                    <p className="text-sm font-medium text-slate-400">No artists added yet</p>
-                                                    <p className="text-xs text-slate-600">Click &quot;Add New Artist&quot; above to create your custom artist profile.</p>
-                                                  </div>
-                                                </td>
-                                              </tr>
-                                            ) : (
-                                              artists.map((artist) => (
-                                                <tr
-                                                  key={artist.id}
-                                                  onClick={() => router.push(`/dashboard/artist/${artist.id}`)}
-                                                  className={`cursor-pointer transition-colors ${isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}`}
-                                                >
-                                                  <td className="px-6 py-4 font-medium">
-                                                    <div className="flex items-center gap-3">
-                                                      {artist.profileUrl ? (
-                                                        <img src={artist.profileUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
-                                                      ) : (
-                                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600/20 text-xs font-semibold text-indigo-400">{artist.name.charAt(0)}</div>
-                                                      )}
-                                                      {artist.name}
-                                                    </div>
-                                                  </td>
-                                                  <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{artist.genre}</td>
-                                                  <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{artist.tracksCount} tracks</td>
-                                                  <td className="px-6 py-4"><span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${artist.status === 'Active' ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border border-amber-500/20 bg-amber-500/10 text-amber-400'}`}>{artist.status}</span></td>
-                                                  <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}><button onClick={() => handleDeleteArtist(artist.id)} className="text-xs font-medium text-red-400 transition hover:text-red-300">Delete</button></td>
-                                                </tr>
-                                              ))
-                                            )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
           {activePage === 'videos' && (
             <div className="space-y-6">
               {/* Page Header */}
-              <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <h2 className="mb-2 text-xl font-semibold">Video Library</h2>
-                <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
-                  Manage music videos and video media catalog.
-                </p>
+              <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight">Video Library</h2>
+                    <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Manage music videos and video media catalog.
+                    </p>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-2 rounded-xl bg-indigo-500/10 px-3 py-1.5 border border-indigo-500/20">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                    </span>
+                    <span className="text-xs font-semibold text-indigo-400">{storageItems.length} Active Streams</span>
+                  </div>
+                </div>
               </div>
 
               {/* Upload Section */}
-              <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <h3 className="text-lg font-semibold">Talk Show Uploads</h3>
+              <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
+                <h3 className="text-base font-bold tracking-tight">Talk Show Uploads</h3>
                 <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                   Drag & drop video files here or click to choose a file to upload to the Talk Show Drive.
                 </p>
@@ -807,7 +1153,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                       void submitUpload(uploadFile, uploadTitle.trim() || uploadFile.name.replace(/\.[^/.]+$/, ""), uploadType);
                     }
                   }}
-                  className="mt-4"
+                  className="mt-5"
                 >
                   {/* Drag and Drop Area */}
                   <div
@@ -838,14 +1184,27 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                         setUploadFile(droppedFile);
                       }
                     }}
-                    className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition ${
-                      isDarkMode ? 'border-slate-700 bg-slate-900/40 hover:border-indigo-500' : 'border-slate-300 bg-slate-50 hover:border-indigo-500'
+                    className={`group relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-all duration-300 ${
+                      isDarkMode
+                        ? 'border-slate-700/80 bg-slate-950/40 hover:border-indigo-500 hover:bg-slate-900/60'
+                        : 'border-slate-300 bg-slate-50/50 hover:border-indigo-500 hover:bg-indigo-50/30'
                     }`}
                   >
-                    <div className="text-center">
-                      <p className={isDarkMode ? 'text-sm text-slate-400' : 'text-sm text-slate-600'}>Drop a file here</p>
-                      <p className="mt-2 text-xs text-slate-500">or</p>
-                      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500">
+                    <div className="absolute inset-0 bg-indigo-500/2 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl pointer-events-none" />
+                    <div className="flex flex-col items-center text-center z-10">
+                      <div className={`mb-3 flex h-12 w-12 items-center justify-center rounded-full transition-transform duration-300 group-hover:scale-110 ${
+                        isDarkMode ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                      }`}>
+                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                      </div>
+                      <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Drag & drop video or audio files here
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">Supports MP4, MOV, MP3, WAV and more</p>
+
+                      <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition-all duration-200 hover:bg-indigo-500 hover:shadow-indigo-500/40 active:scale-95">
                         <input
                           type="file"
                           accept="video/*,audio/*"
@@ -860,31 +1219,34 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                           }}
                           className="hidden"
                         />
-                        Choose file
+                        Browse Files
                       </label>
+
                       {uploadFile ? (
-                        <div className={`mt-3 text-sm font-medium ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
-                          Selected: {uploadFile.name}
+                        <div className={`mt-3 inline-flex items-center gap-2 rounded-lg px-3 py-1 text-xs font-medium border ${
+                          isDarkMode ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300' : 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                        }`}>
+                          <span className="truncate max-w-50">Selected: {uploadFile.name}</span>
                         </div>
                       ) : null}
                     </div>
                   </div>
 
                   {/* Input & Submit Row */}
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <input
                       type="text"
-                      placeholder="Title"
+                      placeholder="Enter media title..."
                       value={uploadTitle}
                       onChange={(e) => setUploadTitle(e.target.value)}
-                      className={`col-span-2 rounded-lg border px-3 py-2 text-sm outline-none transition focus:border-indigo-500 ${
-                        isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
+                      className={`col-span-2 rounded-xl border px-4 py-2.5 text-sm outline-none transition-all duration-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                        isDarkMode ? 'border-slate-800 bg-slate-950 text-white placeholder-slate-600' : 'border-slate-200 bg-white text-slate-900 placeholder-slate-400'
                       }`}
                     />
                     <button
                       type="submit"
                       disabled={uploading || (!uploadFile && !editingStorageItemId)}
-                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500 disabled:opacity-50"
+                      className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition-all duration-200 hover:bg-indigo-500 hover:shadow-indigo-500/40 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
                     >
                       {uploading ? 'Uploading…' : editingStorageItemId ? 'Update Title' : 'Upload to Talk Show'}
                     </button>
@@ -892,14 +1254,17 @@ export default function DashboardApp({ user }: { user?: User | null }) {
 
                   {/* Progress Bar */}
                   {(uploading || uploadProgress > 0) && (
-                    <div className="mt-3">
-                      <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
-                        <span>{uploading ? 'Uploading file...' : 'Upload complete'}</span>
-                        <span>{uploadProgress}%</span>
+                    <div className="mt-4 rounded-xl border p-4 bg-slate-950/20 border-slate-800/50">
+                      <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-400">
+                        <span className="flex items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                          {uploading ? 'Uploading media file...' : 'Upload complete'}
+                        </span>
+                        <span className="font-bold text-indigo-400">{uploadProgress}%</span>
                       </div>
-                      <div className={`h-2 overflow-hidden rounded-full ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                      <div className={`h-2.5 overflow-hidden rounded-full p-0.5 ${isDarkMode ? 'bg-slate-900 border border-slate-800' : 'bg-slate-200'}`}>
                         <div
-                          className="h-full rounded-full bg-indigo-500 transition-all duration-300"
+                          className="h-full rounded-full bg-linear-to-r from-indigo-600 to-indigo-400 transition-all duration-300 shadow-sm shadow-indigo-500/50"
                           style={{ width: `${uploadProgress}%` }}
                         />
                       </div>
@@ -908,54 +1273,60 @@ export default function DashboardApp({ user }: { user?: User | null }) {
 
                   {/* Upload Status Message */}
                   {uploadMessage && (
-                    <p className={`mt-2 text-sm ${uploadMessage.includes('Unable') || uploadMessage.includes('Error') ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      {uploadMessage}
-                    </p>
+                    <div className={`mt-3 rounded-xl border p-3 text-sm flex items-center gap-2 ${
+                      uploadMessage.includes('Unable') || uploadMessage.includes('Error')
+                        ? 'border-rose-500/30 bg-rose-500/10 text-rose-400'
+                        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                    }`}>
+                      <span>{uploadMessage}</span>
+                    </div>
                   )}
                 </form>
 
                 {/* Uploaded Items List */}
-                <div className={`mt-6 rounded-xl border p-4 ${isDarkMode ? 'border-slate-800/70 bg-slate-950/30' : 'border-slate-200 bg-slate-50/50'}`}>
-                  <div className="mb-3 flex items-center justify-between">
+                <div className={`mt-8 rounded-2xl border p-5 ${isDarkMode ? 'border-slate-800/70 bg-slate-950/40' : 'border-slate-200 bg-slate-50/50'}`}>
+                  <div className="mb-4 flex items-center justify-between">
                     <div>
-                      <h4 className="text-sm font-semibold">Talk Show Uploads</h4>
+                      <h4 className="text-sm font-bold tracking-tight">Talk Show Uploads Catalog</h4>
                       <p className={`mt-0.5 text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                         Manage and edit details of uploaded items.
                       </p>
                     </div>
-                    <span className="rounded-full bg-indigo-500/10 px-2.5 py-1 text-xs font-semibold text-indigo-400">
-                      {storageItems.length}
+                    <span className="rounded-xl bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 text-xs font-bold text-indigo-400 shadow-sm">
+                      {storageItems.length} items
                     </span>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {storageItems.length === 0 ? (
-                      <div className={`rounded-lg border border-dashed px-3 py-4 text-center text-sm ${
-                        isDarkMode ? 'border-slate-700 text-slate-400' : 'border-slate-300 text-slate-500'
+                      <div className={`rounded-xl border border-dashed px-4 py-8 text-center text-sm ${
+                        isDarkMode ? 'border-slate-800 text-slate-500 bg-slate-900/20' : 'border-slate-300 text-slate-500 bg-white/50'
                       }`}>
-                        No Talk Show uploads yet.
+                        No Talk Show uploads yet. Upload your first file above.
                       </div>
                     ) : storageItems.map((item) => (
                       <div
                         key={item.id}
-                        className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 transition ${
-                          isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-200 bg-white'
+                        className={`group flex items-center justify-between gap-4 rounded-xl border p-3.5 transition-all duration-200 ${
+                          isDarkMode
+                            ? 'border-slate-800/80 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900/80 shadow-sm'
+                            : 'border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-md'
                         }`}
                       >
-                        <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-md border border-slate-700/60 bg-slate-900">
+                        <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg border border-slate-700/40 bg-slate-950 shadow-inner">
                           {getStorageThumbnailUrl(item.file_url, item.thumbnail_url) ? (
                             <img
                               src={getStorageThumbnailUrl(item.file_url, item.thumbnail_url) || undefined}
                               alt=""
-                              className="h-full w-full object-cover"
+                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                             />
                           ) : (
                             <div className="flex h-full items-center justify-center text-indigo-400" aria-hidden="true">
                               <Video className="h-5 w-5" />
                             </div>
                           )}
-                          <label className="absolute inset-x-0 bottom-0 cursor-pointer bg-slate-950/80 px-1 py-0.5 text-center text-[9px] font-medium text-white opacity-0 transition hover:bg-slate-950 group-hover:opacity-100">
-                            {changingThumbnailId === item.id ? 'Uploading...' : 'Change thumbnail'}
+                          <label className="absolute inset-x-0 bottom-0 cursor-pointer bg-slate-950/85 px-1 py-1 text-center text-[10px] font-semibold text-white opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100">
+                            {changingThumbnailId === item.id ? 'Updating...' : 'Change thumb'}
                             <input
                               type="file"
                               accept="image/*"
@@ -968,9 +1339,10 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                             />
                           </label>
                         </div>
+
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="shrink-0 rounded bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-400">
+                            <span className="shrink-0 rounded-md bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-400">
                               {item.type}
                             </span>
                             {editingStorageItemId === item.id ? (
@@ -978,28 +1350,30 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                                 type="text"
                                 value={editingStorageTitle}
                                 onChange={(e) => setEditingStorageTitle(e.target.value)}
-                                className={`w-full rounded-md border px-2 py-1 text-sm outline-none transition focus:border-indigo-500 ${
-                                  isDarkMode ? 'border-slate-700 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-900'
+                                className={`w-full rounded-lg border px-3 py-1 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 ${
+                                  isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
                                 }`}
                                 autoFocus
                               />
                             ) : (
-                              <span className="truncate text-sm font-medium">{item.title}</span>
+                              <span className={`truncate text-sm font-semibold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                                {item.title}
+                              </span>
                             )}
                           </div>
-                          <p className={`mt-1 truncate text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>
+                          <p className="mt-1 truncate text-xs text-slate-500 font-mono">
                             {item.file_url}
                           </p>
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="ml-3 flex shrink-0 items-center gap-2">
+                        <div className="ml-2 flex shrink-0 items-center gap-2">
                           {editingStorageItemId === item.id ? (
                             <>
                               <button
                                 type="button"
                                 onClick={() => void handleUpdateStorageItem(item.id)}
-                                className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-emerald-500"
+                                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-500 active:scale-95"
                               >
                                 Save
                               </button>
@@ -1009,7 +1383,9 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                                   setEditingStorageItemId(null);
                                   setEditingStorageTitle('');
                                 }}
-                                className="rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${
+                                  isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                }`}
                               >
                                 Cancel
                               </button>
@@ -1022,14 +1398,18 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                                   setEditingStorageItemId(item.id);
                                   setEditingStorageTitle(item.title);
                                 }}
-                                className="rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${
+                                  isDarkMode
+                                    ? 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700 hover:bg-slate-800 hover:text-white'
+                                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                }`}
                               >
                                 Edit
                               </button>
                               <button
                                 type="button"
                                 onClick={() => void handleDeleteStorageItem(item.id)}
-                                className="rounded-md border border-rose-500/30 px-2.5 py-1 text-xs font-medium text-rose-400 transition hover:bg-rose-500/10"
+                                className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-1.5 text-xs font-semibold text-rose-400 transition hover:bg-rose-500/15 hover:border-rose-500/30 active:scale-95"
                               >
                                 Delete
                               </button>
@@ -1046,32 +1426,75 @@ export default function DashboardApp({ user }: { user?: User | null }) {
 
           {activePage === 'histories' && (
             <div className="space-y-6">
-              <div>
-                <div className="flex flex-wrap items-start justify-between gap-4">
+              {/* Page Header */}
+              <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
+                <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-xl font-semibold">Activity History</h2>
-                    <p className={isDarkMode ? 'mt-1 text-sm text-slate-400' : 'mt-1 text-sm text-slate-600'}>Every recorded dashboard change with the exact time it happened.</p>
+                    <h2 className="text-xl font-bold tracking-tight">Activity History</h2>
+                    <p className={isDarkMode ? 'mt-1 text-sm text-slate-400' : 'mt-1 text-sm text-slate-600'}>
+                      Every recorded dashboard change with the exact time it happened.
+                    </p>
                   </div>
-                  <button type="button" onClick={handleClearHistory} disabled={history.length === 0} className="rounded-lg border border-rose-500/40 px-3 py-2 text-sm font-medium text-rose-400 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40">Clear all history</button>
+                  <button
+                    type="button"
+                    onClick={handleClearHistory}
+                    disabled={history.length === 0}
+                    className="rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-2 text-sm font-semibold text-rose-400 shadow-sm transition-all duration-200 hover:bg-rose-500/15 hover:border-rose-500/40 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Clear all history
+                  </button>
                 </div>
               </div>
-              <div className={`overflow-hidden rounded-xl border ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
+
+              {/* Table Container */}
+              <div className={`overflow-hidden rounded-2xl border backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
-                    <thead className={`border-b text-xs uppercase tracking-wider ${isDarkMode ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
-                      <tr><th className="px-6 py-3.5">Change</th><th className="px-6 py-3.5">Type</th><th className="px-6 py-3.5">Time</th></tr>
+                    <thead className={`border-b text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'border-slate-800/80 bg-slate-950/40 text-slate-400' : 'border-slate-200 bg-slate-50/70 text-slate-500'}`}>
+                      <tr>
+                        <th className="px-6 py-4">Change</th>
+                        <th className="px-6 py-4">Type</th>
+                        <th className="px-6 py-4">Time</th>
+                      </tr>
                     </thead>
-                    <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
+                    <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/80' : 'divide-slate-200/80'}`}>
                       {history.length === 0 ? (
-                        <tr><td colSpan={3} className="px-6 py-12 text-center text-slate-500">No activity recorded yet.</td></tr>
+                        <tr>
+                          <td colSpan={3} className="px-6 py-16 text-center">
+                            <div className="flex flex-col items-center justify-center">
+                              <div className={`mb-3 flex h-12 w-12 items-center justify-center rounded-full border ${isDarkMode ? 'border-slate-800 bg-slate-800/50 text-slate-500' : 'border-slate-200 bg-slate-100 text-slate-400'}`}>
+                                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </div>
+                              <p className={`text-sm font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>No activity recorded yet.</p>
+                              <p className="mt-1 text-xs text-slate-500">Dashboard events will appear here as they occur.</p>
+                            </div>
+                          </td>
+                        </tr>
                       ) : history.map((item) => (
-                        <tr key={item.id}>
-                          <td className="px-6 py-4 font-medium">{item.description}</td>
-                          <td className={`px-6 py-4 capitalize ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{item.action} {item.entityType.replace('_', ' ')}</td>
+                        <tr
+                          key={item.id}
+                          className={`transition-colors duration-150 ${isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/80'}`}
+                        >
+                          <td className={`px-6 py-4 font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                            {item.description}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center rounded-md bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-indigo-400">
+                              {item.action} {item.entityType.replace('_', ' ')}
+                            </span>
+                          </td>
                           <td className={`whitespace-nowrap px-6 py-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                            <div className="flex items-center justify-between gap-4">
-                              <span>{new Date(item.createdAt).toLocaleString()}</span>
-                              <button type="button" onClick={() => handleDeleteHistory(item.id)} className="text-xs font-medium text-rose-400 hover:text-rose-300">Clear</button>
+                            <div className="flex items-center justify-between gap-6">
+                              <span className="font-mono text-xs">{new Date(item.createdAt).toLocaleString()}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteHistory(item.id)}
+                                className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-2.5 py-1 text-xs font-semibold text-rose-400 transition hover:bg-rose-500/15 hover:border-rose-500/30 active:scale-95"
+                              >
+                                Clear
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1085,73 +1508,153 @@ export default function DashboardApp({ user }: { user?: User | null }) {
 
           {activePage === 'storage' && (
             <div className="space-y-6">
-              <div className={`rounded-xl border p-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-white'}`}>
-                <h2 className="mb-2 text-xl font-semibold">Storage Overview</h2>
-                <p className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Google Drive capacity used by your uploaded media.</p>
+              {/* Storage Overview Card */}
+              <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight">Storage Overview</h2>
+                    <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Google Drive capacity used by your uploaded media.
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 px-3.5 py-1.5 shadow-sm">
+                    <svg className="h-4 w-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8-4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                    <span className="text-xs font-semibold text-indigo-400">Live Quota</span>
+                  </div>
+                </div>
+
                 {driveStorageEntries && driveStorageEntries.length > 0 ? (
-                  <div className="mt-5 space-y-3">
-                    {driveStorageEntries.map((entry) => (
-                      <div key={entry.label} className="rounded-md border p-3">
-                        <div className="flex items-end justify-between gap-4">
-                          <div>
-                            <p className="text-sm font-medium">{entry.label}</p>
-                            <p className="text-2xl font-semibold">{formatBytes(entry.used)}</p>
-                            <p className="text-xs text-slate-400">used</p>
+                  <div className="mt-6 space-y-4">
+                    {driveStorageEntries.map((entry) => {
+                      const usagePercent = entry.limit ? Math.min((entry.used / (entry.limit || 1)) * 100, 100) : 0;
+                      return (
+                        <div
+                          key={entry.label}
+                          className={`rounded-xl border p-5 transition-all duration-200 ${isDarkMode ? 'border-slate-800/80 bg-slate-950/40 hover:border-slate-700' : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'}`}
+                        >
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                            <div className="space-y-1">
+                              <span className="inline-flex items-center rounded-md bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-indigo-400">
+                                {entry.label}
+                              </span>
+                              <div>
+                                <p className="text-3xl font-bold tracking-tight mt-1">{formatBytes(entry.used)}</p>
+                                <p className="text-xs font-medium text-slate-400">total space used</p>
+                              </div>
+                            </div>
+
+                            <div className={`rounded-xl p-3 border text-right space-y-1 ${isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-white'}`}>
+                              <p className="text-xs font-semibold text-slate-300">
+                                {entry.limit ? `${formatBytes(entry.limit)} limit` : 'No storage limit'}
+                              </p>
+                              <div className="flex items-center justify-end gap-3 text-xs font-medium pt-1">
+                                <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>My Drive: <strong className="font-mono text-indigo-400">{formatBytes(entry.usedInDrive)}</strong></span>
+                                <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Trash: <strong className="font-mono text-slate-300">{formatBytes(entry.usedInTrash)}</strong></span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm text-slate-400">{entry.limit ? `${formatBytes(entry.limit)} total` : 'No storage limit'}</p>
-                            <div className="mt-2 text-xs text-slate-400">My Drive: {formatBytes(entry.usedInDrive)}</div>
-                            <div className="text-xs text-slate-400">Trash: {formatBytes(entry.usedInTrash)}</div>
-                          </div>
+
+                          {entry.limit ? (
+                            <div className="mt-4 space-y-1.5">
+                              <div className="flex justify-between text-xs font-medium text-slate-400">
+                                <span>Usage Capacity</span>
+                                <span className="font-mono">{Math.round(usagePercent)}%</span>
+                              </div>
+                              <div className={`h-2.5 w-full overflow-hidden rounded-full p-0.5 ${isDarkMode ? 'bg-slate-950 border border-slate-800' : 'bg-slate-200'}`}>
+                                <div
+                                  className="h-full rounded-full bg-linear-to-r from-indigo-600 to-indigo-400 transition-all duration-500 shadow-sm shadow-indigo-500/50"
+                                  style={{ width: `${usagePercent}%` }}
+                                />
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {entry.error ? (
+                            <div className="mt-3 rounded-lg border border-rose-500/20 bg-rose-500/10 p-2.5 text-xs text-rose-400">
+                              {entry.error}
+                            </div>
+                          ) : null}
                         </div>
-                        {entry.limit ? <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min((entry.used / (entry.limit || 1)) * 100, 100)}%` }} /></div> : null}
-                        {entry.error ? <p className="mt-2 text-xs text-rose-400">{entry.error}</p> : null}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : driveStorage ? (
-                  <div className="mt-5 space-y-3">
-                    <div className="flex items-end justify-between gap-4">
-                      <div><p className="text-2xl font-semibold">{formatBytes(driveStorage.used)}</p><p className="text-xs text-slate-400">used across Drive</p></div>
-                      <p className="text-right text-sm text-slate-400">{driveStorage.limit ? `${formatBytes(driveStorage.limit)} total` : 'No storage limit reported'}</p>
+                  <div className="mt-6 rounded-xl border border-slate-800 bg-slate-950/40 p-6 space-y-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-3xl font-bold tracking-tight">{formatBytes(driveStorage.used)}</p>
+                        <p className="text-xs font-medium text-slate-400">used across Drive</p>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-300">
+                        {driveStorage.limit ? `${formatBytes(driveStorage.limit)} total limit` : 'No storage limit reported'}
+                      </p>
                     </div>
-                    {driveStorage.limit ? <div className="h-3 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.min((driveStorage.used / driveStorage.limit) * 100, 100)}%` }} /></div> : null}
-                    <div className="flex flex-wrap gap-4 text-xs text-slate-400"><span>My Drive: {formatBytes(driveStorage.usedInDrive)}</span><span>Trash: {formatBytes(driveStorage.usedInTrash)}</span></div>
+
+                    {driveStorage.limit ? (
+                      <div className={`h-2.5 w-full overflow-hidden rounded-full p-0.5 ${isDarkMode ? 'bg-slate-950 border border-slate-800' : 'bg-slate-200'}`}>
+                        <div
+                          className="h-full rounded-full bg-linear-to-r from-indigo-600 to-indigo-400 transition-all duration-500"
+                          style={{ width: `${Math.min((driveStorage.used / driveStorage.limit) * 100, 100)}%` }}
+                        />
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-wrap gap-6 pt-2 text-xs font-medium text-slate-400 border-t border-slate-800/80">
+                      <span>My Drive: <strong className="font-mono text-indigo-400">{formatBytes(driveStorage.usedInDrive)}</strong></span>
+                      <span>Trash: <strong className="font-mono text-slate-300">{formatBytes(driveStorage.usedInTrash)}</strong></span>
+                    </div>
                   </div>
-                ) : <p className="mt-4 text-sm text-rose-400">{driveStorageError || 'Drive storage usage is unavailable.'}</p>}
+                ) : (
+                  <div className="mt-6 rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-center text-sm font-medium text-rose-400">
+                    {driveStorageError || 'Drive storage usage is unavailable.'}
+                  </div>
+                )}
               </div>
 
+              {/* Hidden Upload Form */}
               <div className="hidden">
                 <form onSubmit={handleUpload} className="space-y-4">
                   <div>
-                    <label className="mb-1.5 block text-sm">Title</label>
-                    <input type="text" value={uploadTitle} onChange={(e) => setUploadTitle(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} placeholder="Song or image title" />
+                    <label className="mb-1.5 block text-sm font-medium">Title</label>
+                    <input
+                      type="text"
+                      value={uploadTitle}
+                      onChange={(e) => setUploadTitle(e.target.value)}
+                      className={`w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition ${isDarkMode ? 'border-slate-800 bg-slate-950 text-white focus:border-indigo-500' : 'border-slate-300 bg-slate-50 text-slate-900 focus:border-indigo-600'}`}
+                      placeholder="Song or image title"
+                    />
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-sm">Type</label>
-                    <select value={uploadType} onChange={(e) => setUploadType(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}>
+                    <label className="mb-1.5 block text-sm font-medium">Type</label>
+                    <select
+                      value={uploadType}
+                      onChange={(e) => setUploadType(e.target.value)}
+                      className={`w-full rounded-xl border px-3.5 py-2.5 text-sm outline-none transition ${isDarkMode ? 'border-slate-800 bg-slate-950 text-white focus:border-indigo-500' : 'border-slate-300 bg-slate-50 text-slate-900 focus:border-indigo-600'}`}
+                    >
                       <option value="music">Music</option>
                       <option value="image">Image</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-sm">File</label>
+                    <label className="mb-1.5 block text-sm font-medium">File</label>
                     <input
                       type="file"
                       accept="audio/*,image/*"
                       onChange={(event) => setUploadFile(event.target.files?.[0] || null)}
-                      className={`w-full rounded-lg border px-3 py-2 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white hover:file:bg-indigo-500 ${
+                      className={`w-full rounded-xl border px-3 py-2 text-sm outline-none file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-indigo-500 transition ${
                         isDarkMode
-                          ? 'border-slate-700 bg-slate-950 text-white'
+                          ? 'border-slate-800 bg-slate-950 text-white'
                           : 'border-slate-300 bg-slate-50 text-slate-900'
                       }`}
                     />
                   </div>
 
                   {uploadMessage && (
-                    <p className={`text-sm ${uploadMessage.includes('Unable') ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    <p className={`text-sm font-medium ${uploadMessage.includes('Unable') ? 'text-rose-400' : 'text-emerald-400'}`}>
                       {uploadMessage}
                     </p>
                   )}
@@ -1159,7 +1662,7 @@ export default function DashboardApp({ user }: { user?: User | null }) {
                   <button
                     type="submit"
                     disabled={uploading}
-                    className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500 disabled:opacity-50"
+                    className="rounded-xl bg-indigo-600 px-4.5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 active:scale-95 disabled:opacity-50"
                   >
                     {uploading ? 'Saving Upload…' : 'Save Upload Record'}
                   </button>
@@ -1167,52 +1670,80 @@ export default function DashboardApp({ user }: { user?: User | null }) {
               </div>
             </div>
           )}
+
         </div>
       </main>
 
-      {/* Add Artist Modal */}
+      {/* Artist Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
-            <h3 className="text-xl font-semibold">Add New Artist</h3>
-            <form onSubmit={handleAddArtist} className="mt-4 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-fadeIn">
+          <div className={`w-full max-w-md rounded-3xl border p-7 shadow-2xl transition-all duration-300 ${
+            isDarkMode
+              ? 'border-slate-800/90 bg-slate-900/95 text-white shadow-black/50'
+              : 'border-slate-200/90 bg-white/95 text-slate-900 shadow-slate-200/50'
+          }`}>
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-700/30">
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Artist Name</label>
+                <h3 className="text-xl font-bold tracking-tight">Add New Artist</h3>
+                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Enter the details to create a new artist profile
+                </p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                  isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddArtist} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Artist Name</label>
                 <input
                   type="text"
                   value={newArtistName}
                   onChange={(e) => setNewArtistName(e.target.value)}
+                  placeholder="e.g. Jane Doe"
+                  className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                    isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
+                  }`}
                   required
-                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}
-                  placeholder="Enter name"
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Genre</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Genre</label>
                 <input
                   type="text"
                   value={newArtistGenre}
                   onChange={(e) => setNewArtistGenre(e.target.value)}
+                  placeholder="e.g. Afrobeats, Pop"
+                  className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                    isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
+                  }`}
                   required
-                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}
-                  placeholder="e.g. Afro-ragga"
                 />
               </div>
-              <div className="flex justify-end gap-3 pt-2">
+
+              {/* Footer Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-700/30">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
-                    isDarkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'
+                  className={`rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors ${
+                    isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-500"
+                  className="rounded-xl bg-linear-to-r from-indigo-600 to-indigo-700 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30 hover:from-indigo-500 hover:to-indigo-600 transition-all"
                 >
-                  Save Artist
+                  Add Artist
                 </button>
               </div>
             </form>
@@ -1220,98 +1751,173 @@ export default function DashboardApp({ user }: { user?: User | null }) {
         </div>
       )}
 
-      {/* Add/Edit Member Modal */}
+      {/* Member Modal */}
       {isMemberModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">{editingMember ? 'Edit Member' : 'Add New Member'}</h3>
-              <button onClick={() => setIsMemberModalOpen(false)} className="text-slate-400 hover:text-white">✕</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-fadeIn">
+          <div className={`w-full max-w-lg rounded-3xl border p-7 shadow-2xl transition-all duration-300 ${
+            isDarkMode
+              ? 'border-slate-800/90 bg-slate-900/95 text-white shadow-black/50'
+              : 'border-slate-200/90 bg-white/95 text-slate-900 shadow-slate-200/50'
+          }`}>
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-700/30">
+              <div>
+                <h3 className="text-xl font-bold tracking-tight">
+                  {editingMember ? 'Edit Team Member' : 'Add New Member'}
+                </h3>
+                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {editingMember ? 'Update member details and privileges' : 'Fill in the information to add a new member to the platform'}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsMemberModalOpen(false)}
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                  isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                ✕
+              </button>
             </div>
+
             <form onSubmit={handleAddMember} className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-sm">Full Name</label>
-                <input type="text" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} required className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} placeholder="Enter full name" />
+              {/* Profile Picture Upload Section */}
+              <div className="flex items-center gap-4 p-4 rounded-2xl border border-dashed border-indigo-500/30 bg-indigo-500/5">
+                <div className="relative shrink-0">
+                  <div className={`h-16 w-16 overflow-hidden rounded-2xl border-2 shadow-inner flex items-center justify-center font-bold text-xl uppercase ${
+                    isDarkMode ? 'border-slate-700 bg-slate-800 text-indigo-400' : 'border-slate-200 bg-slate-100 text-indigo-600'
+                  }`}>
+                    {newMemberProfilePic ? (
+                      <img src={newMemberProfilePic} alt="Preview" className="h-full w-full object-cover" />
+                    ) : (
+                      <span>{newMemberName ? newMemberName.charAt(0) : 'N'}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-indigo-400">Profile Picture</label>
+                  <div className="flex items-center gap-2">
+                    <label className={`cursor-pointer inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold shadow-sm transition border ${
+                      isDarkMode
+                        ? 'border-slate-700 bg-slate-800 text-white hover:bg-slate-700'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}>
+                      <span>📁 Upload Image</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const previewUrl = URL.createObjectURL(file);
+                            setNewMemberProfilePic(previewUrl);
+                          }
+                        }}
+                      />
+                    </label>
+                    {newMemberProfilePic && (
+                      <button
+                        type="button"
+                        onClick={() => setNewMemberProfilePic('')}
+                        className="text-xs font-medium text-red-400 hover:text-red-300 px-2 py-1"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="mb-1.5 block text-sm">Email Address</label>
-                <input type="email" value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} required className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} placeholder="Enter email address" />
+
+              {/* Form Inputs Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Full Name</label>
+                  <input
+                    type="text"
+                    value={newMemberName}
+                    onChange={(e) => setNewMemberName(e.target.value)}
+                    placeholder="e.g. John Doe"
+                    className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                      isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
+                    }`}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Email Address</label>
+                  <input
+                    type="email"
+                    value={newMemberEmail}
+                    onChange={(e) => setNewMemberEmail(e.target.value)}
+                    placeholder="e.g. john@example.com"
+                    className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                      isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
+                    }`}
+                    required
+                  />
+                </div>
               </div>
+
               <div>
-                <label className="mb-1.5 block text-sm">Contact Phone</label>
-                <input type="text" value={newMemberContact} onChange={(e) => setNewMemberContact(e.target.value)} className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`} placeholder="Enter phone number" />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm">Profile Picture (Optional)</label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Contact Number</label>
                 <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        setNewMemberProfilePic(reader.result as string);
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-indigo-600 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white hover:file:bg-indigo-500 ${
-                    isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'
+                  type="text"
+                  value={newMemberContact}
+                  onChange={(e) => setNewMemberContact(e.target.value)}
+                  placeholder="e.g. +256 700 000000"
+                  className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                    isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
                   }`}
                 />
               </div>
+
               <div>
-                <label className="mb-1.5 block text-sm">Category</label>
-                <select value={newMemberCategory} onChange={(e) => setNewMemberCategory(e.target.value as Member['category'])} className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${isDarkMode ? 'border-slate-700 bg-slate-950 text-white' : 'border-slate-300 bg-slate-50 text-slate-900'}`}>
-                  <option value="Board Members">Board Members</option>
-                  <option value="Artists">Artists</option>
-                  <option value="Dancers">Dancers</option>
-                  <option value="Regular Members">Regular Members</option>
-                </select>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Member Category</label>
+                <div className="relative">
+                  <select
+                    value={newMemberCategory}
+                    onChange={(e) => setNewMemberCategory(e.target.value as any)}
+                    className={`w-full appearance-none rounded-xl border px-4 py-2.5 pr-10 text-sm outline-none transition cursor-pointer focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+                      isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
+                    }`}
+                  >
+                    <option value="Regular Members" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Regular Members</option>
+                    <option value="Board Members" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Board Members</option>
+                    <option value="Artists" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Artists</option>
+                    <option value="Dancers" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Dancers</option>
+                  </select>
+                  {/* Custom Modern Dropdown Arrow Indicator */}
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-indigo-400">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setIsMemberModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-400 hover:text-white">Cancel</button>
-                <button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">{editingMember ? 'Update Member' : 'Save Member'}</button>
+
+              {/* Footer Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-700/30">
+                <button
+                  type="button"
+                  onClick={() => setIsMemberModalOpen(false)}
+                  className={`rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors ${
+                    isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-linear-to-r from-indigo-600 to-indigo-700 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30 hover:from-indigo-500 hover:to-indigo-600 transition-all"
+                >
+                  {editingMember ? 'Save Changes' : 'Add Member'}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Mega Upload Modal */}
-      {isMegaUploadOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className={`w-full max-w-lg rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
-            <h3 className="text-xl font-semibold">Mega File Request</h3>
-            <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-              Upload files directly through Mega&apos;s dropzone request link below:
-            </p>
-            <div className={`my-4 rounded-xl border p-3 text-xs break-all ${isDarkMode ? 'border-slate-800 bg-slate-950 text-indigo-400' : 'border-slate-200 bg-slate-100 text-indigo-600'}`}>
-              {megaUploadUrl}
-            </div>
-            <div className="flex justify-end gap-3">
-              <a
-                href={megaUploadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
-              >
-                Open in Mega
-              </a>
-              <button
-                type="button"
-                onClick={() => setIsMegaUploadOpen(false)}
-                className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
-                  isDarkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-100'
-                }`}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
