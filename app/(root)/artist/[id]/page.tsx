@@ -220,12 +220,21 @@ export default function PublicArtistDetailPage() {
 
   const totalTrackDownloads = tracks.reduce((total, track) => total + Number(track.downloadCount || 0), 0);
 
-  const syncDownloadCount = (trackId: string) => {
+  const syncDownloadCount = (trackId: string, serverDownloadCount?: number) => {
     setTracks((currentTracks) => currentTracks.map((track) => track.id === trackId
-      ? { ...track, downloadCount: Number(track.downloadCount || 0) + 1 }
+      ? {
+        ...track,
+        downloadCount: Number.isFinite(serverDownloadCount)
+          ? serverDownloadCount
+          : Number(track.downloadCount || 0) + 1,
+      }
       : track));
     if (activeTrackId === trackId) {
-      setActiveTrackDownloads((count) => count + 1);
+      setActiveTrackDownloads((count) => (
+        typeof serverDownloadCount === 'number' && Number.isFinite(serverDownloadCount)
+          ? serverDownloadCount
+          : count + 1
+      ));
     }
   };
 

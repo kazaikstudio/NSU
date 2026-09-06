@@ -44,10 +44,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const range = request.headers.get('range');
   const searchParams = new URL(request.url).searchParams;
   const requestedFilename = searchParams.get('filename');
+  let updatedDownloadCount: number | null = null;
 
   if (searchParams.get('download') === '1') {
     try {
-      await incrementMediaPlayCount(id);
+      updatedDownloadCount = await incrementMediaPlayCount(id);
     } catch (error) {
       console.error('Unable to record artist download:', error);
     }
@@ -82,6 +83,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const fileName = buildDownloadFilename(safeFilename, 'audio');
     headers.set('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
     headers.set('X-NSU-Thumbnail-Url', getAudioDownloadThumbnailUrl());
+  }
+  if (updatedDownloadCount !== null) {
+    headers.set('X-NSU-Download-Count', String(updatedDownloadCount));
   }
 
   return new NextResponse(response.body, { status: response.status, headers });

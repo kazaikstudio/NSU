@@ -24,7 +24,7 @@ interface AudioPlayerProps {
   downloadCount?: number;
   showDownload?: boolean;
   onPlay?: () => void;
-  onDownload?: () => void;
+  onDownload?: (downloadCount?: number) => void;
 }
 
 function formatTime(time: number) {
@@ -186,6 +186,7 @@ export default function AudioPlayer({
       if (!response.ok) {
         throw new Error(`Download failed with status ${response.status}`);
       }
+      const serverDownloadCount = Number(response.headers.get('X-NSU-Download-Count'));
 
       const total = Number(response.headers.get('content-length')) || 0;
       const reader = response.body?.getReader();
@@ -234,8 +235,11 @@ export default function AudioPlayer({
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(objectUrl);
-      onDownload?.();
-      setTrackDownloads((count) => count + 1);
+      setTrackDownloads((count) => {
+        const nextCount = Number.isFinite(serverDownloadCount) ? serverDownloadCount : count + 1;
+        onDownload?.(nextCount);
+        return nextCount;
+      });
 
       window.clearInterval(progressTimer);
       downloadProgressRef.current = 100;
