@@ -96,6 +96,11 @@ export default function DashboardApp({ user }: { user?: User | null }) {
     const savedMode = window.localStorage.getItem('nsu-theme') || window.localStorage.getItem('theme_mode');
     return savedMode === 'dark';
   });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode);
+  }, [isDarkMode]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isMegaUploadOpen, setIsMegaUploadOpen] = useState(false);
