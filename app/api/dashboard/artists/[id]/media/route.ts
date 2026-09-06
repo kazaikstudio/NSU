@@ -223,9 +223,9 @@ export async function POST(request: Request, context: Context) {
       const mediaId = `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const mediaTitle = title.trim() || (kind === 'banner' ? 'Artist Banner' : kind === 'profile' ? 'Artist Profile' : 'Track');
       const { rows } = await pool.query(
-        `INSERT INTO artist_media (id, artist_id, kind, title, album, file_name, mime_type, file_url, drive_file_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-         RETURNING id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", created_at AS "createdAt"`,
+        `INSERT INTO artist_media (id, artist_id, kind, title, album, file_name, mime_type, file_url, drive_file_id, download_count)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0)
+         RETURNING id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", download_count AS "downloadCount", created_at AS "createdAt"`,
         [mediaId, artistId, kind, mediaTitle, album, file.name, file.type || 'application/octet-stream', driveFile.publicUrl, driveFile.id]
       );
 
@@ -259,6 +259,7 @@ export async function POST(request: Request, context: Context) {
           fileName: file.name,
           mimeType: file.type || 'application/octet-stream',
           fileUrl: driveFile.publicUrl,
+          downloadCount: 0,
           createdAt: new Date().toISOString(),
         },
         uploadError,

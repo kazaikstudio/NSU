@@ -16,8 +16,13 @@ async function ensureMediaTable() {
       mime_type TEXT NOT NULL,
       file_url TEXT NOT NULL,
       drive_file_id TEXT,
+      download_count INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  await pool.query(`
+    ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0
   `);
 }
 

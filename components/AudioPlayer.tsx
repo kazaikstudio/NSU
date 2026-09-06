@@ -21,6 +21,8 @@ interface AudioPlayerProps {
   createdAt?: string;
   artistName?: string;
   artistGenre?: string | null;
+  downloadCount?: number;
+  showDownload?: boolean;
   onPlay?: () => void;
   onDownload?: () => void;
 }
@@ -48,6 +50,8 @@ export default function AudioPlayer({
   fileUrl,
   fileName,
   artistName,
+  downloadCount = 0,
+  showDownload = true,
   onPlay,
   onDownload,
 }: AudioPlayerProps) {
@@ -57,6 +61,7 @@ export default function AudioPlayer({
   const [duration, setDuration] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'done' | 'error'>('idle');
+  const [trackDownloads, setTrackDownloads] = useState(downloadCount);
   const waveId = useId();
   const downloadTimerRef = useRef<number | null>(null);
   const downloadProgressRef = useRef(0);
@@ -181,7 +186,6 @@ export default function AudioPlayer({
       if (!response.ok) {
         throw new Error(`Download failed with status ${response.status}`);
       }
-      onDownload?.();
 
       const total = Number(response.headers.get('content-length')) || 0;
       const reader = response.body?.getReader();
@@ -230,6 +234,8 @@ export default function AudioPlayer({
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(objectUrl);
+      onDownload?.();
+      setTrackDownloads((count) => count + 1);
 
       window.clearInterval(progressTimer);
       downloadProgressRef.current = 100;
@@ -361,19 +367,24 @@ export default function AudioPlayer({
         </div>
       )}
 
-      {downloadUrl && (
-        <a
-          href={downloadUrl}
-          download={fileName || `${title}.mp3`}
-          onClick={handleDownloadClick}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-2 text-[11px] font-semibold text-Eltext1 transition hover:border-amber-300 hover:bg-amber-400/20 sm:px-3 cursor-pointer"
-          aria-label={`Download ${title}`}
-        >
-          <Download size={14} />
-          <span className="hidden sm:inline">
-            {downloadStatus === 'downloading' ? 'Downloading…' : downloadStatus === 'done' ? 'Saved' : 'Download'}
+      {showDownload && downloadUrl && (
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-[10px] tabular-nums text-secondry" aria-label={`${trackDownloads} downloads`}>
+            {trackDownloads} downloads
           </span>
-        </a>
+          <a
+            href={downloadUrl}
+            download={fileName || `${title}.mp3`}
+            onClick={handleDownloadClick}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-2 text-[11px] font-semibold text-Eltext1 transition hover:border-amber-300 hover:bg-amber-400/20 sm:px-3 cursor-pointer"
+            aria-label={`Download ${title}`}
+          >
+            <Download size={14} />
+            <span className="hidden sm:inline">
+              {downloadStatus === 'downloading' ? 'Downloading…' : downloadStatus === 'done' ? 'Saved' : 'Download'}
+            </span>
+          </a>
+        </div>
       )}
     </article>
   );

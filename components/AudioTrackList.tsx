@@ -14,6 +14,7 @@ interface AudioTrack {
   artistName: string;
   artistGenre?: string | null;
   artistProfileUrl?: string | null;
+  downloadCount?: number;
 }
 
 function getPlayableAudioUrl(url: string) {
@@ -72,6 +73,7 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
           createdAt={track.createdAt}
           artistName={track.artistName}
           artistGenre={track.artistGenre}
+          downloadCount={track.downloadCount}
         />
       ))}
     </div>

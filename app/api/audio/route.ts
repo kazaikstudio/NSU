@@ -31,10 +31,15 @@ async function ensureMediaTable() {
       mime_type TEXT NOT NULL,
       file_url TEXT NOT NULL,
       drive_file_id TEXT,
+      download_count INTEGER NOT NULL DEFAULT 0,
       thumbnail_url TEXT,
       thumbnail_drive_file_id TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  await pool.query(`
+    ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0;
   `);
   await pool.query(`
     ALTER TABLE artist_media
@@ -68,6 +73,7 @@ export async function GET() {
         media.file_name AS "fileName",
         media.file_url AS "fileUrl",
         media.drive_file_id AS "driveFileId",
+        media.download_count AS "downloadCount",
         media.thumbnail_url AS "thumbnailUrl",
         media.thumbnail_drive_file_id AS "thumbnailDriveFileId",
         media.created_at AS "createdAt",

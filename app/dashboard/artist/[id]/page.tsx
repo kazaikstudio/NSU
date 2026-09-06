@@ -29,6 +29,7 @@ interface Track {
   fileName: string;
   fileUrl?: string;
   thumbnailUrl?: string;
+  downloadCount?: number;
   createdAt?: string;
   uploadedAt: string;
 }
@@ -181,6 +182,7 @@ export default function ArtistDetailPage() {
                   fileName: item.fileName,
                   fileUrl: item.fileUrl,
                   thumbnailUrl: item.thumbnailUrl,
+                  downloadCount: Number(item.downloadCount || 0),
                   uploadedAt: new Date(item.uploadedAt || item.createdAt || new Date().toISOString()).toISOString().split('T')[0],
                 })));
               }
@@ -357,6 +359,7 @@ export default function ArtistDetailPage() {
         album: media.album || 'Single',
         fileName: media.fileName,
         fileUrl: media.fileUrl,
+        downloadCount: Number(media.downloadCount || 0),
         uploadedAt: new Date(media.createdAt || new Date().toISOString()).toISOString().split('T')[0],
       }, ...prevTracks]);
       setSelectedFile(null);
@@ -866,10 +869,8 @@ export default function ArtistDetailPage() {
                   <thead className="border-b border-slate-800 bg-slate-900/50 text-xs uppercase tracking-wider text-slate-400">
                     <tr>
                       <th className="px-6 py-3.5">Thumbnail</th>
-                      <th className="px-6 py-3.5">Title</th>
                       <th className="px-6 py-3.5">Play</th>
                       <th className="px-6 py-3.5">Album</th>
-                      <th className="px-6 py-3.5">File Name</th>
                       <th className="px-6 py-3.5">Date Added</th>
                       <th className="px-6 py-3.5 text-right">Action</th>
                     </tr>
@@ -877,7 +878,7 @@ export default function ArtistDetailPage() {
                   <tbody className="divide-y divide-slate-800">
                     {tracks.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                        <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <svg className="h-8 w-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
@@ -891,90 +892,97 @@ export default function ArtistDetailPage() {
                       tracks.map((track) => (
                         <tr key={track.id} className="transition hover:bg-slate-900/40">
                           <td className="px-6 py-4">
-                            <div className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800">
-                              <img
-                                src={track.thumbnailUrl || DEFAULT_TRACK_THUMBNAIL}
-                                alt={track.title}
-                                className="h-full w-full object-cover"
-                              />
-                              {/* Thumbnail Edit Overlay */}
-                              <label className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/70 opacity-0 transition group-hover:opacity-100 cursor-pointer text-[10px] font-medium text-white text-center px-1">
-                                <svg className="h-4 w-4 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                                {changingThumbnailId === track.id ? 'Updating...' : 'Change'}
-                                <input
-                                  ref={(el) => {
-                                    if (el) thumbnailInputRefs.current[track.id] = el;
-                                  }}
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => {
-                                    if (e.target.files?.[0]) {
-                                      void handleThumbnailChange(track, e.target.files[0]);
-                                    }
-                                  }}
-                                  className="hidden"
-                                  disabled={changingThumbnailId !== null}
+                            <div className="flex items-center gap-3">
+                              <div className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800">
+                                <img
+                                  src={track.thumbnailUrl || DEFAULT_TRACK_THUMBNAIL}
+                                  alt={track.title}
+                                  className="h-full w-full object-cover"
                                 />
-                              </label>
+                                {/* Thumbnail Edit Overlay */}
+                                <label className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/70 opacity-0 transition group-hover:opacity-100 cursor-pointer text-[10px] font-medium text-white text-center px-1">
+                                  <svg className="h-4 w-4 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  {changingThumbnailId === track.id ? 'Updating...' : 'Change'}
+                                  <input
+                                    ref={(el) => {
+                                      if (el) thumbnailInputRefs.current[track.id] = el;
+                                    }}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      if (e.target.files?.[0]) {
+                                        void handleThumbnailChange(track, e.target.files[0]);
+                                      }
+                                    }}
+                                    className="hidden"
+                                    disabled={changingThumbnailId !== null}
+                                  />
+                                </label>
+                              </div>
+                              <span className="whitespace-nowrap text-xs text-slate-400">
+                                {Number(track.downloadCount || 0).toLocaleString()} {Number(track.downloadCount || 0) === 1 ? 'download' : 'downloads'}
+                              </span>
                             </div>
-                          </td>
-                          <td className="px-6 py-4 font-medium text-white">
-                            {editingTrackId === track.id ? (
-                              <div className="flex flex-col gap-2">
-                                <input
-                                  value={trackTitleDraft}
-                                  onChange={(e) => setTrackTitleDraft(e.target.value)}
-                                  className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
-                                />
-                                <input
-                                  value={trackAlbumDraft}
-                                  onChange={(e) => setTrackAlbumDraft(e.target.value)}
-                                  placeholder="Album / Project"
-                                  className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
-                                />
-                              </div>
-                            ) : (
-                              <div>
-                                <div>{track.title}</div>
-                                <div className="text-xs text-slate-500">{track.album}</div>
-                              </div>
-                            )}
                           </td>
                           <td className="px-6 py-4">
                             {track.fileUrl ? (
                               <AudioPlayer
                                 src={getPlayableAudioUrl(track.fileUrl) || ''}
                                 title={track.title}
+                                fileUrl={track.fileUrl}
+                                fileName={track.fileName}
+                                artistName={artist.name}
+                                showDownload={false}
+                                downloadCount={track.downloadCount}
+                                onDownload={() => {
+                                  setTracks((currentTracks) => currentTracks.map((currentTrack) => currentTrack.id === track.id
+                                    ? { ...currentTrack, downloadCount: Number(currentTrack.downloadCount || 0) + 1 }
+                                    : currentTrack));
+                                }}
                               />
                             ) : (
                               <span className="text-xs text-slate-500">Unavailable</span>
                             )}
                           </td>
                           <td className="px-6 py-4 text-slate-400">{track.album}</td>
-                          <td className="px-6 py-4 text-xs font-mono text-slate-500">{track.fileName}</td>
                           <td className="px-6 py-4 text-slate-400">{track.uploadedAt}</td>
                           <td className="px-6 py-4 text-right">
                             {editingTrackId === track.id ? (
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  onClick={() => void handleSaveTrackEdit()}
-                                  className="text-xs font-medium text-emerald-400 transition hover:text-emerald-300"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingTrackId(null);
-                                    setTrackTitleDraft('');
-                                    setTrackAlbumDraft('');
-                                  }}
-                                  className="text-xs font-medium text-slate-400 transition hover:text-slate-300"
-                                >
-                                  Cancel
-                                </button>
+                              <div className="flex flex-col items-end gap-2">
+                                <input
+                                  value={trackTitleDraft}
+                                  onChange={(e) => setTrackTitleDraft(e.target.value)}
+                                  className="w-48 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-white outline-none focus:border-indigo-500"
+                                  aria-label="Track title"
+                                />
+                                <input
+                                  value={trackAlbumDraft}
+                                  onChange={(e) => setTrackAlbumDraft(e.target.value)}
+                                  placeholder="Album / Project"
+                                  className="w-48 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-white outline-none focus:border-indigo-500"
+                                  aria-label="Album or project"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => void handleSaveTrackEdit()}
+                                    className="text-xs font-medium text-emerald-400 transition hover:text-emerald-300"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingTrackId(null);
+                                      setTrackTitleDraft('');
+                                      setTrackAlbumDraft('');
+                                    }}
+                                    className="text-xs font-medium text-slate-400 transition hover:text-slate-300"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="flex justify-end gap-2">
