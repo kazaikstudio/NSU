@@ -110,7 +110,6 @@ export function controlYoutubeDownload(title: string, action: 'pause' | 'resume'
     cancelled = true;
     paused = false;
     activeController?.abort();
-    activeJob = null;
   }
 }
 
@@ -132,7 +131,12 @@ function emitStatus(isPaused: boolean) {
 
 async function runDownload(job: YoutubeDownloadJob) {
   try {
+    if (cancelled) return;
     activeController = new AbortController();
+    if (cancelled) {
+      activeController.abort();
+      return;
+    }
     const query = new URLSearchParams({
       id: job.videoId,
       itag: String(job.itag),
@@ -167,6 +171,24 @@ async function runDownload(job: YoutubeDownloadJob) {
       chunks.push(value);
       downloadedBytes += value.length;
       currentDownloadedBytes = downloadedBytes;
+
+      if (paused) {
+        const pausedProgress = totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : undefined;
+        if (typeof pausedProgress === 'number') currentProgress = pausedProgress;
+        emit({
+          status: 'downloading',
+          title: job.title,
+          progress: pausedProgress,
+          paused: true,
+          downloadedBytes,
+          totalBytes,
+          sourceVideoId: job.videoId,
+          sourceItag: job.itag,
+          sourceExtension: job.extension,
+          sourceOutputBitrate: job.outputBitrate,
+        });
+        continue;
+      }
 
       const progress = totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : undefined;
       if (typeof progress === 'number') currentProgress = progress;

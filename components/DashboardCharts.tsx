@@ -394,7 +394,7 @@ function Graph1({ isDarkMode }: ChartThemeProps) {
 }
 
 function Graph2({ isDarkMode, artists }: DashboardChartsProps) {
-  const colors = ['#f59e0b', '#f97316', '#eab308', '#84cc16', '#14b8a6'];
+  const colors = ['#f64740', '#f97316', '#CC00AD', '#00CC14', '#0063CC'];
   const topArtists = artists
     .map((artist) => ({ ...artist, totalDownloads: Number(artist.totalDownloads || 0) }))
     .sort((first, second) => second.totalDownloads - first.totalDownloads)
