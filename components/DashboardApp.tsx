@@ -2,8 +2,10 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { LayoutDashboard, Users, History, HardDrive, LogOut, Video } from 'lucide-react';
-import { clampUploadProgress, formatUploadStatusMessage, shouldAutoUploadOnSelection } from '@/lib/talk-show-upload';
+import { clampUploadProgress, formatUploadStatusMessage } from '@/lib/talk-show-upload';
+import type { DashboardUser } from '@/lib/dashboard-auth';
 import DashboardCharts from '@/components/DashboardCharts';
 
 type NavPage = 'dashboard' | 'artists' | 'videos' | 'histories' | 'storage' | 'members';
@@ -81,7 +83,7 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
-export default function DashboardApp() {
+export default function DashboardApp({ user }: { user: DashboardUser }) {
   const router = useRouter();
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -99,7 +101,6 @@ export default function DashboardApp() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
-  const [isMegaUploadOpen, setIsMegaUploadOpen] = useState(false);
 
   const [artists, setArtists] = useState<Artist[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -111,6 +112,7 @@ export default function DashboardApp() {
   const [newMemberContact, setNewMemberContact] = useState('');
   const [newMemberProfilePic, setNewMemberProfilePic] = useState('');
   const [newMemberCategory, setNewMemberCategory] = useState<'Board Members' | 'Artists' | 'Dancers' | 'Regular Members'>('Regular Members');
+  const [newMemberStatus, setNewMemberStatus] = useState<Member['status']>('Active');
 
   const [newArtistName, setNewArtistName] = useState('');
   const [newArtistGenre, setNewArtistGenre] = useState('');
@@ -182,10 +184,9 @@ export default function DashboardApp() {
     setNewMemberContact(member.contact || '');
     setNewMemberProfilePic(member.profilePic || '');
     setNewMemberCategory(member.category);
+    setNewMemberStatus(member.status);
     setIsMemberModalOpen(true);
   }, []);
-
-  const megaUploadUrl = 'https://mega.nz/filerequest#!N3MQs2f_ucY!d!en';
 
   const navItems = useMemo(
     () => [
@@ -228,7 +229,7 @@ export default function DashboardApp() {
     if (response.ok) setArtists((prev) => prev.filter((artist) => artist.id !== id));
   }, []);
 
-  const handleAddMember = useCallback(async (e: React.FormEvent) => {
+  const handleAddMember = useCallback(async (e: React.FormEvent | React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     if (!newMemberName || !newMemberEmail) return;
 
@@ -243,6 +244,7 @@ export default function DashboardApp() {
           contact: newMemberContact,
           profilePic: newMemberProfilePic,
           category: newMemberCategory,
+          status: newMemberStatus,
         }),
       });
       const data = await response.json();
@@ -261,7 +263,7 @@ export default function DashboardApp() {
     } catch (error) {
       setMemberMessage(error instanceof Error ? error.message : 'Unable to save member');
     }
-  }, [newMemberName, newMemberEmail, newMemberContact, newMemberProfilePic, newMemberCategory, editingMember]);
+  }, [newMemberName, newMemberEmail, newMemberContact, newMemberProfilePic, newMemberCategory, newMemberStatus, editingMember]);
 
   const handleDeleteMember = useCallback(async (id: string) => {
     const response = await fetch(`/api/members/${id}`, { method: 'DELETE' });
@@ -384,22 +386,6 @@ export default function DashboardApp() {
     await submitUpload(uploadFile);
   }, [submitUpload, uploadFile, editingStorageItemId, editingStorageTitle, storageItems]);
 
-  const handleFileSelection = useCallback((file: File | null) => {
-    setUploadFile(file);
-
-    if (shouldAutoUploadOnSelection(file, uploadTitle, uploading)) {
-      void submitUpload(file, uploadTitle, uploadType);
-    }
-  }, [submitUpload, uploadTitle, uploadType, uploading]);
-
-  const startEditingStorageItem = useCallback((item: StorageItem) => {
-    setEditingStorageItemId(item.id);
-    setEditingStorageTitle(item.title);
-    setUploadTitle(item.title);
-    setUploadFile(null);
-    setUploadMessage('');
-  }, []);
-
   const handleDeleteStorageItem = useCallback(async (id: string) => {
     try {
       const response = await fetch(`/api/dashboard/storage/${id}`, { method: 'DELETE' });
@@ -494,7 +480,6 @@ export default function DashboardApp() {
       }
     }
   }, [router]);
-  const [newMemberStatus, setNewMemberStatus] = useState<'Active' | 'Inactive' | 'Pending'>('Active');
   return (
     <div
       className={`flex h-screen overflow-hidden ${
@@ -605,7 +590,7 @@ export default function DashboardApp() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-8">
+      <main aria-label={`Dashboard for ${user.email}`} className="flex-1 overflow-y-auto p-8">
         <div className="mx-auto max-w-5xl">
           <div className="mb-8 flex items-center justify-between">
             <div>
@@ -771,7 +756,7 @@ export default function DashboardApp() {
                             <td className={`px-6 py-4 font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                               <div className="flex items-center gap-3">
                                 {member.profilePic ? (
-                                  <img src={member.profilePic} alt={member.name} className="h-9 w-9 rounded-full object-cover shadow-sm border border-slate-700/50" />
+                                  <Image src={member.profilePic} alt={member.name} width={36} height={36} unoptimized className="h-9 w-9 rounded-full object-cover shadow-sm border border-slate-700/50" />
                                 ) : (
                                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600/20 border border-indigo-500/30 text-xs font-bold text-indigo-400 shadow-sm">
                                     {member.name.charAt(0)}
@@ -842,7 +827,7 @@ export default function DashboardApp() {
                         <div className="flex items-center gap-4">
                           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-indigo-500/30 bg-indigo-600/10 flex items-center justify-center shadow-inner">
                             {newMemberProfilePic ? (
-                              <img src={newMemberProfilePic} alt="Preview" className="h-full w-full object-cover" />
+                              <Image src={newMemberProfilePic} alt="Preview" fill unoptimized className="object-cover" />
                             ) : (
                               <span className="text-lg font-bold text-indigo-400">
                                 {newMemberName ? newMemberName.charAt(0).toUpperCase() : 'N'}
@@ -928,7 +913,7 @@ export default function DashboardApp() {
                         <div className="relative">
                           <select
                             value={newMemberCategory || 'Regular Members'}
-                            onChange={(e) => setNewMemberCategory(e.target.value as any)}
+                            onChange={(e) => setNewMemberCategory(e.target.value as Member['category'])}
                             className={`w-full appearance-none rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/80 text-white' : 'border-slate-200 bg-slate-50 text-slate-900'}`}
                           >
                             <option value="Board Members">Board Members</option>
@@ -952,7 +937,7 @@ export default function DashboardApp() {
                         <div className="relative">
                           <select
                             value={newMemberStatus}
-                            onChange={(e) => setNewMemberStatus(e.target.value as any)}
+                            onChange={(e) => setNewMemberStatus(e.target.value as Member['status'])}
                             className={`w-full appearance-none rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/80 text-white' : 'border-slate-200 bg-slate-50 text-slate-900'}`}
                           >
                             <option value="Active">Active</option>
@@ -980,7 +965,7 @@ export default function DashboardApp() {
                       <button
                         type="button"
                         onClick={(e) => {
-                          handleAddMember(e as any);
+                          handleAddMember(e);
                         }}
                         className="rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 active:scale-95"
                       >
@@ -1063,7 +1048,7 @@ export default function DashboardApp() {
                             <td className="px-6 py-4 font-medium">
                               <div className="flex items-center gap-3.5">
                                 {artist.profileUrl ? (
-                                  <img src={artist.profileUrl} alt="" className="h-10 w-10 rounded-xl object-cover ring-2 ring-indigo-500/20 transition group-hover:ring-indigo-500/40" />
+                                  <Image src={artist.profileUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 rounded-xl object-cover ring-2 ring-indigo-500/20 transition group-hover:ring-indigo-500/40" />
                                 ) : (
                                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-indigo-500/20 to-violet-500/20 text-xs font-bold text-indigo-400 ring-2 ring-indigo-500/20 transition group-hover:ring-indigo-500/40">
                                     {artist.name.charAt(0)}
@@ -1304,20 +1289,25 @@ export default function DashboardApp() {
                       }`}>
                         No Talk Show uploads yet. Upload your first file above.
                       </div>
-                    ) : storageItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`group flex items-center justify-between gap-4 rounded-xl border p-3.5 transition-all duration-200 ${
-                          isDarkMode
-                            ? 'border-slate-800/80 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900/80 shadow-sm'
-                            : 'border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-md'
-                        }`}
-                      >
+                    ) : storageItems.map((item) => {
+                      const thumbnailUrl = getStorageThumbnailUrl(item.file_url, item.thumbnail_url);
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`group flex items-center justify-between gap-4 rounded-xl border p-3.5 transition-all duration-200 ${
+                            isDarkMode
+                              ? 'border-slate-800/80 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900/80 shadow-sm'
+                              : 'border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-md'
+                          }`}
+                        >
                         <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg border border-slate-700/40 bg-slate-950 shadow-inner">
-                          {getStorageThumbnailUrl(item.file_url, item.thumbnail_url) ? (
-                            <img
-                              src={getStorageThumbnailUrl(item.file_url, item.thumbnail_url) || undefined}
+                          {thumbnailUrl ? (
+                            <Image
+                              src={thumbnailUrl}
                               alt=""
+                              fill
+                              unoptimized
                               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                             />
                           ) : (
@@ -1416,8 +1406,9 @@ export default function DashboardApp() {
                             </>
                           )}
                         </div>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -1787,7 +1778,7 @@ export default function DashboardApp() {
                     isDarkMode ? 'border-slate-700 bg-slate-800 text-indigo-400' : 'border-slate-200 bg-slate-100 text-indigo-600'
                   }`}>
                     {newMemberProfilePic ? (
-                      <img src={newMemberProfilePic} alt="Preview" className="h-full w-full object-cover" />
+                      <Image src={newMemberProfilePic} alt="Preview" fill unoptimized className="object-cover" />
                     ) : (
                       <span>{newMemberName ? newMemberName.charAt(0) : 'N'}</span>
                     )}
@@ -1876,7 +1867,7 @@ export default function DashboardApp() {
                 <div className="relative">
                   <select
                     value={newMemberCategory}
-                    onChange={(e) => setNewMemberCategory(e.target.value as any)}
+                    onChange={(e) => setNewMemberCategory(e.target.value as Member['category'])}
                     className={`w-full appearance-none rounded-xl border px-4 py-2.5 pr-10 text-sm outline-none transition cursor-pointer focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
                       isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
                     }`}
