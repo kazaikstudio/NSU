@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Download, Trash2, Inbox, Sparkles, X } from 'lucide-react';
 import DownloadRow, { DownloadEntry } from '../../../components/DownloadRow';
-import { startYoutubeDownload } from '@/lib/youtube-download-manager';
+import { controlYoutubeDownload, startYoutubeDownload } from '@/lib/youtube-download-manager';
 
 interface DownloadNotice {
   status: 'downloading' | 'done' | 'error';
@@ -387,8 +387,10 @@ export default function DownloadsPage() {
         : current);
     }
 
+    const action = nextPaused ? 'pause' : 'resume';
+    controlYoutubeDownload(entry.title, action);
     window.dispatchEvent(new CustomEvent('nsu-download-control', {
-      detail: { title: entry.title, action: nextPaused ? 'pause' : 'resume' },
+      detail: { title: entry.title, action },
     }));
   };
 
@@ -397,6 +399,7 @@ export default function DownloadsPage() {
       activeRetryRef.current = null;
       abortControllerRef.current?.abort();
     }
+    controlYoutubeDownload(entry.title, 'cancel');
     window.dispatchEvent(new CustomEvent('nsu-download-control', {
       detail: { title: entry.title, action: 'cancel' },
     }));
