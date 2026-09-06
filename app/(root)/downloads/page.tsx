@@ -374,15 +374,17 @@ export default function DownloadsPage() {
       return nextEntries;
     });
 
-    if (nextPaused) {
-      if (activeRetryRef.current?.title === entry.title) {
+    const activeRetry = activeRetryRef.current;
+    if (activeRetry?.title === entry.title) {
+      if (nextPaused) {
         abortControllerRef.current?.abort();
+      } else {
+        void runRetryDownload(activeRetry, { keepProgress: true });
       }
+
       setDownloadNotice((current) => current && current.title === entry.title
-        ? { ...current, paused: true, progress: entry.progress }
+        ? { ...current, paused: nextPaused, progress: entry.progress }
         : current);
-    } else if (activeRetryRef.current?.title === entry.title) {
-      void runRetryDownload(activeRetryRef.current, { keepProgress: true });
     }
 
     window.dispatchEvent(new CustomEvent('nsu-download-control', {
@@ -391,8 +393,10 @@ export default function DownloadsPage() {
   };
 
   const handleCancelDownload = (entry: DownloadEntry) => {
-    activeRetryRef.current = null;
-    abortControllerRef.current?.abort();
+    if (activeRetryRef.current?.title === entry.title) {
+      activeRetryRef.current = null;
+      abortControllerRef.current?.abort();
+    }
     window.dispatchEvent(new CustomEvent('nsu-download-control', {
       detail: { title: entry.title, action: 'cancel' },
     }));

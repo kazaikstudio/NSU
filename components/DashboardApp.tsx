@@ -71,6 +71,11 @@ interface DriveStorage {
   usedInTrash: number;
 }
 
+interface DownloadRegion {
+  name: string;
+  downloads: number;
+}
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   const units = ['KB', 'MB', 'GB', 'TB'];
@@ -103,6 +108,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
 
   const [artists, setArtists] = useState<Artist[]>([]);
+  const [downloadRegions, setDownloadRegions] = useState<DownloadRegion[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [memberCategoryFilter, setMemberCategoryFilter] = useState<string>('All');
 
@@ -114,6 +120,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
   const [newMemberProfileFile, setNewMemberProfileFile] = useState<File | null>(null);
   const [newMemberCategory, setNewMemberCategory] = useState<'Board Members' | 'Artists' | 'Dancers' | 'Regular Members'>('Regular Members');
   const [newMemberStatus, setNewMemberStatus] = useState<Member['status']>('Active');
+  const [savingMember, setSavingMember] = useState(false);
 
   const [newArtistName, setNewArtistName] = useState('');
   const [newArtistGenre, setNewArtistGenre] = useState('');
@@ -141,24 +148,27 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        const [artistsResponse, membersResponse, mediaResponse, historyResponse, storageResponse] = await Promise.all([
+        const [artistsResponse, membersResponse, mediaResponse, historyResponse, storageResponse, regionsResponse] = await Promise.all([
           fetch('/api/dashboard/artists'),
           fetch('/api/members'),
           fetch('/api/dashboard/media'),
           fetch('/api/dashboard/history'),
           fetch('/api/dashboard/storage'),
+          fetch('/api/dashboard/regions'),
         ]);
         const artistsData = await artistsResponse.json();
         const membersData = await membersResponse.json();
         const mediaData = await mediaResponse.json();
         const historyData = await historyResponse.json();
         const storageData = await storageResponse.json();
+        const regionsData = await regionsResponse.json();
 
         if (!artistsResponse.ok) throw new Error(artistsData.error || 'Unable to load artists');
         if (!membersResponse.ok) throw new Error(membersData.error || 'Unable to load members');
         if (!mediaResponse.ok) throw new Error(mediaData.error || 'Unable to load upload count');
         if (!historyResponse.ok) throw new Error(historyData.error || 'Unable to load activity history');
         if (!storageResponse.ok) throw new Error(storageData.error || 'Unable to load Drive storage');
+        if (!regionsResponse.ok) throw new Error(regionsData.error || 'Unable to load download regions');
 
         setArtists(artistsData.artists || []);
         setMembers(membersData.members || []);
@@ -168,6 +178,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
         setDriveStorage(storageData.driveStorage || null);
         setDriveStorageError(storageData.driveStorageError || '');
         setDriveStorageEntries(storageData.driveStorageEntries || []);
+        setDownloadRegions(regionsData.regions || []);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to load dashboard data';
         setArtistMessage(message);
@@ -252,11 +263,14 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
     return data.item.file_url;
   }, []);
 
-  const handleAddMember = useCallback(async (e: React.FormEvent | React.MouseEvent<HTMLButtonElement>) => {
+  const handleAddMember = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!newMemberName || !newMemberEmail) return;
+    if (savingMember || !newMemberName.trim() || !newMemberEmail.trim()) {
+      return;
+    }
 
     setMemberMessage('');
+    setSavingMember(true);
     try {
       let profilePic = newMemberProfilePic;
       if (newMemberProfileFile) {
@@ -292,8 +306,10 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
       setMemberMessage(editingMember ? 'Member updated successfully.' : 'Member added successfully.');
     } catch (error) {
       setMemberMessage(error instanceof Error ? error.message : 'Unable to save member');
+    } finally {
+      setSavingMember(false);
     }
-  }, [newMemberName, newMemberEmail, newMemberContact, newMemberProfilePic, newMemberProfileFile, newMemberCategory, newMemberStatus, editingMember, uploadMemberProfileImage]);
+  }, [newMemberName, newMemberEmail, newMemberContact, newMemberProfilePic, newMemberProfileFile, newMemberCategory, newMemberStatus, editingMember, savingMember, uploadMemberProfileImage]);
 
   const handleDeleteMember = useCallback(async (id: string) => {
     const response = await fetch(`/api/members/${id}`, { method: 'DELETE' });
@@ -683,7 +699,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
 
               {/* Charts Section */}
               <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
-                <DashboardCharts isDarkMode={isDarkMode} artists={artists} />
+                <DashboardCharts isDarkMode={isDarkMode} artists={artists} downloadRegions={downloadRegions} />
               </div>
             </div>
           )}
@@ -826,7 +842,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
               </div>
 
               {/* Modern Add / Edit Member Modal Panel */}
-              {isMemberModalOpen && (
+              {false && isMemberModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                   <div className={`relative w-full max-w-lg rounded-3xl border p-6 sm:p-8 shadow-2xl transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
 
@@ -991,13 +1007,11 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                         Cancel
                       </button>
                       <button
-                        type="button"
-                        onClick={(e) => {
-                          handleAddMember(e);
-                        }}
+                        type="submit"
+                        disabled={savingMember}
                         className="rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 active:scale-95"
                       >
-                        {editingMember ? 'Save Changes' : 'Create Member'}
+                        {savingMember ? 'Saving...' : editingMember ? 'Save Changes' : 'Create Member'}
                       </button>
                     </div>
 
@@ -1929,11 +1943,12 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
+                  <button
+                    type="submit"
+                    disabled={savingMember}
                   className="rounded-xl bg-linear-to-r from-indigo-600 to-indigo-700 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30 hover:from-indigo-500 hover:to-indigo-600 transition-all"
                 >
-                  {editingMember ? 'Save Changes' : 'Add Member'}
+                  {savingMember ? 'Saving...' : editingMember ? 'Save Changes' : 'Add Member'}
                 </button>
               </div>
             </form>
