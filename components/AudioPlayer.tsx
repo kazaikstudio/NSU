@@ -38,10 +38,11 @@ function formatTime(time: number) {
 function getDownloadUrl(fileUrl: string | undefined, fileName: string | undefined, title: string) {
   if (!fileUrl) return undefined;
 
-  const match = fileUrl.match(/[?&]id=([^&]+)/);
-  if (!match?.[1]) return fileUrl;
+  const match = fileUrl.match(/\/media\/([a-zA-Z0-9_-]+)(?:[/?#]|$)|[?&]id=([a-zA-Z0-9_-]+)/);
+  const fileId = match?.[1] || match?.[2];
+  if (!fileId) return fileUrl;
 
-  return `/api/dashboard/media/${match[1]}?download=1&filename=${encodeURIComponent(fileName || `${title}.mp3`)}`;
+  return `/api/dashboard/media/${fileId}?download=1&filename=${encodeURIComponent(fileName || `${title}.mp3`)}`;
 }
 
 export default function AudioPlayer({
