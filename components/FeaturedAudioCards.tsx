@@ -92,6 +92,17 @@ export default function FeaturedAudioCards() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sliderRef = useRef<HTMLDivElement | null>(null);
 
+  const scrollTrackIntoView = (trackId: string) => {
+    if (!window.matchMedia('(max-width: 639px)').matches) return;
+
+    requestAnimationFrame(() => {
+      const trackCard = sliderRef.current?.querySelector<HTMLElement>(
+        `[data-track-id="${CSS.escape(trackId)}"]`
+      );
+      trackCard?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    });
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -206,6 +217,7 @@ export default function FeaturedAudioCards() {
       setActiveTrackId(track.id);
       setIsPlaying(true);
       setCurrentTime(0);
+      scrollTrackIntoView(track.id);
 
       if (audioRef.current) {
         audioRef.current.src = track.fileUrl;
@@ -366,6 +378,12 @@ export default function FeaturedAudioCards() {
         onTouchStart={() => setIsHovered(true)}
         onTouchEnd={() => setIsHovered(false)}
         className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-1"
+        onWheel={(event) => {
+          if (window.matchMedia('(min-width: 640px)').matches && event.deltaY !== 0) {
+            event.preventDefault();
+            event.currentTarget.scrollLeft += event.deltaY;
+          }
+        }}
         onScroll={(event) => {
           const cardWidth =
             event.currentTarget.firstElementChild?.firstElementChild?.clientWidth ||
@@ -384,11 +402,12 @@ export default function FeaturedAudioCards() {
             return (
               <div
                 key={track.id}
+                data-track-id={track.id}
                 onClick={() => handleTogglePlay(track)}
-                className={`w-full shrink-0 snap-center sm:w-87.5 border rounded-3xl p-6 shadow-xl flex flex-col gap-5 cursor-pointer transition-all duration-300 ${
+                className={`w-full shrink-0 snap-center sm:w-87.5 rounded-3xl p-6 backdrop-blur-xl border flex flex-col gap-5 cursor-pointer transition-all duration-500 shadow-2xl ${
                   isSelected
-                    ? 'bg-Audicard border-amber-400/50 shadow-amber-500/10'
-                    : 'bg-Audicard1 border-white/10 hover:border-white/20'
+                    ? 'bg-gradient-to-b from-Audicard/90 to-Audicard/40 border-amber-400/40 shadow-amber-500/10 ring-1 ring-amber-400/30'
+                    : 'bg-gradient-to-b from-Audicard1/80 to-Audicard1/40 border-white/[0.08] hover:border-white/[0.16] hover:bg-Audicard1/90'
                 }`}
               >
                 {/* Header Section */}
@@ -400,22 +419,22 @@ export default function FeaturedAudioCards() {
                       e.stopPropagation();
                       handleTogglePlay(track);
                     }}
-                    className="relative group/btn w-16 h-16 rounded-full bg-zinc-800 overflow-hidden shrink-0 border-2 border-white/20 shadow-md focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    className="relative group/btn w-16 h-16 rounded-2xl bg-zinc-900/80 overflow-hidden shrink-0 border border-white/10 shadow-inner focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                   >
                     <img
                       src={normalizeImageUrl(getTrackThumbnailUrl(track))}
                       alt={track.title}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover/btn:scale-110"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover/btn:scale-110"
                     />
 
                     <div
-                      className={`absolute inset-0 flex items-center justify-center transition-all duration-200 ${
+                      className={`absolute inset-0 flex items-center justify-center transition-all duration-300 backdrop-blur-[2px] ${
                         isCurrentlyPlaying
-                          ? 'bg-black/50 opacity-100'
+                          ? 'bg-black/60 opacity-100'
                           : 'bg-black/40 opacity-0 group-hover/btn:opacity-100'
                       }`}
                     >
-                      <div className="p-2 rounded-full bg-amber-400 text-slate-950 shadow-md">
+                      <div className="p-2.5 rounded-full bg-amber-400 text-slate-950 shadow-lg transform transition-transform duration-300 group-hover/btn:scale-105">
                         {isCurrentlyPlaying ? (
                           <Pause className="w-4 h-4 fill-current" />
                         ) : (
@@ -426,11 +445,11 @@ export default function FeaturedAudioCards() {
                   </button>
 
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-white font-semibold text-lg truncate w-full">
+                    <h3 className="text-white font-medium text-base tracking-tight truncate w-full group-hover:text-amber-200/90 transition-colors">
                       {track.title || 'Untitled Track'}
                     </h3>
-                    <p className="text-zinc-300 text-sm truncate w-full">
-                      {track.artist || 'Unknown Artist'}
+                    <p className="text-xs text-zinc-400/80 font-normal mt-0.5">
+                      {track.artist || 'Audio Track'}
                     </p>
                   </div>
                 </div>
@@ -439,7 +458,7 @@ export default function FeaturedAudioCards() {
                 <div className="py-1">
                   <div
                     onClick={handleSeek}
-                    className="flex items-center justify-between gap-1 h-8 px-1 cursor-pointer group"
+                    className="flex items-center justify-between gap-1 h-9 px-1.5 cursor-pointer group bg-white/[0.02] hover:bg-white/[0.04] rounded-xl border border-white/[0.04] transition-colors"
                     title="Click to seek position"
                   >
                     {WAVEFORM_HEIGHTS.map((height, i) => {
@@ -449,10 +468,10 @@ export default function FeaturedAudioCards() {
                       return (
                         <span
                           key={i}
-                          className={`w-1 rounded-full transition-colors duration-150 ${
+                          className={`w-1 rounded-full transition-all duration-200 ${
                             isPlayedBar
-                              ? 'bg-[#fdd835]'
-                              : 'bg-white/40 group-hover:bg-white/60'
+                              ? 'bg-gradient-to-t from-amber-500 to-[#fdd835] shadow-[0_0_8px_rgba(253,216,53,0.4)]'
+                              : 'bg-white/20 group-hover:bg-white/40'
                           }`}
                           style={{ height: `${height}%` }}
                         />
@@ -462,25 +481,25 @@ export default function FeaturedAudioCards() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center justify-between pt-2 border-t border-white/10 text-zinc-300">
+                <div className="flex items-center justify-between pt-3 border-t border-white/[0.06] text-zinc-400">
                   <button
                     type="button"
                     onClick={(e) => handleLikeToggle(e, track.id)}
-                    className={`flex items-center gap-1.5 text-xs transition-colors ${
+                    className={`flex items-center gap-2 text-xs font-medium transition-all py-1 px-2.5 rounded-full ${
                       likedTracks[track.id]
-                        ? 'text-red-500 hover:text-red-400'
-                        : 'text-zinc-300 hover:text-white'
+                        ? 'text-red-400 bg-red-500/10 border border-red-500/20'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/[0.06]'
                     }`}
                   >
                     <Heart
-                      className={`w-4 h-4 transition-transform active:scale-125 ${
-                        likedTracks[track.id] ? 'fill-red-500 text-red-500' : ''
+                      className={`w-3.5 h-3.5 transition-transform active:scale-125 ${
+                        likedTracks[track.id] ? 'fill-red-400 text-red-400' : ''
                       }`}
                     />
-                    <span>
-                      {likedTracks[track.id] ? 'Liked' : 'Like'}
-                    </span>
-                    <span className="ml-0.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-mono text-zinc-300">
+                    <span>{likedTracks[track.id] ? 'Liked' : 'Like'}</span>
+                    <span className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[10px] font-mono ${
+                      likedTracks[track.id] ? 'bg-red-500/20 text-red-300' : 'bg-white/10 text-zinc-300'
+                    }`}>
                       {likeCounts[track.id] ?? 0}
                     </span>
                   </button>
@@ -488,9 +507,9 @@ export default function FeaturedAudioCards() {
                   <button
                     type="button"
                     onClick={(e) => void handleDownloadClick(e, track)}
-                    className="flex items-center gap-1.5 text-xs hover:text-white transition-colors"
+                    className="flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-white transition-all py-1 px-2.5 rounded-full hover:bg-white/[0.06]"
                   >
-                    <Download className="w-4 h-4" />
+                    <Download className="w-3.5 h-3.5" />
                     <span>Download</span>
                   </button>
                 </div>
