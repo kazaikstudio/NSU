@@ -455,10 +455,10 @@ export default function PublicArtistDetailPage() {
       <button
         type="button"
         onClick={() => void shareArtistPage()}
-        className="fixed bottom-5 right-4 z-50 inline-flex items-center gap-2 rounded-full bg-amber-400 p-3 sm:px-4 text-sm font-bold text-cardcl shadow-xl shadow-amber-400/25 transition hover:bg-amber-300 active:scale-95 cursor-pointer sm:bottom-6 sm:left-6"
+        className="fixed bottom-5 right-4 z-50 inline-flex items-center gap-2 rounded-full bg-amber-400 p-3 sm:px-4 text-sm font-bold text-cardcl shadow-xl shadow-amber-400/25 transition hover:bg-amber-300 active:scale-95 cursor-pointer sm:bottom-6 sm:right-6"
         aria-label="Share artist page"
         title="Share artist page"
-        >
+      >
         <Share2 size={17} />
         <span className="hidden sm:inline">{shareStatus || 'Share'}</span>
       </button>
