@@ -5,6 +5,7 @@ import Link from "next/link";
 import ComedyDirectoryList, { type ComedyDirectoryItem } from '@/components/ComedyDirectoryList';
 import ModernVideoPlayer from '@/components/ModernVideoPlayer';
 import { ArrowLeft, Share2, Download, Info, Check } from "lucide-react";
+import { registerClientDownload } from '@/lib/download-controls';
 
 type PlaylistItem = ComedyDirectoryItem;
 
@@ -148,8 +149,11 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
 
     dispatchStatus('downloading', 0, 0);
 
+    const controller = new AbortController();
+    const downloadControl = registerClientDownload(safeTitle, () => controller.abort());
+
     try {
-      const response = await fetch(downloadUrl, { cache: 'no-store' });
+      const response = await fetch(downloadUrl, { cache: 'no-store', signal: controller.signal });
       if (!response.ok) {
         throw new Error(`Download failed with status ${response.status}`);
       }
@@ -165,6 +169,9 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
       let lastProgress = 0;
 
       while (true) {
+        await downloadControl.waitUntilResumed();
+        if (downloadControl.isCancelled()) return;
+
         const { done, value } = await reader.read();
         if (done) break;
         if (!value) continue;
@@ -199,8 +206,11 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
 
       dispatchStatus('done', 100, loaded, total || loaded);
     } catch (error) {
+      if (downloadControl.isCancelled() || (error instanceof Error && error.name === 'AbortError')) return;
       console.error('Download failed:', error);
       dispatchStatus('error', 0);
+    } finally {
+      downloadControl.unregister();
     }
   };
 

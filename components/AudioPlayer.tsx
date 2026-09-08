@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useId } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
 import { getAudioDownloadThumbnailUrl, getDownloadPath } from '@/lib/download';
+import { registerClientDownload } from '@/lib/download-controls';
 
 interface DownloadNoticePayload {
   status: 'downloading' | 'done' | 'error';
@@ -213,11 +214,14 @@ export default function AudioPlayer({
       }));
     }, 180);
 
+    const controller = new AbortController();
+    const downloadControl = registerClientDownload(title, () => controller.abort());
+
     try {
       const region = await getDownloadRegion();
       const requestUrl = new URL(downloadUrl, window.location.origin);
       if (region) requestUrl.searchParams.set('region', region);
-      const response = await fetch(requestUrl, { cache: 'no-store' });
+      const response = await fetch(requestUrl, { cache: 'no-store', signal: controller.signal });
       if (!response.ok) {
         throw new Error(`Download failed with status ${response.status}`);
       }
@@ -234,6 +238,9 @@ export default function AudioPlayer({
       let lastProgress = 0;
 
       while (true) {
+        await downloadControl.waitUntilResumed();
+        if (downloadControl.isCancelled()) return;
+
         const { done, value } = await reader.read();
         if (done) break;
         if (!value) continue;
@@ -282,6 +289,7 @@ export default function AudioPlayer({
         setDownloadStatus('idle');
       }, 1800);
     } catch (error) {
+      if (downloadControl.isCancelled() || (error instanceof Error && error.name === 'AbortError')) return;
       console.error('Download failed:', error);
       window.clearInterval(progressTimer);
       setDownloadStatus('error');
@@ -291,6 +299,8 @@ export default function AudioPlayer({
       downloadTimerRef.current = window.setTimeout(() => {
         setDownloadStatus('idle');
       }, 2200);
+    } finally {
+      downloadControl.unregister();
     }
   };
 

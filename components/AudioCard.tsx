@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Download } from 'lucide-react';
+import { registerClientDownload } from '@/lib/download-controls';
 
 export interface FeaturedAudioTrack {
   id: string;
@@ -66,8 +67,11 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
       detail: { status: 'downloading', title: track.title, progress: 0, downloadedBytes: 0 },
     }));
 
+    const controller = new AbortController();
+    const downloadControl = registerClientDownload(track.title, () => controller.abort());
+
     try {
-      const response = await fetch(downloadUrl, { cache: 'no-store' });
+      const response = await fetch(downloadUrl, { cache: 'no-store', signal: controller.signal });
       if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
 
       const total = Number(response.headers.get('content-length')) || 0;
@@ -79,6 +83,9 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
       let lastProgress = 0;
 
       while (true) {
+        await downloadControl.waitUntilResumed();
+        if (downloadControl.isCancelled()) return;
+
         const { done, value } = await reader.read();
         if (done) break;
         if (!value) continue;
@@ -116,10 +123,13 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
         detail: { status: 'done', title: track.title, progress: 100, downloadedBytes: loaded, totalBytes: total || loaded },
       }));
     } catch (error) {
+      if (downloadControl.isCancelled() || (error instanceof Error && error.name === 'AbortError')) return;
       console.error('Download failed:', error);
       window.dispatchEvent(new CustomEvent('nsu-download-status', {
         detail: { status: 'error', title: track.title, progress: 0 },
       }));
+    } finally {
+      downloadControl.unregister();
     }
   };
 

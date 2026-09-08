@@ -30,7 +30,7 @@ const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
               : 'text-secondry hover:bg-card1/10 hover:text-primary'
           }`}
         >
-          Video
+          Watch Video
         </Link>
         <Link
           href="/Audio"
@@ -40,7 +40,7 @@ const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
               : 'text-secondry hover:bg-card1/10 hover:text-primary'
           }`}
         >
-          Audio
+          Listen Audio
         </Link>
         <Link
           href="/download"

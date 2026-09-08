@@ -354,12 +354,6 @@ export default function DownloadsPage() {
   };
 
   const handleTogglePause = (entry: DownloadEntry) => {
-    const canResume = Boolean(entry.sourceVideoId && typeof entry.sourceItag === 'number' && entry.sourceExtension);
-    if (!canResume && !entry.paused) {
-      handleCancelDownload(entry);
-      return;
-    }
-
     const nextPaused = !entry.paused;
     const now = new Date().toISOString();
     const updatedEntry: DownloadEntry = {

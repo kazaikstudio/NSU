@@ -2,6 +2,7 @@
 
 import type { MouseEvent } from 'react';
 import { Download, Flame } from 'lucide-react';
+import { registerClientDownload } from '@/lib/download-controls';
 
 export type ComedyDirectoryItem = {
   id: string;
@@ -47,8 +48,11 @@ export default function ComedyDirectoryList({
       detail: { status: 'downloading', title: safeTitle, progress: 0, downloadedBytes: 0 },
     }));
 
+    const controller = new AbortController();
+    const downloadControl = registerClientDownload(safeTitle, () => controller.abort());
+
     try {
-      const response = await fetch(downloadUrl, { cache: 'no-store' });
+      const response = await fetch(downloadUrl, { cache: 'no-store', signal: controller.signal });
       if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
 
       const total = Number(response.headers.get('content-length')) || 0;
@@ -60,6 +64,9 @@ export default function ComedyDirectoryList({
       let lastProgress = 0;
 
       while (true) {
+        await downloadControl.waitUntilResumed();
+        if (downloadControl.isCancelled()) return;
+
         const { done, value } = await reader.read();
         if (done) break;
         if (!value) continue;
@@ -98,10 +105,13 @@ export default function ComedyDirectoryList({
         detail: { status: 'done', title: safeTitle, progress: 100, downloadedBytes: loaded, totalBytes: total || loaded },
       }));
     } catch (error) {
+      if (downloadControl.isCancelled() || (error instanceof Error && error.name === 'AbortError')) return;
       console.error('Download failed:', error);
       window.dispatchEvent(new CustomEvent('nsu-download-status', {
         detail: { status: 'error', title: safeTitle, progress: 0 },
       }));
+    } finally {
+      downloadControl.unregister();
     }
   };
 
