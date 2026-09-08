@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Bell, BellOff, Radio, Sparkles } from 'lucide-react';
+import { ArrowLeft, Bell, BellOff, Radio, Share2, Sparkles } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import AudioPlayer from '@/components/AudioPlayer';
@@ -66,6 +66,7 @@ export default function PublicArtistDetailPage() {
   const [error, setError] = useState('');
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [shareStatus, setShareStatus] = useState('');
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [activeTrackDownloads, setActiveTrackDownloads] = useState(0);
   const latestTrackId = useRef<string | null>(null);
@@ -197,6 +198,29 @@ export default function PublicArtistDetailPage() {
     }
   };
 
+  const shareArtistPage = async () => {
+    if (!artist) return;
+
+    const shareData = {
+      title: `${artist.name} | Noll Studio`,
+      text: `Listen to ${artist.name} on Noll Studio`,
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareData.url);
+        setShareStatus('Link copied');
+        window.setTimeout(() => setShareStatus(''), 2000);
+      }
+    } catch (shareError) {
+      if (shareError instanceof DOMException && shareError.name === 'AbortError') return;
+      setError('Unable to share this artist page');
+    }
+  };
+
   const syncPlayCount = async (trackId: string, fileUrl: string) => {
     const driveFileId = getDriveFileId(fileUrl);
     if (!driveFileId) return;
@@ -272,7 +296,7 @@ export default function PublicArtistDetailPage() {
         />
 
         {/* Glassmorphic Backdrop Blur Overlay (Mobile Only) */}
-        <div className="absolute inset-0 bg-linear-to-b from-black/20 via-transparent to-cardcl/60 backdrop-blur-sm sm:backdrop-blur-none" />
+        <div className="absolute inset-0 bg-linear-to-b from-black/20 via-transparent to-cardcl/60" />
 
         {/* Back Navigation Button */}
         <div className="relative z-10 p-4 sm:p-6">
@@ -427,6 +451,17 @@ export default function PublicArtistDetailPage() {
           )}
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={() => void shareArtistPage()}
+        className="fixed bottom-5 left-4 z-50 inline-flex items-center gap-2 rounded-full bg-amber-400 px-4 py-3 text-sm font-bold text-cardcl shadow-xl shadow-amber-400/25 transition hover:bg-amber-300 active:scale-95 cursor-pointer sm:bottom-6 sm:left-6"
+        aria-label="Share artist page"
+        title="Share artist page"
+      >
+        <Share2 size={17} />
+        <span>{shareStatus || 'Share'}</span>
+      </button>
     </main>
   );
 }
