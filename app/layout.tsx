@@ -6,7 +6,7 @@ import ClientRequestCache from "@/components/ClientRequestCache";
 export const metadata: Metadata = {
   title: "Noll Studios - NSU | Creative Studio",
   description:
-    "Noll Studios (NSU) - Your description here. Discover our work and services.",
+    "Noll Studios (NSU) official home page.",
   metadataBase: new URL("https://nollstudios.org"),
   icons: {
     icon: [{ url: "/NollPage-v3.svg", type: "image/svg+xml" }],
