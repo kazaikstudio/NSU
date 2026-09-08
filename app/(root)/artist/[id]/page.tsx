@@ -410,9 +410,6 @@ export default function PublicArtistDetailPage() {
               <h2 className="text-2xl font-bold text-primary tracking-tight">Released Tracks</h2>
               <p className="mt-1 text-xs text-secondry">Listen to music uploaded by Noll Studio.</p>
             </div>
-            <span className="rounded-full bg-cardcl border border-card1/20 px-3 py-1 text-xs font-semibold text-secondry">
-              {tracks.length} available
-            </span>
           </div>
 
           {tracks.length === 0 ? (
