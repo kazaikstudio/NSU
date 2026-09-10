@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Switchbutton from "../../components/Switchbutton";
 import HotComediesRowList from "../../components/HotComediesRowList";
@@ -197,7 +198,7 @@ const Home = () => {
       <Switchbutton searchHref="/search" />
 
       <div className="p-2 text-start text-primary">
-        <div className="relative overflow-hidden rounded-lg bg-linear-to-r from-cardcl via-cardcl/90 to-rose-950/40 p-3 shadow-xl border border-card1/20 backdrop-blur-md">
+        <div className="relative overflow-hidden rounded-lg bg-linear-to-r from-cardcl via-cardcl/90 to-rose-950/40 p-3 shadow-xl shadow-rose-500/30 backdrop-blur-md">
           <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-rose-500/20 blur-2xl pointer-events-none" />
           <div className="relative z-10 flex flex-col items-center sm:items-start text-center sm:text-left gap-1">
             <span className="font-bold text-Eltext tracking-tight text-xs sm:text-sm leading-tight">
@@ -220,10 +221,11 @@ const Home = () => {
                     onClick={() => openPlayer(v)}
                     className="group relative w-full shrink-0 snap-center h-52 sm:h-52 rounded-2xl overflow-hidden cursor-pointer bg-zinc-900 border border-zinc-800/80 shadow-md transition-all duration-300 hover:border-violet-500/50 hover:shadow-xl hover:shadow-violet-950/20"
                   >
-                    <img
+                    <Image
                       src={v.thumbnail}
                       alt={v.title}
-                      className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+                      fill
+                      className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/40 to-transparent opacity-90 transition-opacity group-hover:opacity-80" />
                     <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-3">
@@ -287,10 +289,11 @@ const Home = () => {
                   className="group relative w-36 sm:w-40 h-42.5 shrink-0 rounded-2xl overflow-hidden cursor-pointer snap-start border border-white/10 bg-cardcl/60 shadow-lg transition-all duration-300 hover:scale-[1.02] hover:border-rose-500/50 hover:shadow-rose-950/30"
                 >
                   {/* Thumbnail Image */}
-                  <img
+                  <Image
                     src={video.thumbnail}
                     alt={video.title}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-500"
                   />
 
                   {/* Gradient Overlay */}
@@ -390,10 +393,11 @@ const Home = () => {
                     className="group relative flex items-center justify-between gap-3 rounded-xl bg-white/10 p-2.5 transition-all duration-300 hover:border-card1/40 hover:bg-card1/10 cursor-pointer shadow-sm"
                   >
                     <div className="relative h-16 w-16 sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-xl bg-black">
-                      <img
+                      <Image
                         src={video.thumbnail}
                         alt={video.title}
-                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     </div>
                     <div className="flex flex-1 flex-col justify-center min-w-0 pr-2">

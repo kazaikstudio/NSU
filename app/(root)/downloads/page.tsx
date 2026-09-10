@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Download, Trash2, Inbox, Sparkles, X } from 'lucide-react';
+import { Download, Trash2, Inbox, Sparkles, X } from 'lucide-react';
 import DownloadRow, { DownloadEntry } from '../../../components/DownloadRow';
 import { controlYoutubeDownload, startYoutubeDownload } from '@/lib/youtube-download-manager';
 
@@ -457,10 +457,6 @@ export default function DownloadsPage() {
     window.localStorage.removeItem('nsu-download-history');
   };
 
-  const handleGoBack = () => {
-    window.history.back();
-  };
-
   return (
     <main className="mt-2 min-h-screen px-3 pb-16 text-slate-100 sm:px-6 sm:pb-24 sm:pt-20">
       <div className="mx-auto flex max-w-4xl flex-col gap-4 sm:gap-6">
@@ -471,17 +467,6 @@ export default function DownloadsPage() {
           {/* Subtle Background Glow Accent */}
           <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-amber-500/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-rose-500/10 blur-3xl" />
-
-          <div className="relative mb-4 flex">
-            <button
-              type="button"
-              onClick={handleGoBack}
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/70 bg-slate-950/40 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-900/70 hover:text-white"
-            >
-              <ArrowLeft size={14} />
-              <span>Back</span>
-            </button>
-          </div>
 
           {/* Header */}
           <div className="relative flex items-start justify-between gap-2.5 sm:items-center sm:gap-4">

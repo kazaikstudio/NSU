@@ -1,0 +1,45 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@theme",
+      "description": "Tailwind CSS v4 — define design-token CSS custom properties (colors, spacing, fonts, etc.) that Tailwind uses to generate utility classes.",
+      "references": [
+        {
+          "name": "Tailwind CSS v4 – Theme variables",
+          "url": "https://tailwindcss.com/docs/theme"
+        }
+      ]
+    },
+    {
+      "name": "@source",
+      "description": "Tailwind CSS v4 — explicitly register a source path for class detection.",
+      "references": [
+        {
+          "name": "Tailwind CSS v4 – Source detection",
+          "url": "https://tailwindcss.com/docs/detecting-classes-in-source-files"
+        }
+      ]
+    },
+    {
+      "name": "@utility",
+      "description": "Tailwind CSS v4 — register a custom utility class.",
+      "references": [
+        {
+          "name": "Tailwind CSS v4 – Adding custom utilities",
+          "url": "https://tailwindcss.com/docs/adding-custom-styles"
+        }
+      ]
+    },
+    {
+      "name": "@variant",
+      "description": "Tailwind CSS v4 — register a custom variant.",
+      "references": [
+        {
+          "name": "Tailwind CSS v4 – Adding custom variants",
+          "url": "https://tailwindcss.com/docs/adding-custom-styles"
+        }
+      ]
+    }
+  ]
+}

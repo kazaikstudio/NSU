@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import Image from 'next/image';
 import {
   Download,
   Play,
@@ -48,6 +49,15 @@ function getTrackThumbnailUrl(track: FeaturedAudioTrack) {
   return '/noll.jpg';
 }
 
+function formatTime(seconds: number) {
+  if (isNaN(seconds) || seconds === 0) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+const CARD_COLORS = ['#8B5CF6', '#3B82F6', '#06B6D4', '#EC4899', '#F59E0B'];
+
 const exampleTracks: FeaturedAudioTrack[] = [
   {
     id: '1',
@@ -73,6 +83,8 @@ export default function FeaturedAudioCards() {
   const [loading, setLoading] = useState(() => !hasClientCachedData('featured-audio'));
   const [isHovered, setIsHovered] = useState(false);
 
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sliderRef = useRef<HTMLDivElement | null>(null);
@@ -115,7 +127,6 @@ export default function FeaturedAudioCards() {
               : exampleTracks;
 
           setTracks(loadedTracks);
-
         }
       } catch (error) {
         console.error("Failed to load tracks, using example data:", error);
@@ -133,19 +144,32 @@ export default function FeaturedAudioCards() {
     };
   }, []);
 
-  // Sync the audio element's playback state.
+  // Sync the audio element's playback state and time updates.
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const handleEnded = () => {
       setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
     };
 
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
 
     return () => {
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
     };
   }, [activeTrackId]);
 
@@ -183,6 +207,8 @@ export default function FeaturedAudioCards() {
     } else {
       setActiveTrackId(track.id);
       setIsPlaying(true);
+      setCurrentTime(0);
+      setDuration(0);
       scrollTrackIntoView(track.id);
 
       if (audioRef.current) {
@@ -283,6 +309,7 @@ export default function FeaturedAudioCards() {
       downloadControl.unregister();
     }
   };
+
   if (loading) {
     return (
       <p className="py-12 text-center text-sm text-slate-400">
@@ -299,121 +326,196 @@ export default function FeaturedAudioCards() {
     );
   }
 
+  const BAR_HEIGHTS = [35, 65, 45, 90, 70, 40, 80, 55, 30, 85, 60, 50, 75, 40, 95, 60, 45, 80, 70, 55, 85, 40, 65, 50, 90, 65, 40, 75];
+
   return (
-    <div className="w-full max-w-9xl mx-auto">
-      <audio ref={audioRef} />
+  <div className="w-full max-w-9xl mx-auto">
+    <audio ref={audioRef} />
 
-      <div className="flex items-center gap-3 mb-2">
-        <span className="flex h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_10px_#fbbf24]" />
-        <span className="text-sm sm:text-lg md:text-xl font-bold uppercase font-mono text-zinc-400">
-          Latest Uploaded Tracks
-        </span>
-      </div>
+    <div
+      ref={sliderRef}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onTouchStart={() => setIsHovered(true)}
+      onTouchEnd={() => setIsHovered(true)}
+      className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-10 pt-8 px-8"
+      onWheel={(event) => {
+        if (window.matchMedia('(min-width: 640px)').matches && event.deltaY !== 0) {
+          event.preventDefault();
+          event.currentTarget.scrollLeft += event.deltaY;
+        }
+      }}
+      onScroll={(event) => {
+        const cardWidth =
+          event.currentTarget.firstElementChild?.firstElementChild?.clientWidth ||
+          event.currentTarget.clientWidth;
+        setCurrentIndex(
+          Math.round(event.currentTarget.scrollLeft / cardWidth)
+        );
+      }}
+    >
+      <div className="flex gap-5">
+        {tracks.map((track, index) => {
+          const cardColor = CARD_COLORS[index % CARD_COLORS.length];
+          const isSelected = activeTrackId === track.id;
+          const isCurrentlyPlaying = isSelected && isPlaying;
+          const trackCurrentTime = isSelected ? currentTime : 0;
+          const trackDuration = isSelected ? duration : 0;
+          const progressPercent = trackDuration > 0 ? (trackCurrentTime / trackDuration) * 100 : 0;
 
-      <div
-        ref={sliderRef}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onTouchStart={() => setIsHovered(true)}
-        onTouchEnd={() => setIsHovered(false)}
-        className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-1"
-        onWheel={(event) => {
-          if (window.matchMedia('(min-width: 640px)').matches && event.deltaY !== 0) {
-            event.preventDefault();
-            event.currentTarget.scrollLeft += event.deltaY;
-          }
-        }}
-        onScroll={(event) => {
-          const cardWidth =
-            event.currentTarget.firstElementChild?.firstElementChild?.clientWidth ||
-            event.currentTarget.clientWidth;
-          setCurrentIndex(
-            Math.round(event.currentTarget.scrollLeft / cardWidth)
-          );
-        }}
-      >
-        <div className="flex gap-6">
-          {tracks.map((track) => {
-            const isSelected = activeTrackId === track.id;
-            const isCurrentlyPlaying = isSelected && isPlaying;
+          return (
+            <div
+              key={track.id}
+              data-track-id={track.id}
+              onClick={() => handleTogglePlay(track)}
+              className={`w-full shrink-0 snap-center sm:w-96 rounded-3xl p-5 bg-Audicard/90 backdrop-blur-xl border flex flex-col justify-between cursor-pointer transition-all duration-500 relative overflow-hidden group ${
+                isSelected ? '' : 'hover:bg-Audicard'
+              }`}
+              style={{
+                borderColor: isSelected ? `${cardColor}70` : 'rgba(255,255,255,0.10)',
+                boxShadow: isSelected
+                  ? `0 0 0 2px ${cardColor}50, 0 0 30px ${cardColor}30, 0 8px 30px rgba(0,0,0,0.36)`
+                  : '0 8px 30px rgba(0,0,0,0.36)',
+              }}
+            >
+              {/* Background Thumbnail Image with Modern Frosted Glass Glow & Fade */}
+              <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+                <Image
+                  fill
+                  unoptimized
+                  src={normalizeImageUrl(getTrackThumbnailUrl(track)) || '/noll.jpg'}
+                  alt=""
+                  sizes="384px"
+                  className="object-cover opacity-20 blur-xl scale-125 transition-transform duration-700 group-hover:scale-150"
+                />
+                <div className="absolute inset-0 bg-linear-to-br from-Audicard/90 via-Audicard/70 to-Audicard/95 backdrop-blur-md" />
+                <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${cardColor}20 0%, transparent 65%)` }} />
+              </div>
 
-            return (
-              <div
-                key={track.id}
-                data-track-id={track.id}
-                onClick={() => handleTogglePlay(track)}
-                className={`w-full shrink-0 snap-center sm:w-87.5 rounded-3xl p-6 backdrop-blur-2xl border flex flex-col gap-5 cursor-pointer transition-all duration-500 shadow-2xl relative overflow-hidden group ${
-                  isSelected
-                    ? 'bg-linear-to-br from-Audicard/90 via-Audicard/50 to-amber-500/10 border-amber-400/50 shadow-amber-500/20 ring-1 ring-amber-400/40'
-                    : 'bg-linear-to-br from-Audicard1/90 via-Audicard1/60 to-zinc-900/40 border-white/8 hover:border-white/20 hover:shadow-cyan-500/5'
-                }`}
-                >
-                {/* Background Ambient Glow Accent */}
-                <div className="absolute -right-12 -top-12 w-32 h-32 bg-amber-400/10 rounded-full blur-3xl pointer-events-none group-hover:bg-amber-400/20 transition-all duration-700" />
-
-                {/* Header Section: Compact & Immersive Player Layout */}
-                <div className="flex items-center gap-4 relative z-10">
-                  <div className="relative group/btn w-20 h-20 rounded-2xl overflow-hidden shrink-0 border border-white/15 shadow-xl bg-zinc-900">
-                    <img
-                      src={normalizeImageUrl(getTrackThumbnailUrl(track))}
-                      alt={track.title}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover/btn:scale-110"
-                    />
-
-                    <div
-                      className={`absolute inset-0 flex items-center justify-center transition-all duration-300 backdrop-blur-xs ${
-                        isCurrentlyPlaying
-                          ? 'bg-black/60 opacity-100'
-                          : 'bg-black/40 opacity-0 group-hover/btn:opacity-100'
-                      }`}
-                    >
-                      <div className="p-3 rounded-full bg-amber-400 text-slate-950 shadow-lg transform transition-transform duration-300 group-hover/btn:scale-110">
-                        {isCurrentlyPlaying ? (
-                          <Pause className="w-4 h-4 fill-current" />
-                        ) : (
-                          <Play className="w-4 h-4 fill-current ml-0.5" />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wider uppercase bg-white/10 text-amber-300 border border-white/5">
+              {/* Card 1 or Card 2 Upper Content based on selection visibility */}
+              {!isSelected ? (
+                <div className="flex justify-between items-center gap-4 relative z-10 w-full">
+                  {/* Left: Text & Info */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-white/80 backdrop-blur-md">
                         Track
                       </span>
-                      {isCurrentlyPlaying && (
-                        <span className="flex h-2 w-2 relative">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                        </span>
-                      )}
                     </div>
-                    <h3 className="text-white font-semibold text-base tracking-tight truncate w-full group-hover:text-amber-200 transition-colors">
+                    <span className="text-white font-semibold text-base sm:text-lg tracking-tight truncate w-full drop-shadow-sm">
                       {track.title || 'Untitled Track'}
-                    </h3>
-                    <p className="text-xs text-zinc-400 font-medium truncate">
+                    </span>
+                    <p className="text-xs text-white/60 truncate mt-0.5">
                       {track.artist || 'Audio Track'}
                     </p>
                   </div>
-                </div>
 
-                {/* Action Buttons */}
-                <div className="pt-3 border-t border-white/8 relative z-10">
-                  <button
-                    type="button"
-                    onClick={(e) => void handleDownloadClick(e, track)}
-                    className="flex w-full items-center justify-center gap-2 text-xs font-medium text-zinc-400 bg-white/2 border border-white/5 hover:text-white hover:bg-white/6 hover:border-white/10 transition-all py-2 px-3 rounded-xl shadow-sm"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download</span>
-                  </button>
+                  {/* Right: Modern Floating Thumbnail Image with Soft Glow */}
+                  <div className="relative group/btn w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shrink-0 shadow-lg bg-neutral-900 border border-white/10">
+                    <Image
+                      fill
+                      unoptimized
+                      src={normalizeImageUrl(getTrackThumbnailUrl(track)) || '/noll.jpg'}
+                      alt={track.title}
+                      sizes="(max-width: 640px) 80px, 96px"
+                      className="object-cover transition-transform duration-700 group-hover/btn:scale-110"
+                    />
+                    <div className="absolute inset-0 bg-black/10 group-hover/btn:bg-transparent transition-colors" />
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              ) : (
+                <div className="flex flex-col justify-start relative z-10 w-full">
+                  <div className="flex items-center justify-between mb-3">
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium backdrop-blur-md"
+                      style={{ backgroundColor: `${cardColor}22`, color: cardColor, border: `1px solid ${cardColor}40` }}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full animate-ping" style={{ backgroundColor: cardColor }} />
+                      Now Playing
+                    </span>
+                    <span className="text-[11px] font-mono text-white/50 tracking-wider">
+                      HD AUDIO
+                    </span>
+                  </div>
+
+                  {/* Waveform using natural bar heights */}
+                  <div className="flex items-end gap-[2.5px] h-8 px-0.5">
+                    {BAR_HEIGHTS.map((h, i) => {
+                      const barPositionPercent = (i / BAR_HEIGHTS.length) * 100;
+                      const isPast = barPositionPercent <= progressPercent;
+                      return (
+                        <div
+                          key={i}
+                          className="flex-1 rounded-full transition-colors duration-200"
+                          style={{
+                            height: `${h}%`,
+                            backgroundColor: isPast ? cardColor : 'rgba(255,255,255,0.18)',
+                            boxShadow: isPast && isCurrentlyPlaying ? `0 0 6px ${cardColor}` : 'none',
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Bottom Content Area: Contextually assigned to Card 1 or Card 2 */}
+              {!isSelected ? (
+                <div className="flex items-center gap-30 text-xs text-white/50 relative z-10 group-hover:text-white/70 transition-colors">
+                  <span className="italic font-light">Click me Listen .....</span>
+                  <span className="transform translate-x-0 group-hover:translate-x-1 transition-transform">⮞</span>
+                </div>
+              ) : (
+                <div className="mt-4 flex items-center justify-between relative z-10 transition-all duration-300 animate-fadeIn">
+                  <div className="flex items-center gap-3">
+                    {/* Modern Circular Play/Pause Button with Glow */}
+                    <div
+                      className="w-12 h-12 rounded-full text-white flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-105 active:scale-95"
+                      style={{ backgroundColor: cardColor, boxShadow: `0 4px 20px ${cardColor}55` }}
+                    >
+                      {isCurrentlyPlaying ? (
+                        <Pause className="w-5 h-5 fill-current" />
+                      ) : (
+                        <Play className="w-5 h-5 fill-current ml-0.5" />
+                      )}
+                    </div>
+
+                    {/* Modern Frosted Download Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleDownloadClick(e, track);
+                      }}
+                      className="inline-flex items-center justify-center text-white/90 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-xl transition-all p-2.5 sm:py-2 sm:px-3.5 rounded-2xl border border-white/10 shadow-sm hover:border-white/20 active:scale-95"
+                      title="Download"
+                    >
+                      <Download className="w-4 h-4 shrink-0 text-white/80" />
+                      <span className="hidden sm:inline ml-2 text-xs font-medium tracking-wide">Download</span>
+                    </button>
+                  </div>
+
+                  {/* Timer & Sleek Indicator */}
+                  <div className="flex items-center gap-2.5 bg-black/20 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-md">
+                    <span className="text-xs font-mono font-medium tracking-wider text-white/80">
+                      {formatTime(trackCurrentTime)} <span className="text-white/40">/</span> {formatTime(trackDuration)}
+                    </span>
+
+                    {isCurrentlyPlaying && (
+                      <div className="flex items-end gap-0.5 h-3 pl-1 border-l border-white/10">
+                        <span className="w-0.5 animate-pulse h-full rounded-full" style={{ backgroundColor: cardColor }} />
+                        <span className="w-0.5 animate-bounce h-2 rounded-full" style={{ backgroundColor: cardColor }} />
+                        <span className="w-0.5 animate-pulse h-2.5 rounded-full" style={{ backgroundColor: cardColor }} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
+  </div>
   );
 }

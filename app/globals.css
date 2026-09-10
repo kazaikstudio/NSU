@@ -12,13 +12,17 @@
   --color-cardcl: #e0fbfc;
   --color-card1: #060615;
   --color-Eltext: #060615;
-  --color-Eltext1: #dce1ef;
+  --color-Eltext1: #0d1535;
 
   /* Card content */
   --color-mrow: #00072d;
 
    --color-Audicard: #6a5ae7;
    --color-Audicard1: #263b65;
+
+  /* Teal glow accent */
+  --color-glow: #0d9488;
+  --color-glow1: #99f6e4;
 
 }
 .dark{
@@ -32,13 +36,17 @@
     --color-cardcl: #00072d;
     --color-card1: #ffffff;
     --color-Eltext: #dce1ef;
-    --color-Eltext1: #00072d;
+    --color-Eltext1: #dce1ef;
 
     /* Card content */
-    --color-mrow: #B9D9EB;
+    --color-mrow: #0d1535;
 
     --color-Audicard: #250075;
     --color-Audicard1: #00072d;
+
+    /* Teal glow accent */
+    --color-glow: #2dd4bf;
+    --color-glow1: #0f766e;
 }
 
 body {
@@ -74,6 +82,25 @@ html.dark body {
 }
 
 
+
+/* Artist card — left-to-right accent gradient */
+.artist-card-gradient {
+  background: linear-gradient(
+    to right,
+    rgba(255, 72, 0, 0.07),
+    rgba(224, 251, 252, 0.50),
+    rgba(13, 148, 136, 0.07)
+  );
+}
+
+.dark .artist-card-gradient {
+  background: linear-gradient(
+    to right,
+    rgba(254, 144, 0, 0.09),
+    rgba(0, 7, 45, 0.55),
+    rgba(45, 212, 191, 0.09)
+  );
+}
 
 .marquee-track > * {
   transition: transform 0.3s ease-in-out;

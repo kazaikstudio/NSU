@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 export interface Artist {
@@ -63,12 +64,15 @@ const TrendingCard: React.FC<TrendingCardProps> = ({ artist, isTop }) => {
       )}
 
       {/* Circular Avatar */}
-      <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full overflow-hidden border border-white/10 shadow-lg hover:scale-105 transition-transform duration-300 bg-zinc-800 shrink-0">
+      <div className="relative mt-4 w-20 h-20 sm:w-28 sm:h-28 rounded-full overflow-hidden border border-white/10 shadow-lg bg-zinc-800 shrink-0">
         {artist.avatarUrl ? (
-          <img
-            src={normalizeImageUrl(artist.avatarUrl)}
+          <Image
+            fill
+            unoptimized
+            src={normalizeImageUrl(artist.avatarUrl) || '/noll.jpg'}
             alt={artist.name || 'Artist'}
-            className="w-full h-full object-cover"
+            sizes="(max-width: 640px) 80px, 112px"
+            className="object-cover transition-transform duration-300 hover:scale-110"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-zinc-400 text-xl sm:text-2xl font-semibold">

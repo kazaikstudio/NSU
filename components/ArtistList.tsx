@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ChevronRight, Mic2, Music } from 'lucide-react';
 import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
 
 interface RegisteredArtist {
@@ -60,42 +61,91 @@ export default function ArtistList({ searchTerm }: { searchTerm: string }) {
     ]).catch(() => {});
   };
 
-  if (loading) return <p className="col-span-full py-16 text-center text-sm text-slate-400">Loading artists...</p>;
-  if (error) return <p className="col-span-full py-16 text-center text-sm text-red-400">{error}</p>;
+  if (loading) {
+    return (
+      <div className="col-span-full flex flex-col items-center justify-center gap-3 py-16 text-secondry/50">
+        <Mic2 size={28} className="animate-pulse text-navlink/40" />
+        <p className="text-sm">Loading artists…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="col-span-full flex flex-col items-center justify-center gap-2 py-16 text-red-400/80">
+        <p className="text-sm font-medium">{error}</p>
+      </div>
+    );
+  }
+
   if (filteredArtists.length === 0) {
-    return <p className="col-span-full py-16 text-center text-sm text-slate-400">No registered artists match your search.</p>;
+    return (
+      <div className="col-span-full flex flex-col items-center justify-center gap-3 py-16 text-secondry/50">
+        <Mic2 size={28} className="text-secondry/25" />
+        <p className="text-sm">No artists match your search.</p>
+      </div>
+    );
   }
 
   return (
-    <div className="col-span-full grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-2 text-primary">
-          {filteredArtists.map((artist) => (
-            <Link
-              href={`/artist/${encodeURIComponent(artist.id)}`}
-              key={artist.id}
-              onMouseEnter={() => preloadArtist(artist.id)}
-              onFocus={() => preloadArtist(artist.id)}
-              className="flex items-center gap-4 rounded-xl  bg-mrow/70 p-4 transition hover:border-amber-400/40"
-            >
-              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full border border-amber-400/30 bg-amber-400/10">
-                {artist.profileUrl ? (
-                  <div
-                    role="img"
-                    aria-label={`${artist.name} profile`}
-                    className="h-full w-full bg-cover bg-center"
-                    style={{ backgroundImage: `url(${artist.profileUrl})` }}
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-lg font-bold text-amber-300">{artist.name.charAt(0).toUpperCase()}</div>
-                )}
-              </div>
-              <div className="min-w-0">
-                <h2 className="truncate text-base font-semibold text-Eltext1">{artist.name}</h2>
-                <p className="mt-1 text-xs text-amber-400">{artist.genre}</p>
-                <p className="mt-1 text-xs text-Eltext1/80">{artist.tracksCount} uploaded track{artist.tracksCount === 1 ? '' : 's'} • {artist.status}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+    <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 p-1 gap-0.5">
+      {filteredArtists.map((artist) => (
+        <Link
+          href={`/artist/${encodeURIComponent(artist.id)}`}
+          key={artist.id}
+          onMouseEnter={() => preloadArtist(artist.id)}
+          onFocus={() => preloadArtist(artist.id)}
+          className="group artist-card-gradient rounded-lg border border-card1/10 backdrop-blur-sm overflow-hidden transition-all duration-200 hover:border-navlink/30 hover:shadow-lg hover:shadow-navlink/5 hover:-translate-y-0.5 active:scale-[0.98]"
+          >
+          <div className="flex items-center gap-4 p-4">
+          {/* Avatar */}
+          <div className="relative h-20 w-20 shrink-0">
+            <div className="h-full w-full overflow-hidden rounded-xl border border-white/10 shadow-lg shadow-black/20 ring-2 ring-transparent group-hover:ring-navlink/30 group-hover:shadow-navlink/20 transition-all duration-300">
+              {artist.profileUrl ? (
+                <div
+                  role="img"
+                  aria-label={`${artist.name} profile`}
+                  className="h-full w-full bg-cover bg-center group-hover:scale-105 transition-transform duration-300"
+                  style={{ backgroundImage: `url(${artist.profileUrl})` }}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center bg-linear-to-br from-navlink/20 to-glow/20 text-xl font-bold text-navlink drop-shadow-sm">
+                  {artist.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+            {/* Status dot */}
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-cardcl shadow-sm transition-colors duration-200 ${
+                artist.status.toLowerCase() === 'active'
+                  ? 'bg-glow shadow-glow/40'
+                  : 'bg-secondry/30'
+              }`}
+            />
+          </div>
+
+          {/* Info */}
+          <div className="min-w-0 flex-1">
+            <span className="block truncate text-sm sm:text-base font-semibold text-primary group-hover:text-navlink transition-colors duration-150">
+              {artist.name}
+            </span>
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-glow/20 bg-glow/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-glow">
+              <Music size={9} />
+              {artist.genre}
+            </span>
+            <p className="mt-1.5 text-[11px] text-secondry/55">
+              {artist.tracksCount} track{artist.tracksCount === 1 ? '' : 's'} · {artist.status}
+            </p>
+          </div>
+
+          {/* Arrow */}
+          <ChevronRight
+            size={16}
+            className="shrink-0 text-secondry/25 group-hover:text-navlink/60 group-hover:translate-x-0.5 transition-all duration-200"
+          />
+          </div>
+        </Link>
+      ))}
+    </div>
   );
 }
-

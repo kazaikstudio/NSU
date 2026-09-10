@@ -14,7 +14,19 @@ interface AudioTrack {
   artistName: string;
   artistGenre?: string | null;
   artistProfileUrl?: string | null;
+  thumbnailUrl?: string | null;
   downloadCount?: number;
+}
+
+function normalizeImageUrl(url?: string | null) {
+  if (!url) return undefined;
+  try {
+    const m = url.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
+    const fid = m ? (m[1] || m[2]) : null;
+    return fid ? `https://drive.google.com/thumbnail?id=${fid}&sz=w400` : url;
+  } catch {
+    return url;
+  }
 }
 
 function getPlayableAudioUrl(url: string) {
@@ -61,7 +73,7 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
   }
 
   return (
-    <div className="col-span-full flex flex-col gap-1">
+    <div className="col-span-full flex flex-col divide-y divide-card1/10">
       {filteredTracks.map((track) => (
         <AudioPlayer
           key={track.id}
@@ -74,6 +86,7 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
           artistName={track.artistName}
           artistGenre={track.artistGenre}
           downloadCount={track.downloadCount}
+          thumbnailUrl={normalizeImageUrl(track.thumbnailUrl)}
         />
       ))}
     </div>

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Download, Moon, Sun } from 'lucide-react';
 import { useClickOutside } from "./useClickOutside";
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 interface DownloadEntry {
   id: string;
@@ -27,6 +27,7 @@ const Navbar = () => {
   );
   const navRef = useRef<HTMLHeadingElement>(null);
   const pathname = usePathname();
+  const router = useRouter();
 
   useClickOutside(navRef, () => {
     if (isOpen) setIsOpen(false);
@@ -186,18 +187,20 @@ const Navbar = () => {
         {/* Desktop Links & Theme Toggle */}
         <div className="hidden md:flex min-w-0 flex-1 items-center justify-end">
           <div className="relative mr-4">
-            <Link
-              href="/downloads"
-              className="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-400/20"
-              aria-label="Open downloads"
+            <button
+              type="button"
+              onClick={() => pathname === '/downloads' ? router.back() : router.push('/downloads')}
+              title={pathname === '/downloads' ? 'Go back' : 'Open downloads'}
+              aria-label={pathname === '/downloads' ? 'Go back' : 'Open downloads'}
+              className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-navlink transition hover:bg-amber-400/20 ${pathname === '/downloads' ? 'bg-amber-400/20' : ''}`}
             >
               <Download size={16} />
               {activeDownloads.length > 0 ? (
-                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-slate-950">
+                <span className="rounded-full bg-navlink px-2 py-0.5 text-[10px] font-bold text-slate-950">
                   {activeDownloads.length}
                 </span>
               ) : null}
-            </Link>
+            </button>
           </div>
           <ul className="flex items-center gap-6 text-sm font-medium">
           <li>
@@ -253,18 +256,20 @@ const Navbar = () => {
         {/* Mobile Actions Container: Theme Toggle + Hamburger Menu */}
         <div className="flex items-center gap-2 md:hidden">
           <div className="relative">
-            <Link
-              href="/downloads"
-              className="flex items-center gap-2 rounded-lg p-2 text-primary transition hover:bg-gray-700/10 dark:hover:bg-zinc-800"
-              aria-label="Open downloads"
+            <button
+              type="button"
+              onClick={() => pathname === '/downloads' ? router.back() : router.push('/downloads')}
+              title={pathname === '/downloads' ? 'Go back' : 'Open downloads'}
+              aria-label={pathname === '/downloads' ? 'Go back' : 'Open downloads'}
+              className={`flex items-center gap-2 rounded-lg p-2 text-primary transition hover:bg-gray-700/10 dark:hover:bg-zinc-800 ${pathname === '/downloads' ? 'bg-gray-700/10 dark:bg-zinc-800' : ''}`}
             >
               <Download size={18} />
               {activeDownloads.length > 0 ? (
-                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold text-slate-950">
+                <span className="rounded-full bg-navlink px-2 py-0.5 text-[10px] font-bold text-slate-950">
                   {activeDownloads.length}
                 </span>
               ) : null}
-            </Link>
+            </button>
           </div>
           {/* Mobile Theme Toggle Button (Always Visible) */}
           <button
