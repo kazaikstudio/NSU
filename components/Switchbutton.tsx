@@ -23,21 +23,21 @@ const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
   const resolvedSearchHref = searchHref ?? '/search'
 
   const navLinkBase =
-    'relative rounded-xl px-4 py-2 sm:px-5 text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap'
+    'relative rounded-xl px-3 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap'
   const navLinkActive =
     'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30'
   const navLinkInactive =
     'text-white/40 hover:text-white/80 hover:bg-white/[0.06]'
 
-  const searchBtnBase = `flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 active:scale-95 ${
+  const searchBtnBase = `flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 active:scale-95 ${
     isSearch
       ? 'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30'
       : 'bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white'
   }`
 
   return (
-    <div className="fixed inset-x-0 bottom-6 z-50 flex items-center justify-center px-4 pointer-events-none">
-      <div className="pointer-events-auto flex max-w-[calc(100vw-2rem)] items-center gap-1 rounded-2xl border border-white/8 bg-black/70 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-2xl ring-1 ring-inset ring-white/4">
+    <div className="fixed inset-x-0 bottom-4 sm:bottom-6 z-50 flex items-center justify-center px-3 sm:px-4 pointer-events-none">
+      <div className="pointer-events-auto flex max-w-[calc(100vw-1.5rem)] items-center gap-0.5 sm:gap-1 rounded-2xl border border-white/8 bg-black/70 p-1 sm:p-1.5 shadow-2xl shadow-black/60 backdrop-blur-2xl ring-1 ring-inset ring-white/4">
 
         <Link href="/" className={`${navLinkBase} ${isVideo ? navLinkActive : navLinkInactive}`}>
           <Play className="inline-block h-3 w-3 mr-1.5 -mt-px" aria-hidden="true" />Watch
