@@ -229,7 +229,7 @@ export default function ArtistDetailPage() {
   }, [params.id]);
 
   if (loadingArtist) {
-    const loadingName = artist?.name || getArtistById(params.id)?.name || 'artist';
+    const loadingName = artist?.name || getArtistById(params.id)?.name || 'Artist';
     return (
       <ArtistProfileLoading
         artistName={loadingName}
@@ -594,6 +594,8 @@ export default function ArtistDetailPage() {
           <div className="absolute -bottom-10 left-8 flex items-end gap-5">
             <div className="group relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border-4 border-slate-900 bg-indigo-600 text-3xl font-bold shadow-xl md:h-28 md:w-28">
               {getDisplayImageUrl(profileUrl) ? (
+                // Uses a plain <img> because the source can be a blob: preview URL from a freshly selected file, which next/image does not support.
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={getDisplayImageUrl(profileUrl) || undefined} alt={artist.name} className="h-full w-full object-cover" />
               ) : (
                 <span>{artist.name.charAt(0)}</span>
@@ -894,6 +896,7 @@ export default function ArtistDetailPage() {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                   src={track.thumbnailUrl || DEFAULT_TRACK_THUMBNAIL}
                                   alt={track.title}

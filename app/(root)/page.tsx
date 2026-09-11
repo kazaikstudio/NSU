@@ -38,9 +38,6 @@ function getTalkShowThumbnailUrl(fileUrl: string | undefined) {
   return driveId ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveId)}&sz=w640` : null;
 }
 
-export const maxDuration = 60;
-export const dynamic = "force-dynamic";
-
 const CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";
 
 const Home = () => {

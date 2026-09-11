@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Download, Headphones, Play } from 'lucide-react'
-import type { Dispatch, SetStateAction } from 'react'
+import { useEffect, type Dispatch, type SetStateAction } from 'react'
 
 interface SwitchbuttonProps {
   onScrollToSearch?: () => void
@@ -21,6 +21,10 @@ const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
   const isVideo = pathname === '/' || pathname.startsWith('/video/')
   const isSearch = pathname === '/search'
   const resolvedSearchHref = searchHref ?? '/search'
+
+  useEffect(() => {
+    router.prefetch(resolvedSearchHref)
+  }, [router, resolvedSearchHref])
 
   const navLinkBase =
     'relative rounded-xl px-3 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap'

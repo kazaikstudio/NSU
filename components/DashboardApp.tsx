@@ -88,6 +88,23 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
+interface DashboardDataCache {
+  artists: Artist[];
+  members: Member[];
+  totalUploads: number;
+  history: HistoryItem[];
+  storageItems: StorageItem[];
+  driveStorage: DriveStorage | null;
+  driveStorageError: string;
+  driveStorageEntries: Array<{ label: string; used: number; limit: number | null; usedInDrive: number; usedInTrash: number; error?: string }>;
+  downloadRegions: DownloadRegion[];
+}
+
+// Held in module scope so the fetched dashboard data survives client-side
+// navigation (e.g. opening an artist page and returning). It is only cleared
+// when the module is re-evaluated, i.e. on a full browser refresh.
+let dashboardDataCache: DashboardDataCache | null = null;
+
 export default function DashboardApp({ user }: { user: DashboardUser }) {
   const router = useRouter();
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
@@ -107,9 +124,9 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
 
-  const [artists, setArtists] = useState<Artist[]>([]);
-  const [downloadRegions, setDownloadRegions] = useState<DownloadRegion[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [artists, setArtists] = useState<Artist[]>(() => dashboardDataCache?.artists ?? []);
+  const [downloadRegions, setDownloadRegions] = useState<DownloadRegion[]>(() => dashboardDataCache?.downloadRegions ?? []);
+  const [members, setMembers] = useState<Member[]>(() => dashboardDataCache?.members ?? []);
   const [memberCategoryFilter, setMemberCategoryFilter] = useState<string>('All');
 
   // Member Form States
@@ -124,12 +141,12 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
   const [newArtistName, setNewArtistName] = useState('');
   const [newArtistGenre, setNewArtistGenre] = useState('');
 
-  const [storageItems, setStorageItems] = useState<StorageItem[]>([]);
-  const [totalUploads, setTotalUploads] = useState(0);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [driveStorage, setDriveStorage] = useState<DriveStorage | null>(null);
-  const [driveStorageError, setDriveStorageError] = useState('');
-  const [driveStorageEntries, setDriveStorageEntries] = useState<Array<{ label: string; used: number; limit: number | null; usedInDrive: number; usedInTrash: number; error?: string }>>([]);
+  const [storageItems, setStorageItems] = useState<StorageItem[]>(() => dashboardDataCache?.storageItems ?? []);
+  const [totalUploads, setTotalUploads] = useState(() => dashboardDataCache?.totalUploads ?? 0);
+  const [history, setHistory] = useState<HistoryItem[]>(() => dashboardDataCache?.history ?? []);
+  const [driveStorage, setDriveStorage] = useState<DriveStorage | null>(() => dashboardDataCache?.driveStorage ?? null);
+  const [driveStorageError, setDriveStorageError] = useState(() => dashboardDataCache?.driveStorageError ?? '');
+  const [driveStorageEntries, setDriveStorageEntries] = useState<Array<{ label: string; used: number; limit: number | null; usedInDrive: number; usedInTrash: number; error?: string }>>(() => dashboardDataCache?.driveStorageEntries ?? []);
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadType, setUploadType] = useState('music');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -145,6 +162,10 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
   useEffect(() => {
+    // Skip the network round-trip when data is already cached for this browser
+    // session. It stays cached across navigation and only reloads on refresh.
+    if (dashboardDataCache) return;
+
     const loadDashboardData = async () => {
       try {
         await fetch('/api/dashboard/storage/member-profiles', { method: 'DELETE' });
@@ -179,6 +200,18 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
         setDriveStorageError(storageData.driveStorageError || '');
         setDriveStorageEntries(storageData.driveStorageEntries || []);
         setDownloadRegions(regionsData.regions || []);
+
+        dashboardDataCache = {
+          artists: artistsData.artists || [],
+          members: membersData.members || [],
+          totalUploads: Number(mediaData.totalUploads || 0),
+          history: historyData.history || [],
+          storageItems: storageData.items || [],
+          driveStorage: storageData.driveStorage || null,
+          driveStorageError: storageData.driveStorageError || '',
+          driveStorageEntries: storageData.driveStorageEntries || [],
+          downloadRegions: regionsData.regions || [],
+        };
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to load dashboard data';
         setArtistMessage(message);
@@ -188,6 +221,35 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
 
     void loadDashboardData();
   }, []);
+
+  // Keep the session cache in sync with in-place mutations (add/edit/delete)
+  // so returning to the dashboard after navigation shows up-to-date data
+  // without refetching. Only runs once an initial load has populated the cache.
+  useEffect(() => {
+    if (!dashboardDataCache) return;
+
+    dashboardDataCache = {
+      artists,
+      members,
+      totalUploads,
+      history,
+      storageItems,
+      driveStorage,
+      driveStorageError,
+      driveStorageEntries,
+      downloadRegions,
+    };
+  }, [
+    artists,
+    members,
+    totalUploads,
+    history,
+    storageItems,
+    driveStorage,
+    driveStorageError,
+    driveStorageEntries,
+    downloadRegions,
+  ]);
 
   const handleOpenEditMember = useCallback((member: Member) => {
     setEditingMember(member);

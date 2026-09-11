@@ -521,7 +521,7 @@ const Features = () => {
                   <div className="group relative overflow-hidden rounded-3xl border border-zinc-800/80 bg-zinc-900/60 shadow-2xl backdrop-blur-sm transition-all duration-500 hover:border-amber-500/40">
 
                     {/* Background Hero Image */}
-                    <div className="relative min-h-[480px] w-full sm:min-h-[520px] lg:min-h-[600px]">
+                    <div className="relative min-h-120 w-full sm:min-h-130 lg:min-h-150">
                       <Image
                         src="/Features/everyone.jpg"
                         alt="Noll Studio Uganda - Full Creative Family"

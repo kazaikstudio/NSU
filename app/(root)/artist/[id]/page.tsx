@@ -263,7 +263,7 @@ export default function PublicArtistDetailPage() {
   };
 
   if (loading) {
-    const loadingName = artist?.name || getArtistById(params.id)?.name || 'artist';
+    const loadingName = artist?.name || getArtistById(params.id)?.name || 'Artist';
     return (
       <ArtistProfileLoading
         artistName={loadingName}

@@ -1,7 +1,7 @@
 import LoadingScreen from '@/components/LoadingScreen'
 
-const loader = () => {
+const Loading = () => {
   return <LoadingScreen />
 }
 
-export default loader
+export default Loading

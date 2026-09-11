@@ -12,7 +12,7 @@ export default function ArtistProfileLoading({
   return (
     <main className="flex min-h-screen items-center justify-center bg-transparent px-6 py-10 text-primary">
       <div className="relative w-full max-w-xl overflow-hidden rounded-[28px] border border-white/10 bg-cardcl/70 p-8 text-center shadow-[0_24px_80px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-amber-400/20 via-fuchsia-500/10 to-indigo-500/20" />
+        <div className="absolute inset-x-0 top-0 h-24 bg-linear-to-r from-amber-400/20 via-fuchsia-500/10 to-indigo-500/20" />
 
         <div className="relative z-10">
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/10 shadow-inner shadow-amber-400/20">
@@ -36,5 +36,3 @@ export default function ArtistProfileLoading({
     </main>
   );
 }
-
-

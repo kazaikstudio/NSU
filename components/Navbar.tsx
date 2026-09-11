@@ -114,6 +114,10 @@ const Navbar = () => {
     };
   }, []);
 
+  useEffect(() => {
+    router.prefetch('/downloads');
+  }, [router]);
+
   const handleThemeToggle = () => {
     const root = document.documentElement;
     const nextIsDark = !root.classList.contains('dark');
