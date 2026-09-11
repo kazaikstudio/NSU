@@ -5,7 +5,6 @@ import { Music2, Mic2, Search, Mic } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Switchbutton from './Switchbutton';
 import ArtistList from './ArtistList';
-import { getClientCachedData } from '@/lib/client-cache';
 
 const FeaturedAudioCards = dynamic(() => import('./FeaturedAudioCards'), {
   ssr: false,
@@ -86,42 +85,68 @@ export default function AudioPageClient() {
 
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
+
+    const loadArtists = async () => {
       try {
-        const data = await getClientCachedData('dashboard-artists', async () => {
-          const res = await fetch('/api/dashboard/artists');
-          const payload = await res.json();
-          if (!res.ok) throw new Error(payload.error || 'Failed to load dashboard artists');
-          return payload;
-        });
-        const mapped: TrendingArtist[] = (data.artists as DashboardArtist[] || []).map((artist) => ({
+        const res = await fetch('/api/dashboard/artists', { cache: 'no-store' });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error || 'Failed to load dashboard artists');
+
+        const mapped: TrendingArtist[] = (payload.artists as DashboardArtist[] || []).map((artist) => ({
           id: artist.id,
           name: artist.name,
           avatarUrl: artist.profileUrl || '',
           downloads: Number(artist.totalDownloads || 0),
         }));
-        if (!cancelled) setArtistCount((data.artists as DashboardArtist[] || []).length);
-        if (mapped.length > 0) {
-          const ranked = [...mapped].sort((left, right) => right.downloads - left.downloads);
-          if (!cancelled) setTopArtists(ranked.slice(0, 5));
-        } else {
-          if (!cancelled) setTopArtists([]);
-        }
+
+        if (cancelled) return;
+        setArtistCount((payload.artists as DashboardArtist[] || []).length);
+        const ranked = [...mapped].sort((left, right) => right.downloads - left.downloads);
+        const next = ranked.slice(0, 5);
+        setTopArtists((prev) => {
+          const same =
+            prev.length === next.length &&
+            next.every((a, i) => a.id === prev[i].id && a.name === prev[i].name && a.avatarUrl === prev[i].avatarUrl && a.downloads === prev[i].downloads);
+          return same ? prev : next;
+        });
       } catch (err) {
         console.warn('Unable to load dashboard artists', err);
       }
     };
-    void load();
-    return () => { cancelled = true; };
+
+    void loadArtists();
+    const interval = window.setInterval(loadArtists, 30000);
+    const handleFocus = () => void loadArtists();
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/audio')
-      .then((r) => r.json())
-      .then((data) => { if (!cancelled) setMusicCount((data.tracks as unknown[] || []).length); })
-      .catch(() => {});
-    return () => { cancelled = true; };
+
+    const loadMusicCount = async () => {
+      try {
+        const response = await fetch('/api/audio', { cache: 'no-store' });
+        const data = await response.json();
+        if (!cancelled) setMusicCount((data.tracks as unknown[] || []).length);
+      } catch {
+        // keep last known count
+      }
+    };
+
+    void loadMusicCount();
+    const interval = window.setInterval(loadMusicCount, 30000);
+    const handleFocus = () => void loadMusicCount();
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   return (

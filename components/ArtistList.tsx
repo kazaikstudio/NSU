@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Mic2, Music } from 'lucide-react';
-import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
+import { getClientCachedData } from '@/lib/client-cache';
 
 interface RegisteredArtist {
   id: string;
@@ -16,29 +16,58 @@ interface RegisteredArtist {
 
 export default function ArtistList({ searchTerm }: { searchTerm: string }) {
   const [artists, setArtists] = useState<RegisteredArtist[]>([]);
-  const [loading, setLoading] = useState(() => !hasClientCachedData('dashboard-artists'));
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const loadedOnceRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadArtists = async () => {
       try {
-        const data = await getClientCachedData('dashboard-artists', async () => {
-          const response = await fetch('/api/dashboard/artists');
-          if (!response.ok) throw new Error('Unable to load artists');
-          return response.json();
+        const response = await fetch('/api/dashboard/artists', { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Unable to load artists');
+        if (cancelled) return;
+        if (!Array.isArray(data.artists)) return;
+        loadedOnceRef.current = true;
+        setError('');
+        setArtists((prev: RegisteredArtist[]) => {
+          const byId = new Map(prev.map((artist) => [artist.id, artist]));
+          const hasChanges =
+            prev.length !== data.artists.length ||
+            (data.artists as RegisteredArtist[]).some((artist) => {
+              const current = byId.get(artist.id);
+              return (
+                !current ||
+                current.name !== artist.name ||
+                current.genre !== artist.genre ||
+                current.tracksCount !== artist.tracksCount ||
+                current.status !== artist.status ||
+                current.profileUrl !== artist.profileUrl
+              );
+            });
+          return hasChanges ? (data.artists as RegisteredArtist[]) : prev;
         });
-        if (!cancelled) setArtists(data.artists || []);
       } catch (loadError) {
-        if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to load artists');
+        if (!cancelled && !loadedOnceRef.current) {
+          setError(loadError instanceof Error ? loadError.message : 'Unable to load artists');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
 
     void loadArtists();
-    return () => { cancelled = true; };
+    const interval = window.setInterval(loadArtists, 30000);
+    const handleFocus = () => void loadArtists();
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   const normalizedSearch = searchTerm.trim().toLowerCase();

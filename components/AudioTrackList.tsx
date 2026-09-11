@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AudioRow from './AudioRow';
 
 interface AudioTrack {
@@ -35,10 +35,7 @@ function getPlayableAudioUrl(url: string) {
   return match?.[1] ? `/api/dashboard/media/${match[1]}` : url;
 }
 
-let cachedAudioTracks: AudioTrack[] | null = null;
-let audioTracksPromise: Promise<AudioTrack[]> | null = null;
-
-async function fetchAudioTracks() {
+async function fetchAudioTracks(): Promise<AudioTrack[]> {
   const response = await fetch('/api/audio', { cache: 'no-store' });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Unable to load music');
@@ -50,31 +47,46 @@ async function fetchAudioTracks() {
 }
 
 export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
-  const [tracks, setTracks] = useState<AudioTrack[]>(cachedAudioTracks ?? []);
-  const [loading, setLoading] = useState(cachedAudioTracks === null);
+  const [tracks, setTracks] = useState<AudioTrack[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const loadedOnceRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadTracks = async () => {
       try {
-        if (!audioTracksPromise) {
-          audioTracksPromise = fetchAudioTracks();
-        }
-        const loadedTracks = await audioTracksPromise;
-        cachedAudioTracks = loadedTracks;
-        if (!cancelled) setTracks(loadedTracks);
+        const loadedTracks = await fetchAudioTracks();
+        if (cancelled) return;
+        loadedOnceRef.current = true;
+        setError('');
+        setTracks((prev: AudioTrack[]) => {
+          const currentIds = new Set(prev.map((track) => track.id));
+          const hasChanges =
+            prev.length !== loadedTracks.length ||
+            loadedTracks.some((track) => !currentIds.has(track.id));
+          return hasChanges ? loadedTracks : prev;
+        });
       } catch (loadError) {
-        audioTracksPromise = null;
-        if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to load music');
+        if (!cancelled && !loadedOnceRef.current) {
+          setError(loadError instanceof Error ? loadError.message : 'Unable to load music');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
 
     void loadTracks();
-    return () => { cancelled = true; };
+    const interval = window.setInterval(loadTracks, 30000);
+    const handleFocus = () => void loadTracks();
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
