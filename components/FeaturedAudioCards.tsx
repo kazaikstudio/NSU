@@ -15,6 +15,7 @@ export interface FeaturedAudioTrack {
   id: string;
   title: string;
   artist?: string;
+  artistName?: string;
   fileUrl: string;
   coverUrl?: string;
   driveFileId?: string;
@@ -121,6 +122,7 @@ export default function FeaturedAudioCards() {
 
                   return {
                     ...track,
+                    artist: track.artist || track.artistName,
                     fileUrl: getPlayableAudioUrl(track.fileUrl),
                     thumbnailUrl: dashboardItem?.thumbnailUrl || track.thumbnailUrl,
                   };
