@@ -106,12 +106,15 @@ export default function AudioRow({
     return cached?.wasPlaying ?? false;
   });
   const [isExpanded, setIsExpanded] = useState(false);
+  const [playProgress, setPlayProgress] = useState(0);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'done' | 'error'>('idle');
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const downloadTimerRef = useRef<number | null>(null);
   const downloadProgressRef = useRef(0);
 
   if (currentSrc !== src) {
     setCurrentSrc(src);
+    setPlayProgress(0);
     setIsPlaying(audioCache.get(src)?.wasPlaying ?? false);
     setIsExpanded(false);
   }
@@ -167,6 +170,7 @@ export default function AudioRow({
       try {
         await audio.play();
         setIsPlaying(true);
+        setIsExpanded(true);
         audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: true });
       } catch (err) {
         console.error('Play failed:', err);
@@ -212,6 +216,7 @@ export default function AudioRow({
 
     setDownloadStatus('downloading');
     downloadProgressRef.current = 8;
+    setDownloadProgress(8);
     window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
       detail: { status: 'downloading', title, progress: 0, downloadedBytes: 0 },
     }));
@@ -335,10 +340,14 @@ export default function AudioRow({
       }}
       onTimeUpdate={() => {
         const audio = audioRef.current;
+        if (audio && isFinite(audio.duration) && audio.duration > 0) {
+          setPlayProgress((audio.currentTime / audio.duration) * 100);
+        }
         if (audio) audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: !audio.paused });
       }}
       onEnded={() => {
         setIsPlaying(false);
+        setPlayProgress(0);
         audioCache.delete(src);
       }}
       className="sr-only"
@@ -421,6 +430,18 @@ export default function AudioRow({
           </span>
         </a>
       )}
+
+      {/* Playback progress bar — bottom border style, visible while clicked & playing */}
+      <div
+        className={`absolute inset-x-0 bottom-0 h-0.5 bg-black/10 transition-opacity duration-300 ${
+          isExpanded && isPlaying ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        <div
+          className="h-full bg-amber-400 transition-[width] duration-200 ease-linear"
+          style={{ width: `${playProgress}%` }}
+        />
+      </div>
     </article>
   );
 }
