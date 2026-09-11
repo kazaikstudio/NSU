@@ -12,7 +12,7 @@ import {
 } from "@/lib/download-storage";
 import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { resolveAllowedOrigin } from '@/lib/request-origin';
-import { configureYoutubeEvaluator, getYoutubeSessionConfig } from '@/lib/youtube-client';
+import { configureYoutubeEvaluator, getYoutubeSessionConfig, YOUTUBE_CLIENT_TYPES } from '@/lib/youtube-client';
 import { getYoutubePageInfo, type YoutubePageInfo } from '@/lib/youtube-page';
 import { getYoutubeDlpInfo, type DlpInfo } from '@/lib/youtube-dlp';
 import {
@@ -27,16 +27,6 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 configureYoutubeEvaluator();
-
-const YOUTUBE_CLIENT_TYPES = [
-  ClientType.WEB,
-  ClientType.MWEB,
-  ClientType.TV,
-  ClientType.ANDROID,
-  ClientType.ANDROID_VR,
-  ClientType.WEB_EMBEDDED,
-  ClientType.IOS,
-] as const;
 
 async function getYoutubeVideoInfo(videoId: string) {
   let lastError: unknown;
@@ -138,19 +128,166 @@ function setDiagnosticHeaders(response: Response, diagnosticCode: string) {
   return response;
 }
 
-async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo | DlpInfo, selectedFormat: { itag: number; url?: string }) {
-  if (selectedFormat.url) {
-    const directResponse = await fetch(selectedFormat.url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+function getStreamingPot(info: { streaming_data?: unknown }): string | undefined {
+  try {
+    const data = info.streaming_data as { pot?: unknown } | undefined;
+    return typeof data?.pot === 'string' ? data.pot : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildStreamUrl(url: string, pot?: string) {
+  const parsed = new URL(url);
+  if (pot && !parsed.searchParams.get('pot')) parsed.searchParams.set('pot', pot);
+  return parsed.toString();
+}
+
+function getStreamRequestHeaders(videoId: string) {
+  return {
+    'User-Agent':
+      process.env.YOUTUBE_USER_AGENT ||
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    Origin: 'https://www.youtube.com',
+    Referer: `https://www.youtube.com/watch?v=${videoId}`,
+  };
+}
+
+const STREAM_SEGMENT_COUNT = 4;
+const STREAM_SEGMENT_MIN_BYTES = 4 * 1024 * 1024;
+
+async function openSegmentedStream(url: string, headers: Record<string, string>, totalBytes: number): Promise<ReadableStream<Uint8Array>> {
+  const segmentCount = Math.max(1, STREAM_SEGMENT_COUNT);
+  const segmentSize = Math.ceil(totalBytes / segmentCount);
+  const ranges = Array.from({ length: segmentCount }, (_, index) => {
+    const start = index * segmentSize;
+    const end = Math.min(totalBytes - 1, start + segmentSize - 1);
+    return { start, end };
+  });
+
+  const readers = await Promise.all(
+    ranges.map(async ({ start, end }) => {
+      const response = await fetch(url, {
+        headers: { ...headers, Range: `bytes=${start}-${end}` },
+        redirect: 'follow',
+      });
+      if (!response.ok || !response.body) {
+        throw new Error(`YouTube stream segment ${start}-${end} returned ${response.status}`);
+      }
+      return response.body.getReader();
+    }),
+  );
+
+  let index = 0;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (index >= readers.length) {
+        controller.close();
+        return;
+      }
+      const { done, value } = await readers[index].read();
+      if (value) controller.enqueue(value);
+      if (done) {
+        await readers[index].releaseLock();
+        index += 1;
+      }
+    },
+    cancel() {
+      for (const reader of readers) void reader.cancel().catch(() => {});
+      return Promise.resolve();
+    },
+  });
+}
+
+async function openYouTubeStream(url: string, headers: Record<string, string>): Promise<ReadableStream<Uint8Array> | undefined> {
+  let probeResponse: Response | null = null;
+  try {
+    probeResponse = await fetch(url, {
+      headers: { ...headers, Range: 'bytes=0-0' },
       redirect: 'follow',
     });
-    if (directResponse.ok && directResponse.body) {
-      return directResponse.body;
+    if (!probeResponse.ok) {
+      await probeResponse.body?.cancel().catch(() => {});
+      return undefined;
+    }
+
+    const contentRange = probeResponse.headers.get('content-range') || '';
+    const totalMatch = contentRange.match(/bytes\s+\d+-\d+\/(\d+)/);
+    const totalBytes = Number(totalMatch?.[1]);
+
+    if (probeResponse.status === 206 && Number.isFinite(totalBytes) && totalBytes >= STREAM_SEGMENT_MIN_BYTES) {
+      await probeResponse.arrayBuffer().catch(() => new ArrayBuffer(0));
+      return openSegmentedStream(url, headers, totalBytes);
+    }
+
+    if (probeResponse.status === 200 && probeResponse.body) {
+      return probeResponse.body;
+    }
+
+    await probeResponse.body?.cancel().catch(() => {});
+  } catch {
+    await probeResponse?.body?.cancel().catch(() => {});
+  }
+  return undefined;
+}
+
+async function downloadViaInnertubeFallback(itag: number, videoId: string): Promise<ReadableStream<Uint8Array>> {
+  let lastError: unknown;
+
+  for (const clientType of YOUTUBE_CLIENT_TYPES) {
+    try {
+      const youtube = await Innertube.create({
+        ...getYoutubeSessionConfig(),
+        client_type: clientType,
+        retrieve_player: true,
+      });
+      const info = await youtube.getBasicInfo(videoId);
+      const candidateFormats = [
+        ...(info.streaming_data?.formats || []),
+        ...(info.streaming_data?.adaptive_formats || []),
+      ];
+      const format = candidateFormats.find((candidate) => candidate.itag === itag);
+      if (!format) continue;
+
+      if (format.url) {
+        const open = await openYouTubeStream(
+          buildStreamUrl(format.url, getStreamingPot(info as { streaming_data?: unknown })),
+          getStreamRequestHeaders(videoId),
+        );
+        if (open) return open;
+      }
+
+      if ('download' in info) return info.download({ itag });
+    } catch (error) {
+      lastError = error;
     }
   }
 
-  if ('download' in info) return info.download({ itag: selectedFormat.itag });
-  throw new Error('The selected watch-page format has no direct stream URL.');
+  if (lastError) throw lastError;
+  throw new Error(`No fallback streamer could open itag ${itag} for ${videoId}.`);
+}
+
+async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo | DlpInfo, selectedFormat: { itag: number; url?: string }, videoId: string) {
+  const pot = 'streaming_data' in info ? getStreamingPot(info) : undefined;
+  if (selectedFormat.url) {
+    const url = buildStreamUrl(selectedFormat.url, pot);
+    const headers = getStreamRequestHeaders(videoId);
+    try {
+      const open = await openYouTubeStream(url, headers);
+      if (open) return open;
+    } catch {
+      // Fall through to the client-native downloader below.
+    }
+  }
+
+  if ('download' in info) {
+    try {
+      return info.download({ itag: selectedFormat.itag });
+    } catch {
+      // Fall through to the cross-client fallback below.
+    }
+  }
+  return downloadViaInnertubeFallback(selectedFormat.itag, videoId);
 }
 
 async function createStoredDownloadPath(filename: string, category: "audio" | "video") {
@@ -297,7 +434,7 @@ export async function GET(req: Request) {
 
     let stream: ReadableStream<Uint8Array> | undefined;
     try {
-      stream = await downloadSelectedFormat(info, selectedFormat);
+      stream = await downloadSelectedFormat(info, selectedFormat, id);
     } catch (error) {
       let retryError: unknown = error;
       let recovered = false;
@@ -311,7 +448,7 @@ export async function GET(req: Request) {
           ].find((format) => format.itag === itag);
           if (!retryFormat) continue;
 
-          stream = await downloadSelectedFormat(retryInfo, retryFormat);
+          stream = await downloadSelectedFormat(retryInfo, retryFormat, id);
           info = retryInfo;
           selectedFormat = retryFormat;
           recovered = true;
@@ -410,31 +547,13 @@ export async function GET(req: Request) {
       }
 
       const input = Readable.fromWeb(stream as never);
-      const artworkPath = join(process.cwd(), "public", "noll.jpg");
-      const artworkAvailable = existsSync(artworkPath);
       const codecArgs = output === "mp3"
         ? ["-codec:a", "libmp3lame", "-b:a", `${bitrate}k`, "-f", "mp3"]
         : output === "wav"
           ? ["-codec:a", "pcm_s16le", "-f", "wav"]
           : ["-codec:a", "aac", "-b:a", "192k", "-f", "ipod"];
-      const defaultOutputFormat = output === "mp3" ? "mp3" : output === "wav" ? "wav" : "ipod";
       const fragmentedMp4Args = output === "m4a" ? ["-movflags", "frag_keyframe+empty_moov"] : [];
-      const ffmpegArgs = artworkAvailable
-        ? [
-            "-loglevel", "error",
-            "-i", "pipe:0",
-            "-i", artworkPath,
-            "-map", "0:a",
-            "-map", "1:v",
-            "-c:a", codecArgs[1],
-            "-b:a", output === "mp3" ? `${bitrate}k` : output === "wav" ? "192k" : "192k",
-            "-c:v", "mjpeg",
-            "-disposition:v", "attached_pic",
-            "-f", defaultOutputFormat,
-            ...fragmentedMp4Args,
-            "pipe:1",
-          ]
-        : ["-loglevel", "error", "-i", "pipe:0", "-vn", ...codecArgs, ...fragmentedMp4Args, "pipe:1"];
+      const ffmpegArgs = ["-loglevel", "error", "-i", "pipe:0", "-vn", ...codecArgs, ...fragmentedMp4Args, "pipe:1"];
       const converter = spawn(executable, ffmpegArgs, { stdio: ["pipe", "pipe", "pipe"] });
       const stderrBuffer: string[] = [];
       collectProcessStderr(converter.stderr, stderrBuffer);
@@ -498,7 +617,7 @@ export async function GET(req: Request) {
 
       let audioStream: ReadableStream<Uint8Array>;
       try {
-        audioStream = await downloadSelectedFormat(info, audioSource);
+        audioStream = await downloadSelectedFormat(info, audioSource, id);
       } catch (error) {
         throw new YoutubeDownloadError(502, {
           code: 'YOUTUBE_STREAM_FAILED',

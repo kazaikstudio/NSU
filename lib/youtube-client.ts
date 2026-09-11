@@ -1,4 +1,4 @@
-import { Platform } from 'youtubei.js';
+import { ClientType, Platform } from 'youtubei.js';
 
 let evaluatorConfigured = false;
 
@@ -11,6 +11,19 @@ export function configureYoutubeEvaluator() {
   };
   evaluatorConfigured = true;
 }
+
+// Clients ordered by how reliably they return playable stream URLs without a
+// PO token: Android VR and iOS surface googlevideo URLs, while WEB/MWEB now
+// routinely withhold them.
+export const YOUTUBE_CLIENT_TYPES = [
+  ClientType.ANDROID_VR,
+  ClientType.IOS,
+  ClientType.ANDROID,
+  ClientType.MWEB,
+  ClientType.WEB,
+  ClientType.TV,
+  ClientType.WEB_EMBEDDED,
+] as const;
 
 type YoutubeSessionConfig = {
   po_token?: string;

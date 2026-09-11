@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { ClientType, Innertube } from 'youtubei.js';
+import { Innertube } from 'youtubei.js';
 import { getFfmpegDiagnostics, getRuntimeDiagnostics } from '@/lib/youtube-download-diagnostics';
 import ffmpegPath from 'ffmpeg-static';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { configureYoutubeEvaluator, getYoutubeSessionConfig } from '@/lib/youtube-client';
+import { configureYoutubeEvaluator, getYoutubeSessionConfig, YOUTUBE_CLIENT_TYPES } from '@/lib/youtube-client';
 import { getYoutubePageInfo } from '@/lib/youtube-page';
 import { getYoutubeDlpInfo } from '@/lib/youtube-dlp';
 
@@ -12,16 +12,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 configureYoutubeEvaluator();
-
-const YOUTUBE_CLIENT_TYPES = [
-  ClientType.WEB,
-  ClientType.MWEB,
-  ClientType.TV,
-  ClientType.ANDROID,
-  ClientType.ANDROID_VR,
-  ClientType.WEB_EMBEDDED,
-  ClientType.IOS,
-] as const;
 
 async function getYoutubeVideoInfo(videoId: string) {
   let lastError: unknown;

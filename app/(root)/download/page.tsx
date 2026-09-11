@@ -8,21 +8,31 @@ import { startYoutubeDownload } from '@/lib/youtube-download-manager'
 
 const SAVED_DOWNLOAD_LINK_KEY = 'nsu-download-link'
 
-function getVideoId(value: string) {
+function extractVideoIdFromUrl(value: string) {
   const trimmedValue = value.trim()
   if (/^[a-zA-Z0-9_-]{11}$/.test(trimmedValue)) return trimmedValue
 
+  const withProtocol = /^https?:\/\//i.test(trimmedValue) ? trimmedValue : `https://${trimmedValue}`
+
   try {
-    const url = new URL(trimmedValue)
-    if (url.hostname === 'youtu.be') return url.pathname.slice(1).split('/')[0]
-    if (url.hostname.endsWith('youtube.com')) {
-      return url.searchParams.get('v') || url.pathname.match(/^\/(?:shorts|embed|live)\/([^/?]+)/)?.[1] || ''
+    const bareUrl = new URL(withProtocol)
+    if (['youtu.be', 'music.youtube.com'].includes(bareUrl.hostname)) {
+      return bareUrl.pathname.slice(1).split('/')[0] || bareUrl.searchParams.get('v') || ''
+    }
+    if (bareUrl.hostname.endsWith('youtube.com') || bareUrl.hostname.endsWith('youtube-nocookie.com')) {
+      const pathId = bareUrl.pathname.match(/^\/(?:shorts|embed|live|clip)\/([^/?]+)/)?.[1]
+      return bareUrl.searchParams.get('v') || pathId || ''
     }
   } catch {
-    return ''
+    // Fall through
   }
 
   return ''
+}
+
+function getVideoId(value: string) {
+  const embeddedMatch = value.match(/https?:\/\/[^\s"'<>]+/)
+  return embeddedMatch ? extractVideoIdFromUrl(embeddedMatch[0]) : extractVideoIdFromUrl(value)
 }
 
 function getDirectUrl(value: string) {
