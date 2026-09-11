@@ -127,6 +127,7 @@ export default function ArtistDetailPage() {
   const [trackTitleDraft, setTrackTitleDraft] = useState('');
   const [trackAlbumDraft, setTrackAlbumDraft] = useState('');
   const [trackFeaturedArtistDraft, setTrackFeaturedArtistDraft] = useState('');
+  const [isSavingTrack, setIsSavingTrack] = useState(false);
 
   // Thumbnail editing state
   const [changingThumbnailId, setChangingThumbnailId] = useState<string | null>(null);
@@ -437,6 +438,7 @@ export default function ArtistDetailPage() {
       return;
     }
 
+    setIsSavingTrack(true);
     try {
       const response = await fetch(`/api/dashboard/artists/${artist.id}/media?mediaId=${encodeURIComponent(editingTrackId)}`, {
         method: 'PUT',
@@ -467,6 +469,8 @@ export default function ArtistDetailPage() {
     } catch (error) {
       setProcessMessage(error instanceof Error ? error.message : 'Unable to update track information.');
       setTimeout(() => setProcessMessage(''), 3000);
+    } finally {
+      setIsSavingTrack(false);
     }
   };
 
@@ -602,14 +606,14 @@ export default function ArtistDetailPage() {
               setTrackFeaturedArtistDraft('');
             }
           }}
-        >
+          >
           <form
             onSubmit={(event) => {
               event.preventDefault();
               void handleSaveTrackEdit();
             }}
             className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-          >
+            >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-400">Track details</p>
@@ -663,28 +667,18 @@ export default function ArtistDetailPage() {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingTrackId(null);
-                  setTrackTitleDraft('');
-                  setTrackAlbumDraft('');
-                  setTrackFeaturedArtistDraft('');
-                }}
-                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
-              >
-                Abort
-              </button>
+            <div className="mt-6 flex justify-end">
               <button
                 type="submit"
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+                disabled={isSavingTrack}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
               >
-                Save
+                {isSavingTrack ? 'Saving' : 'Save'}
               </button>
             </div>
           </form>
         </div>
+
       ) : null}
       <div className="mx-auto  overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-2xl">
 

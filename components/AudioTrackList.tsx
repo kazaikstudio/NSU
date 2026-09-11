@@ -35,9 +35,23 @@ function getPlayableAudioUrl(url: string) {
   return match?.[1] ? `/api/dashboard/media/${match[1]}` : url;
 }
 
+let cachedAudioTracks: AudioTrack[] | null = null;
+let audioTracksPromise: Promise<AudioTrack[]> | null = null;
+
+async function fetchAudioTracks() {
+  const response = await fetch('/api/audio', { cache: 'no-store' });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Unable to load music');
+  const loadedTracks = Array.isArray(data.tracks) ? data.tracks : [];
+  return loadedTracks.map((track: AudioTrack & { featured_artist_name?: string | null }) => ({
+    ...track,
+    featuredArtistName: track.featuredArtistName ?? track.featured_artist_name ?? null,
+  }));
+}
+
 export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
-  const [tracks, setTracks] = useState<AudioTrack[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tracks, setTracks] = useState<AudioTrack[]>(cachedAudioTracks ?? []);
+  const [loading, setLoading] = useState(cachedAudioTracks === null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -45,16 +59,14 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
 
     const loadTracks = async () => {
       try {
-        const response = await fetch('/api/audio', { cache: 'no-store' });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Unable to load music');
-        const loadedTracks = Array.isArray(data.tracks) ? data.tracks : [];
-        const normalizedTracks = loadedTracks.map((track: AudioTrack & { featured_artist_name?: string | null }) => ({
-          ...track,
-          featuredArtistName: track.featuredArtistName ?? track.featured_artist_name ?? null,
-        }));
-        if (!cancelled) setTracks(normalizedTracks);
+        if (!audioTracksPromise) {
+          audioTracksPromise = fetchAudioTracks();
+        }
+        const loadedTracks = await audioTracksPromise;
+        cachedAudioTracks = loadedTracks;
+        if (!cancelled) setTracks(loadedTracks);
       } catch (loadError) {
+        audioTracksPromise = null;
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to load music');
       } finally {
         if (!cancelled) setLoading(false);

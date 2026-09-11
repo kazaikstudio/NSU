@@ -80,6 +80,13 @@ async function getDownloadRegion() {
   return undefined;
 }
 
+interface AudioCacheEntry {
+  currentTime: number;
+  wasPlaying: boolean;
+}
+
+const audioCache = new Map<string, AudioCacheEntry>();
+
 export default function AudioRow({
   src,
   title,
@@ -93,19 +100,34 @@ export default function AudioRow({
   onDownload,
 }: AudioRowProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [isPlaying, setIsPlaying] = useState(() => {
+    const cached = audioCache.get(src);
+    return cached?.wasPlaying ?? false;
+  });
   const [isExpanded, setIsExpanded] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'done' | 'error'>('idle');
   const downloadTimerRef = useRef<number | null>(null);
   const downloadProgressRef = useRef(0);
+
+  if (currentSrc !== src) {
+    setCurrentSrc(src);
+    setIsPlaying(audioCache.get(src)?.wasPlaying ?? false);
+    setIsExpanded(false);
+  }
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     audio.load();
-    setIsPlaying(false);
-    setIsExpanded(false);
+    const cached = audioCache.get(src);
+    if (cached) {
+      audio.currentTime = cached.currentTime;
+      if (cached.wasPlaying) {
+        audio.play().catch(() => {});
+      }
+    }
   }, [src]);
 
   useEffect(() => {
@@ -145,12 +167,14 @@ export default function AudioRow({
       try {
         await audio.play();
         setIsPlaying(true);
+        audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: true });
       } catch (err) {
         console.error('Play failed:', err);
       }
     } else {
       audio.pause();
       setIsPlaying(false);
+      audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: false });
     }
   };
 
@@ -162,6 +186,7 @@ export default function AudioRow({
 
     try {
       await audio.play();
+      audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: true });
     } catch (err) {
       console.error('Play failed:', err);
     }
@@ -299,10 +324,23 @@ export default function AudioRow({
       src={src}
       onPlay={() => {
         setIsPlaying(true);
+        const audio = audioRef.current;
+        if (audio) audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: true });
         onPlay?.();
       }}
-      onPause={() => setIsPlaying(false)}
-      onEnded={() => setIsPlaying(false)}
+      onPause={() => {
+        setIsPlaying(false);
+        const audio = audioRef.current;
+        if (audio) audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: false });
+      }}
+      onTimeUpdate={() => {
+        const audio = audioRef.current;
+        if (audio) audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: !audio.paused });
+      }}
+      onEnded={() => {
+        setIsPlaying(false);
+        audioCache.delete(src);
+      }}
       className="sr-only"
       aria-label={`Audio player for ${title}`}
     />
@@ -333,7 +371,7 @@ export default function AudioRow({
   return (
     <article
       onClick={handleRowClick}
-      className="group relative flex min-w-0 items-center gap-3 sm:gap-3 px-3 py-2.5 transition cursor-pointer text-Eltext1 sm:px-4 sm:py-3 border-b border-card1/10"
+      className="group relative flex min-w-0 items-center gap-3 sm:gap-3 px-3 py-2.5 transition cursor-pointer text-Eltext1 sm:px-4 sm:py-3 bg-cardcl/40 shadow-lg shadow-black/5"
       >
       {/* Active gradient overlay — fades left-to-right when playing */}
       <div

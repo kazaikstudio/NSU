@@ -37,10 +37,22 @@ interface TrendingArtist {
 }
 
 export default function AudioPageClient() {
-  const [activeTab, setActiveTab] = useState<'music' | 'artist'>('music');
+  const [activeTab, setActiveTab] = useState<'music' | 'artist'>(() => {
+    if (typeof window === 'undefined') return 'music';
+    const stored = window.localStorage.getItem('nsu-active-tab');
+    return stored === 'artist' ? 'artist' : 'music';
+  });
   const [artistSearchTerm, setArtistSearchTerm] = useState('');
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('nsu-active-tab', activeTab);
+    } catch {
+      // ignore storage errors
+    }
+  }, [activeTab]);
 
   const startListening = useCallback(() => {
     const SpeechRecognitionAPI =
@@ -226,15 +238,12 @@ export default function AudioPageClient() {
       </div>
 
       <div className="mt-2 max-w-8xl mx-auto">
-        {activeTab === 'music' ? (
-          <div id="music-list-container" className="grid grid-cols-1 w-full rounded-xl bg-mrow/30 border border-card1/10 overflow-hidden">
-            <AudioTrackList searchTerm="" />
-          </div>
-        ) : (
-          <div id="artist-list-container" className="grid grid-cols-1 w-full rounded-xl bg-mrow/30 border border-card1/10 overflow-hidden">
-            <ArtistList searchTerm={artistSearchTerm} />
-          </div>
-        )}
+        <div id="music-list-container" className={`grid grid-cols-1 w-full rounded-xl bg-mrow/30 overflow-hidden ${activeTab === 'music' ? '' : 'hidden'}`}>
+          <AudioTrackList searchTerm="" />
+        </div>
+        <div id="artist-list-container" className={`grid grid-cols-1 w-full rounded-xl bg-mrow/30 overflow-hidden ${activeTab === 'artist' ? '' : 'hidden'}`}>
+          <ArtistList searchTerm={artistSearchTerm} />
+        </div>
       </div>
     </main>
   );
