@@ -7,7 +7,6 @@ import {
   Play,
   Pause,
 } from 'lucide-react';
-import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
 import { registerClientDownload } from '@/lib/download-controls';
 import { buildAudioDownloadName } from '@/lib/download';
 
@@ -58,6 +57,37 @@ function formatTime(seconds: number) {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
+interface FeaturedAudioStorageItem {
+  title?: string;
+  fileUrl?: string;
+  thumbnailUrl?: string;
+}
+
+function normalizeFeaturedTracks(data: {
+  tracks?: FeaturedAudioTrack[];
+  storageItems?: FeaturedAudioStorageItem[];
+}): FeaturedAudioTrack[] {
+  const storageItems = Array.isArray(data.storageItems) ? data.storageItems : [];
+  const sourceTracks = Array.isArray(data.tracks) && data.tracks.length > 0 ? data.tracks : [];
+
+  if (sourceTracks.length === 0) return exampleTracks;
+
+  return sourceTracks.slice(0, 5).map((track) => {
+    const dashboardItem = storageItems.find(
+      (item) =>
+        item.fileUrl === track.fileUrl ||
+        item.title?.trim().toLowerCase() === track.title?.trim().toLowerCase(),
+    );
+
+    return {
+      ...track,
+      artist: track.artist || track.artistName,
+      fileUrl: getPlayableAudioUrl(track.fileUrl),
+      thumbnailUrl: dashboardItem?.thumbnailUrl || track.thumbnailUrl,
+    };
+  });
+}
+
 const CARD_COLORS = ['#8B5CF6', '#3B82F6', '#06B6D4', '#EC4899', '#F59E0B'];
 
 const exampleTracks: FeaturedAudioTrack[] = [
@@ -82,7 +112,7 @@ export default function FeaturedAudioCards() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [loading, setLoading] = useState(() => !hasClientCachedData('featured-audio'));
+  const [loading, setLoading] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
 
   const [currentTime, setCurrentTime] = useState(0);
@@ -90,6 +120,11 @@ export default function FeaturedAudioCards() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sliderRef = useRef<HTMLDivElement | null>(null);
+  const activeTrackIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    activeTrackIdRef.current = activeTrackId;
+  }, [activeTrackId]);
 
   const scrollTrackIntoView = (trackId: string) => {
     if (!window.matchMedia('(max-width: 639px)').matches) return;
@@ -105,45 +140,48 @@ export default function FeaturedAudioCards() {
   useEffect(() => {
     let cancelled = false;
 
-    const loadFeaturedTracks = async () => {
+    const syncTracks = async () => {
       try {
-        const data = await getClientCachedData('featured-audio', async () => {
-          const response = await fetch('/api/audio');
-          return response.json();
+        const response = await fetch('/api/audio', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (cancelled) return;
+
+        const nextTracks = normalizeFeaturedTracks(data);
+        if (nextTracks.length === 0) return;
+
+        setTracks((prev) => {
+          const currentIds = new Set(prev.map((track) => track.id));
+          const hasChanges =
+            prev.length !== nextTracks.length ||
+            nextTracks.some((track) => !currentIds.has(track.id));
+          return hasChanges ? nextTracks : prev;
         });
-        if (!cancelled) {
-          const storageItems = Array.isArray(data.storageItems) ? data.storageItems : [];
-          const loadedTracks: FeaturedAudioTrack[] =
-            data.tracks && data.tracks.length > 0
-              ? (data.tracks || []).slice(0, 5).map((track: FeaturedAudioTrack) => {
-                  const dashboardItem = storageItems.find((item: { title?: string; fileUrl?: string; thumbnailUrl?: string }) =>
-                    item.fileUrl === track.fileUrl || item.title?.trim().toLowerCase() === track.title?.trim().toLowerCase()
-                  );
 
-                  return {
-                    ...track,
-                    artist: track.artist || track.artistName,
-                    fileUrl: getPlayableAudioUrl(track.fileUrl),
-                    thumbnailUrl: dashboardItem?.thumbnailUrl || track.thumbnailUrl,
-                  };
-                })
-              : exampleTracks;
-
-          setTracks(loadedTracks);
+        const activeId = activeTrackIdRef.current;
+        if (activeId !== null && !nextTracks.some((track) => track.id === activeId)) {
+          audioRef.current?.pause();
+          setIsPlaying(false);
+          setCurrentTime(0);
+          setActiveTrackId(null);
         }
       } catch (error) {
-        console.error("Failed to load tracks, using example data:", error);
-        if (!cancelled) {
-          setTracks(exampleTracks);
-        }
+        console.error('Failed to sync featured audio from the database:', error);
+        setTracks((prev) => (prev.length > 0 ? prev : exampleTracks));
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
 
-    void loadFeaturedTracks();
+    void syncTracks();
+    const timer = window.setInterval(syncTracks, 30000);
+    const handleFocus = () => void syncTracks();
+    window.addEventListener('focus', handleFocus);
+
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', handleFocus);
     };
   }, []);
 

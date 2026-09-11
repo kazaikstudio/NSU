@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool, { ensureDatabaseReady } from '@/lib/db';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 const fallbackTracks = [
   {
@@ -97,7 +98,22 @@ export async function GET() {
     `);
 
     if (!rows?.length) {
-      return NextResponse.json({ tracks: fallbackTracks, storageItems: storageRows, fallback: true });
+      const storageCards = storageRows.slice(0, 5).map((item) => ({
+        id: `storage-${item.fileUrl}`,
+        title: item.title,
+        album: null,
+        fileName: item.fileUrl.split('/').pop() || `${item.title}.mp3`,
+        fileUrl: item.fileUrl,
+        createdAt: new Date().toISOString(),
+        artistId: 'noll-studio',
+        artistName: 'Noll Studio',
+        artistGenre: 'Music',
+        artistProfileUrl: null,
+        thumbnailUrl: item.thumbnailUrl,
+      }));
+
+      const tracks = storageCards.length > 0 ? storageCards : fallbackTracks;
+      return NextResponse.json({ tracks, storageItems: storageRows, fallback: storageCards.length === 0 });
     }
 
     return NextResponse.json({ tracks: rows, storageItems: storageRows, fallback: false });
