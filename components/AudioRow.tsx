@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
-import { getAudioDownloadThumbnailUrl, getDownloadPath } from '@/lib/download';
+import { buildAudioDownloadName, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { registerClientDownload } from '@/lib/download-controls';
 
 interface DownloadNoticePayload {
@@ -108,7 +108,6 @@ export default function AudioRow({
   const [isExpanded, setIsExpanded] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'done' | 'error'>('idle');
-  const [downloadProgress, setDownloadProgress] = useState(0);
   const downloadTimerRef = useRef<number | null>(null);
   const downloadProgressRef = useRef(0);
 
@@ -216,7 +215,6 @@ export default function AudioRow({
 
     setDownloadStatus('downloading');
     downloadProgressRef.current = 8;
-    setDownloadProgress(8);
     window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
       detail: { status: 'downloading', title, progress: 0, downloadedBytes: 0 },
     }));
@@ -243,6 +241,10 @@ export default function AudioRow({
       if (!response.ok) {
         throw new Error(`Download failed with status ${response.status}`);
       }
+      const responseContentType = response.headers.get('content-type') || '';
+      if (/text\/html|text\/plain|application\/json/.test(responseContentType)) {
+        throw new Error('Download failed: the server returned a text page instead of audio.');
+      }
       const serverDownloadCount = Number(response.headers.get('X-NSU-Download-Count'));
 
       const total = Number(response.headers.get('content-length')) || 0;
@@ -254,6 +256,7 @@ export default function AudioRow({
       const chunks: Uint8Array[] = [];
       let loaded = 0;
       let lastProgress = 0;
+      let checkedFirstChunk = false;
 
       while (true) {
         await downloadControl.waitUntilResumed();
@@ -262,6 +265,17 @@ export default function AudioRow({
         const { done, value } = await reader.read();
         if (done) break;
         if (!value) continue;
+
+        if (!checkedFirstChunk) {
+          checkedFirstChunk = true;
+          const head = Array.from(value.subarray(0, Math.min(value.length, 64)))
+            .map((byte) => String.fromCharCode(byte))
+            .join('');
+          if (/^\s*(<|<!DOCTYPE|\{)/.test(head)) {
+            controller.abort();
+            throw new Error('Download failed: the response is not an audio file.');
+          }
+        }
 
         chunks.push(value);
         loaded += value.length;
@@ -283,8 +297,8 @@ export default function AudioRow({
         array.set(chunk);
         return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
       });
-      const blob = new Blob(binaryData, { type: 'audio/mpeg' });
-      const filename = getDownloadPath(fileName || `${title}.mp3`, 'audio', artistCredit);
+      const blob = new Blob(binaryData, { type: response.headers.get('content-type') || 'audio/mpeg' });
+      const filename = buildAudioDownloadName(title, artistCredit);
       const anchor = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       anchor.href = objectUrl;

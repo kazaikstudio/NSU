@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
-import ffmpegPath from 'ffmpeg-static';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { Readable } from 'node:stream';
-import { spawn } from 'node:child_process';
-import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
+import { buildAudioDownloadName, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { getMediaDownloadCount, incrementMediaPlayCount, recordDownloadRegion } from '@/lib/media-play';
 
 export const runtime = 'nodejs';
@@ -18,26 +13,44 @@ async function fetchGoogleDriveFile(id: string, range?: string) {
 
   const response = await fetch(baseUrl, { headers, redirect: 'follow' });
 
-  if (response.status === 200 && response.headers.get('content-type')?.includes('text/html')) {
-    const bodyText = await response.text();
-    const confirmMatch = bodyText.match(/https?:\/\/drive\.google\.com\/uc\?export=download[^"'\s]+/i);
-    const fallbackUrl = confirmMatch?.[0] ?? `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}&confirm=t`;
-    const fallbackResponse = await fetch(fallbackUrl, { headers, redirect: 'follow' });
+  const isHtml = (res: Response) =>
+    res.status === 200 && res.headers.get('content-type')?.includes('text/html');
 
-    if (fallbackResponse.status === 200 && fallbackResponse.headers.get('content-type')?.includes('text/html')) {
-      const fallbackBody = await fallbackResponse.text();
-      if (fallbackBody.includes('virus') || fallbackBody.includes('download warning')) {
-        return new Response(fallbackBody, {
-          status: 502,
-          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        });
+  if (!isHtml(response)) return response;
+
+  const bodyText = await response.text();
+
+  const confirmMatch = bodyText.match(
+    /(?:https?:\/\/)?(?:drive\.usercontent\.google\.com\/download|drive\.google\.com\/uc\?export=download)[^"'\s]+/i,
+  );
+
+  const candidates = [
+    confirmMatch?.[0],
+    `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}&confirm=t`,
+    `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`,
+  ].filter((url): url is string => Boolean(url));
+
+  for (const url of candidates) {
+    try {
+      const resolved = await fetch(url, { headers, redirect: 'follow' });
+      if (!isHtml(resolved)) return resolved;
+
+      const resolvedBody = await resolved.text();
+      if (/(virus|download warning|exception in download|scan this file)/i.test(resolvedBody)) {
+        return new Response(
+          'Google Drive blocked this download because it could not scan the file for viruses.',
+          { status: 502, headers: { 'Content-Type': 'text/plain; charset=utf-8' } },
+        );
       }
+    } catch {
+      // fall through to the next candidate
     }
-
-    return fallbackResponse;
   }
 
-  return response;
+  return new Response(
+    'Google Drive returned a web page instead of the audio file. The file may be too large or restricted.',
+    { status: 502, headers: { 'Content-Type': 'text/plain; charset=utf-8' } },
+  );
 }
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -79,8 +92,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Unable to load audio from Google Drive' }, { status: response.status });
   }
 
-  const headers = new Headers();
   const contentType = response.headers.get('content-type');
+  if (contentType && /text\/html|text\/plain|application\/json/i.test(contentType)) {
+    return NextResponse.json({ error: 'Google Drive returned a text page instead of audio' }, { status: 502 });
+  }
+
+  const headers = new Headers();
   const contentLength = response.headers.get('content-length');
   const contentRange = response.headers.get('content-range');
   if (contentType) headers.set('Content-Type', contentType);
@@ -89,45 +106,16 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   headers.set('Accept-Ranges', 'bytes');
   headers.set('Cache-Control', 'public, max-age=3600');
 
-  if (requestedFilename) {
-    const safeFilename = requestedFilename.replace(/[\r\n"\\/]/g, '_');
-    const fileName = buildDownloadFilename(safeFilename, 'audio', artistName);
-    headers.set('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-    headers.set('X-NSU-Thumbnail-Url', getAudioDownloadThumbnailUrl());
-
-    const artworkPath = join(process.cwd(), 'public', 'noll.jpg');
-    const extension = safeFilename.split('.').pop()?.toLowerCase();
-    if (searchParams.get('download') === '1' && existsSync(artworkPath) && (extension === 'mp3' || extension === 'm4a')) {
-      if (!ffmpegPath) {
-        return NextResponse.json({ error: 'Audio artwork processing is unavailable on this server' }, { status: 503 });
-      }
-
-      const source = Readable.fromWeb(response.body as never);
-      const outputFormat = extension === 'mp3' ? 'mp3' : 'ipod';
-      const converter = spawn(ffmpegPath, [
-        '-loglevel', 'error',
-        '-i', 'pipe:0',
-        '-i', artworkPath,
-        '-map', '0:a',
-        '-map', '1:v',
-        '-c:a', 'copy',
-        '-c:v', 'mjpeg',
-        '-disposition:v', 'attached_pic',
-        ...(title ? ['-metadata', `title=${title}`] : []),
-        ...(artistName ? ['-metadata', `artist=${artistName}`] : []),
-        '-f', outputFormat,
-        'pipe:1',
-      ], { stdio: ['pipe', 'pipe', 'pipe'] });
-      converter.stderr.on('data', (chunk: Buffer) => console.error('Audio artwork processing failed:', chunk.toString()));
-      source.pipe(converter.stdin);
-
-      headers.delete('Content-Length');
-      headers.set('Content-Type', extension === 'mp3' ? 'audio/mpeg' : 'audio/mp4');
-      return new NextResponse(Readable.toWeb(converter.stdout) as ReadableStream, { status: 200, headers });
-    }
-  }
   if (updatedDownloadCount !== null) {
     headers.set('X-NSU-Download-Count', String(updatedDownloadCount));
+  }
+
+  if (requestedFilename) {
+    const safeFilename = requestedFilename.replace(/[\r\n"\\/]/g, '_');
+    const extension = safeFilename.split('.').pop()?.toLowerCase();
+    const fileName = buildAudioDownloadName(title || safeFilename, artistName, extension);
+    headers.set('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    headers.set('X-NSU-Thumbnail-Url', getAudioDownloadThumbnailUrl());
   }
 
   return new NextResponse(response.body, { status: response.status, headers });

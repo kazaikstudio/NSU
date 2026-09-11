@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
 import { registerClientDownload } from '@/lib/download-controls';
-import { getDownloadPath } from '@/lib/download';
+import { buildAudioDownloadName } from '@/lib/download';
 
 export interface FeaturedAudioTrack {
   id: string;
@@ -294,7 +294,7 @@ export default function FeaturedAudioCards() {
       const anchor = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       anchor.href = objectUrl;
-      anchor.download = getDownloadPath(`${track.title}.mp3`, 'audio', track.artist);
+      anchor.download = buildAudioDownloadName(track.title, track.artist);
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();

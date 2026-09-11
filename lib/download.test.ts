@@ -1,19 +1,33 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getAudioDownloadThumbnailUrl, getDownloadPath } from './download';
+import { buildAudioDownloadName, getAudioDownloadThumbnailUrl } from './download';
 
-test('audio download names include the title, artist, and Nollstudios.org suffix', () => {
+test('audio download names use the title and artist, never the source file name', () => {
   assert.equal(
-    getDownloadPath('My Song.mp3', 'audio', 'Example Artist'),
+    buildAudioDownloadName('My Song', 'Example Artist'),
     'My Song, By Example Artist (Nollstudios.org).mp3',
   );
 });
 
-test('video downloads keep their original name without the audio suffix', () => {
+test('audio download names keep only title when no artist is given', () => {
   assert.equal(
-    getDownloadPath('My Song.mp4', 'video'),
-    'My Song.mp4',
+    buildAudioDownloadName('My Song'),
+    'My Song (Nollstudios.org).mp3',
+  );
+});
+
+test('audio download names ignore prefixes like Noll Music', () => {
+  assert.equal(
+    buildAudioDownloadName('Noll Music - My Song', 'Example Artist'),
+    'My Song, By Example Artist (Nollstudios.org).mp3',
+  );
+});
+
+test('audio download names honour a provided extension', () => {
+  assert.equal(
+    buildAudioDownloadName('My Song', 'Example Artist', 'm4a'),
+    'My Song, By Example Artist (Nollstudios.org).m4a',
   );
 });
 

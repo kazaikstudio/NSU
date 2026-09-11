@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Download } from 'lucide-react';
 import { registerClientDownload } from '@/lib/download-controls';
-import { getDownloadPath } from '@/lib/download';
+import { buildAudioDownloadName } from '@/lib/download';
 
 export interface FeaturedAudioTrack {
   id: string;
@@ -115,7 +115,7 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
       const anchor = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       anchor.href = objectUrl;
-      anchor.download = getDownloadPath(`${track.title}.mp3`, 'audio', track.artistName);
+      anchor.download = buildAudioDownloadName(track.title, track.artistName);
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();

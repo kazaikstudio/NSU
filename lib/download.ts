@@ -26,10 +26,14 @@ export function buildDownloadFilename(filename: string, category?: DownloadCateg
   if (resolvedCategory === 'audio') {
     let normalizedBase = baseName.trim();
     normalizedBase = normalizedBase
-      .replace(/^Noll[-_ ]?Music(?:[-_ ]?Audio)?[-_ ]?/i, '')
-      .replace(/^Noll[-_ ]?Music[-_ ]?/i, '')
-      .replace(/^Audio[-_ ]?/i, '')
+      .replace(/^Noll[\s_-]*Music(?:[\s_-]*Audio)?[\s_-]*/i, '')
+      .replace(/^Noll[\s_-]*Music[\s_-]*/i, '')
+      .replace(/^Audio[\s_-]*/i, '')
       .trim();
+
+    if (/\(Nollstudios\.org\)$/.test(normalizedBase)) {
+      normalizedBase = normalizedBase.replace(/,\s*By\s+.+\(Nollstudios\.org\)$/, '').trim();
+    }
 
     const normalizedArtist = artistName ? sanitizeDownloadFilename(artistName).trim() : '';
     const titleAndArtist = normalizedArtist ? `${normalizedBase}, By ${normalizedArtist}` : normalizedBase;
@@ -53,4 +57,18 @@ export function getDownloadPath(filename: string, category?: DownloadCategory, a
   }
 
   return resolvedFilename;
+}
+
+export function buildAudioDownloadName(title: string, artistName?: string, extension = 'mp3') {
+  let normalizedTitle = sanitizeDownloadFilename(title || '').trim();
+  normalizedTitle = normalizedTitle
+    .replace(/^Noll[\s_-]*Music(?:[\s_-]*Audio)?[\s_-]*/i, '')
+    .replace(/^Noll[\s_-]*Music[\s_-]*/i, '')
+    .replace(/^Audio[\s_-]*/i, '')
+    .trim();
+
+  const normalizedArtist = artistName ? sanitizeDownloadFilename(artistName).trim() : '';
+  const titleAndArtist = normalizedArtist ? `${normalizedTitle}, By ${normalizedArtist}` : normalizedTitle;
+  const withSuffix = titleAndArtist ? `${titleAndArtist} (Nollstudios.org)` : 'Nollstudios.org';
+  return `${withSuffix}.${extension.replace(/^\./, '') || 'mp3'}`;
 }
