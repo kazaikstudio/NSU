@@ -242,8 +242,6 @@ export default function PublicArtistDetailPage() {
     }
   };
 
-  const totalTrackDownloads = tracks.reduce((total, track) => total + Number(track.downloadCount || 0), 0);
-
   const syncDownloadCount = (trackId: string, serverDownloadCount?: number) => {
     setTracks((currentTracks) => currentTracks.map((track) => track.id === trackId
       ? {
@@ -253,6 +251,12 @@ export default function PublicArtistDetailPage() {
           : Number(track.downloadCount || 0) + 1,
       }
       : track));
+    // Keep the artist-level total in step with the dashboard's
+    // `artists.total_downloads`, which the server also increments by one per
+    // download. This keeps the front-end stat and the dashboard chart in sync.
+    setArtist((currentArtist) => currentArtist
+      ? { ...currentArtist, totalDownloads: Number(currentArtist.totalDownloads || 0) + 1 }
+      : currentArtist);
     if (activeTrackId === trackId) {
       setActiveTrackDownloads((count) => (
         typeof serverDownloadCount === 'number' && Number.isFinite(serverDownloadCount)
@@ -391,7 +395,7 @@ export default function PublicArtistDetailPage() {
           </div>
           <div className="min-w-0">
             <span className="block text-base xs:text-lg sm:text-2xl font-black text-primary truncate">
-              {activeTrackId ? formatNumber(activeTrackDownloads) : formatNumber(totalTrackDownloads)}
+              {activeTrackId ? formatNumber(activeTrackDownloads) : formatNumber(Number(artist.totalDownloads || 0))}
             </span>
             <span className="text-[10px] sm:text-xs font-medium text-secondry block truncate">Downloads</span>
           </div>
