@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Mic, MicOff, Music2, Video, Search } from 'lucide-react'
 import Switchbutton from '@/components/Switchbutton'
-import AudioPlayer from '@/components/AudioPlayer'
+import AudioRow from '@/components/AudioRow'
 
 function getPlayableAudioUrl(url: string) {
   const match = url.match(/[?&]id=([^&]+)/)
@@ -21,6 +21,7 @@ interface AudioTrack {
   createdAt: string
   artistId: string
   artistName: string
+  featuredArtistName?: string | null
   artistGenre?: string | null
   artistProfileUrl?: string | null
 }
@@ -146,7 +147,7 @@ function SearchClient() {
         setError(null)
 
         const [audioRes, videoRes] = await Promise.all([
-          fetch('/api/audio'),
+          fetch('/api/audio', { cache: 'no-store' }),
           fetch('/api/youtube/videos?channelId=UCDwZ_ENzU7LIDA5F8EYf1Jg'),
         ])
 
@@ -158,7 +159,10 @@ function SearchClient() {
         ]
 
         if (!cancelled) {
-          setTracks(audioData.tracks || [])
+          setTracks((audioData.tracks || []).map((track: AudioTrack & { featured_artist_name?: string | null }) => ({
+            ...track,
+            featuredArtistName: track.featuredArtistName ?? track.featured_artist_name ?? null,
+          })))
           setVideos(combinedVideos)
         }
       } catch (err) {
@@ -180,7 +184,7 @@ function SearchClient() {
     const normalized = query.trim().toLowerCase()
     if (!normalized) return []
     return tracks.filter((track) =>
-      [track.title, track.artistName, track.album || '']
+      [track.title, track.artistName, track.featuredArtistName || '', track.album || '']
         .some((value) => value.toLowerCase().includes(normalized))
     )
   }, [query, tracks])
@@ -297,7 +301,7 @@ function SearchClient() {
               ) : (
                 <div className="rounded-2xl border border-card1/15 bg-cardcl/60 overflow-hidden backdrop-blur-sm">
                   {filteredTracks.map((track) => (
-                    <AudioPlayer
+                    <AudioRow
                       key={track.id}
                       src={getPlayableAudioUrl(track.fileUrl)}
                       fileUrl={track.fileUrl}
@@ -306,6 +310,7 @@ function SearchClient() {
                       fileName={track.fileName}
                       createdAt={track.createdAt}
                       artistName={track.artistName}
+                      featuredArtistName={track.featuredArtistName}
                       artistGenre={track.artistGenre}
                     />
                   ))}

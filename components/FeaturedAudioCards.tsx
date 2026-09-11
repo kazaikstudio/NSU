@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
 import { registerClientDownload } from '@/lib/download-controls';
+import { getDownloadPath } from '@/lib/download';
 
 export interface FeaturedAudioTrack {
   id: string;
@@ -225,7 +226,9 @@ export default function FeaturedAudioCards() {
     const match = track.fileUrl.match(/[?&]id=([^&]+)/);
     if (!match?.[1]) return track.fileUrl;
 
-    return `/api/dashboard/media/${match[1]}?download=1&filename=${encodeURIComponent(`${track.title}.mp3`)}`;
+    const params = new URLSearchParams({ download: '1', filename: `${track.title}.mp3`, title: track.title });
+    if (track.artist) params.set('artist', track.artist);
+    return `/api/dashboard/media/${match[1]}?${params.toString()}`;
   };
 
   const handleDownloadClick = async (event: React.MouseEvent<HTMLButtonElement>, track: FeaturedAudioTrack) => {
@@ -289,7 +292,7 @@ export default function FeaturedAudioCards() {
       const anchor = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       anchor.href = objectUrl;
-      anchor.download = `${track.title}.mp3`;
+      anchor.download = getDownloadPath(`${track.title}.mp3`, 'audio', track.artist);
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();

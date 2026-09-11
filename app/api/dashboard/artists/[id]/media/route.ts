@@ -25,6 +25,7 @@ async function ensureMediaTable() {
       drive_file_id TEXT,
       thumbnail_url TEXT,
       thumbnail_drive_file_id TEXT,
+      featured_artist_name TEXT,
       download_count INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -33,7 +34,8 @@ async function ensureMediaTable() {
     ALTER TABLE artist_media
     ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
-    ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT
+    ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
+    ADD COLUMN IF NOT EXISTS featured_artist_name TEXT
   `);
 
   mediaTableReady = true;
@@ -44,7 +46,7 @@ export async function GET(_request: Request, context: Context) {
   try {
     await ensureMediaTable();
     const { rows } = await pool.query(
-      `SELECT id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", drive_file_id AS "driveFileId", thumbnail_url AS "thumbnailUrl", download_count AS "downloadCount", created_at AS "createdAt"
+      `SELECT id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", drive_file_id AS "driveFileId", thumbnail_url AS "thumbnailUrl", download_count AS "downloadCount", created_at AS "createdAt"
        FROM artist_media WHERE artist_id = $1 ORDER BY created_at DESC`,
       [id]
     );
@@ -71,6 +73,9 @@ export async function PUT(request: Request, context: Context) {
     const album = isMultipart
       ? (body.get('album') as string | null)?.trim() || ''
       : typeof body?.album === 'string' ? body.album.trim() : '';
+    const featuredArtistName = isMultipart
+      ? (body.get('featuredArtistName') as string | null)?.trim() || ''
+      : typeof body?.featuredArtistName === 'string' ? body.featuredArtistName.trim() : '';
     const thumbnail = isMultipart ? body.get('thumbnail') : null;
 
     if (!title && !(thumbnail instanceof File)) {
@@ -105,10 +110,10 @@ export async function PUT(request: Request, context: Context) {
     const { rows } = await pool.query<{ id: string; kind: string; title: string; album: string | null; fileName: string; fileUrl: string; thumbnailUrl: string | null; createdAt: string }>(
       `UPDATE artist_media
        SET title = COALESCE(NULLIF($1, ''), title), album = COALESCE(NULLIF($2, ''), album),
-           thumbnail_url = COALESCE($3, thumbnail_url), thumbnail_drive_file_id = COALESCE($4, thumbnail_drive_file_id)
-       WHERE id = $5 AND artist_id = $6
-       RETURNING id, kind, title, album, file_name AS "fileName", file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", created_at AS "createdAt"`,
-      [title, album, thumbnailUrl, thumbnailDriveFileId, mediaId, artistId]
+             featured_artist_name = NULLIF($3, ''), thumbnail_url = COALESCE($4, thumbnail_url), thumbnail_drive_file_id = COALESCE($5, thumbnail_drive_file_id)
+      WHERE id = $6 AND artist_id = $7
+           RETURNING id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", created_at AS "createdAt"`,
+          [title, album, featuredArtistName, thumbnailUrl, thumbnailDriveFileId, mediaId, artistId]
     );
 
     if (rows.length === 0) {
@@ -184,6 +189,7 @@ export async function POST(request: Request, context: Context) {
     const kind = formData.get('kind');
     const title = String(formData.get('title') || '');
     const album = String(formData.get('album') || '') || null;
+    const featuredArtistName = String(formData.get('featuredArtistName') || '').trim() || null;
 
     if (!(file instanceof File) || (kind !== 'banner' && kind !== 'profile' && kind !== 'track')) {
       return NextResponse.json({ error: 'A file and valid media kind are required' }, { status: 400 });
@@ -223,10 +229,10 @@ export async function POST(request: Request, context: Context) {
       const mediaId = `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const mediaTitle = title.trim() || (kind === 'banner' ? 'Artist Banner' : kind === 'profile' ? 'Artist Profile' : 'Track');
       const { rows } = await pool.query(
-        `INSERT INTO artist_media (id, artist_id, kind, title, album, file_name, mime_type, file_url, drive_file_id, download_count)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0)
-         RETURNING id, kind, title, album, file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", download_count AS "downloadCount", created_at AS "createdAt"`,
-        [mediaId, artistId, kind, mediaTitle, album, file.name, file.type || 'application/octet-stream', driveFile.publicUrl, driveFile.id]
+        `INSERT INTO artist_media (id, artist_id, kind, title, album, featured_artist_name, file_name, mime_type, file_url, drive_file_id, download_count)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0)
+         RETURNING id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", download_count AS "downloadCount", created_at AS "createdAt"`,
+        [mediaId, artistId, kind, mediaTitle, album, featuredArtistName, file.name, file.type || 'application/octet-stream', driveFile.publicUrl, driveFile.id]
       );
 
       if (kind === 'banner' || kind === 'profile') {

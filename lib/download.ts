@@ -17,7 +17,7 @@ export function inferDownloadCategoryFromFilename(filename: string): DownloadCat
   return audioExtensions.includes(extension) ? 'audio' : 'video';
 }
 
-export function buildDownloadFilename(filename: string, category?: DownloadCategory) {
+export function buildDownloadFilename(filename: string, category?: DownloadCategory, artistName?: string) {
   const safeFilename = sanitizeDownloadFilename(filename);
   const resolvedCategory = category ?? inferDownloadCategoryFromFilename(safeFilename);
   const baseName = safeFilename.replace(/\.[^.]+$/, '');
@@ -31,7 +31,9 @@ export function buildDownloadFilename(filename: string, category?: DownloadCateg
       .replace(/^Audio[-_ ]?/i, '')
       .trim();
 
-    const withSuffix = normalizedBase ? `${normalizedBase} - Nollstudios.org` : 'Nollstudios.org';
+    const normalizedArtist = artistName ? sanitizeDownloadFilename(artistName).trim() : '';
+    const titleAndArtist = normalizedArtist ? `${normalizedBase}, By ${normalizedArtist}` : normalizedBase;
+    const withSuffix = titleAndArtist ? `${titleAndArtist} (Nollstudios.org)` : 'Nollstudios.org';
     return `${withSuffix}${extension}`;
   }
 
@@ -42,8 +44,8 @@ export function getAudioDownloadThumbnailUrl() {
   return NOLL_STUDIO_DOWNLOAD_THUMBNAIL;
 }
 
-export function getDownloadPath(filename: string, category?: DownloadCategory) {
-  const resolvedFilename = buildDownloadFilename(filename, category);
+export function getDownloadPath(filename: string, category?: DownloadCategory, artistName?: string) {
+  const resolvedFilename = buildDownloadFilename(filename, category, artistName);
   const resolvedCategory = category ?? inferDownloadCategoryFromFilename(filename);
 
   if (resolvedCategory === 'audio') {

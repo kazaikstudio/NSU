@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server';
+import ffmpegPath from 'ffmpeg-static';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { Readable } from 'node:stream';
+import { spawn } from 'node:child_process';
 import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { getMediaDownloadCount, incrementMediaPlayCount, recordDownloadRegion } from '@/lib/media-play';
 
@@ -44,6 +49,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const range = request.headers.get('range');
   const searchParams = new URL(request.url).searchParams;
   const requestedFilename = searchParams.get('filename');
+  const artistName = searchParams.get('artist') || undefined;
+  const title = searchParams.get('title') || undefined;
   const downloadRegion = searchParams.get('region');
   let updatedDownloadCount: number | null = null;
 
@@ -84,9 +91,40 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   if (requestedFilename) {
     const safeFilename = requestedFilename.replace(/[\r\n"\\/]/g, '_');
-    const fileName = buildDownloadFilename(safeFilename, 'audio');
+    const fileName = buildDownloadFilename(safeFilename, 'audio', artistName);
     headers.set('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
     headers.set('X-NSU-Thumbnail-Url', getAudioDownloadThumbnailUrl());
+
+    const artworkPath = join(process.cwd(), 'public', 'noll.jpg');
+    const extension = safeFilename.split('.').pop()?.toLowerCase();
+    if (searchParams.get('download') === '1' && existsSync(artworkPath) && (extension === 'mp3' || extension === 'm4a')) {
+      if (!ffmpegPath) {
+        return NextResponse.json({ error: 'Audio artwork processing is unavailable on this server' }, { status: 503 });
+      }
+
+      const source = Readable.fromWeb(response.body as never);
+      const outputFormat = extension === 'mp3' ? 'mp3' : 'ipod';
+      const converter = spawn(ffmpegPath, [
+        '-loglevel', 'error',
+        '-i', 'pipe:0',
+        '-i', artworkPath,
+        '-map', '0:a',
+        '-map', '1:v',
+        '-c:a', 'copy',
+        '-c:v', 'mjpeg',
+        '-disposition:v', 'attached_pic',
+        ...(title ? ['-metadata', `title=${title}`] : []),
+        ...(artistName ? ['-metadata', `artist=${artistName}`] : []),
+        '-f', outputFormat,
+        'pipe:1',
+      ], { stdio: ['pipe', 'pipe', 'pipe'] });
+      converter.stderr.on('data', (chunk: Buffer) => console.error('Audio artwork processing failed:', chunk.toString()));
+      source.pipe(converter.stdin);
+
+      headers.delete('Content-Length');
+      headers.set('Content-Type', extension === 'mp3' ? 'audio/mpeg' : 'audio/mp4');
+      return new NextResponse(Readable.toWeb(converter.stdout) as ReadableStream, { status: 200, headers });
+    }
   }
   if (updatedDownloadCount !== null) {
     headers.set('X-NSU-Download-Count', String(updatedDownloadCount));

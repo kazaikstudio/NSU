@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import AudioPlayer from './AudioPlayer';
+import AudioRow from './AudioRow';
 
 interface AudioTrack {
   id: string;
@@ -12,6 +12,7 @@ interface AudioTrack {
   createdAt: string;
   artistId: string;
   artistName: string;
+  featuredArtistName?: string | null;
   artistGenre?: string | null;
   artistProfileUrl?: string | null;
   thumbnailUrl?: string | null;
@@ -44,10 +45,15 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
 
     const loadTracks = async () => {
       try {
-        const response = await fetch('/api/audio');
+        const response = await fetch('/api/audio', { cache: 'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Unable to load music');
-        if (!cancelled) setTracks(data.tracks || []);
+        const loadedTracks = Array.isArray(data.tracks) ? data.tracks : [];
+        const normalizedTracks = loadedTracks.map((track: AudioTrack & { featured_artist_name?: string | null }) => ({
+          ...track,
+          featuredArtistName: track.featuredArtistName ?? track.featured_artist_name ?? null,
+        }));
+        if (!cancelled) setTracks(normalizedTracks);
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to load music');
       } finally {
@@ -61,7 +67,7 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const filteredTracks = tracks.filter((track) =>
-    [track.title, track.artistName, track.album || ''].some((value) =>
+    [track.title, track.artistName, track.featuredArtistName || '', track.album || ''].some((value) =>
       value.toLowerCase().includes(normalizedSearch)
     )
   );
@@ -74,21 +80,24 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
 
   return (
     <div className="col-span-full flex flex-col divide-y divide-card1/10">
-      {filteredTracks.map((track) => (
-        <AudioPlayer
-          key={track.id}
-          src={getPlayableAudioUrl(track.fileUrl)}
-          fileUrl={track.fileUrl}
-          title={track.title}
-          album={track.album}
-          fileName={track.fileName}
-          createdAt={track.createdAt}
-          artistName={track.artistName}
-          artistGenre={track.artistGenre}
-          downloadCount={track.downloadCount}
-          thumbnailUrl={normalizeImageUrl(track.thumbnailUrl)}
-        />
-      ))}
+      {filteredTracks.map((track) => {
+        return (
+          <AudioRow
+            key={track.id}
+            src={getPlayableAudioUrl(track.fileUrl)}
+            fileUrl={track.fileUrl}
+            title={track.title}
+            album={track.album}
+            fileName={track.fileName}
+            createdAt={track.createdAt}
+            artistName={track.artistName}
+            featuredArtistName={track.featuredArtistName}
+            artistGenre={track.artistGenre}
+            downloadCount={track.downloadCount}
+            thumbnailUrl={normalizeImageUrl(track.thumbnailUrl)}
+          />
+        );
+      })}
     </div>
   );
 }

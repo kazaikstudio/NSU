@@ -34,6 +34,7 @@ async function ensureMediaTable() {
       download_count INTEGER NOT NULL DEFAULT 0,
       thumbnail_url TEXT,
       thumbnail_drive_file_id TEXT,
+      featured_artist_name TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
@@ -44,7 +45,8 @@ async function ensureMediaTable() {
   await pool.query(`
     ALTER TABLE artist_media
     ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
-    ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT;
+    ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
+    ADD COLUMN IF NOT EXISTS featured_artist_name TEXT;
   `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS storage_items (
@@ -76,6 +78,7 @@ export async function GET() {
         media.download_count AS "downloadCount",
         media.thumbnail_url AS "thumbnailUrl",
         media.thumbnail_drive_file_id AS "thumbnailDriveFileId",
+          media.featured_artist_name AS "featuredArtistName",
         media.created_at AS "createdAt",
         artist.id::text AS "artistId",
         artist.name AS "artistName",

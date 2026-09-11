@@ -13,7 +13,7 @@ interface DownloadNoticePayload {
   totalBytes?: number;
 }
 
-interface AudioPlayerProps {
+interface AudioRowProps {
   src: string;
   title: string;
   fileUrl?: string;
@@ -21,6 +21,7 @@ interface AudioPlayerProps {
   fileName?: string;
   createdAt?: string;
   artistName?: string;
+  featuredArtistName?: string | null;
   artistGenre?: string | null;
   downloadCount?: number;
   showDownload?: boolean;
@@ -30,14 +31,20 @@ interface AudioPlayerProps {
   onNext?: () => void;
 }
 
-function getDownloadUrl(fileUrl: string | undefined, fileName: string | undefined, title: string) {
+function getDownloadUrl(fileUrl: string | undefined, fileName: string | undefined, title: string, artistName?: string) {
   if (!fileUrl) return undefined;
 
   const match = fileUrl.match(/\/media\/([a-zA-Z0-9_-]+)(?:[/?#]|$)|[?&]id=([a-zA-Z0-9_-]+)/);
   const fileId = match?.[1] || match?.[2];
   if (!fileId) return fileUrl;
 
-  return `/api/dashboard/media/${fileId}?download=1&filename=${encodeURIComponent(fileName || `${title}.mp3`)}`;
+  const params = new URLSearchParams({
+    download: '1',
+    filename: fileName || `${title}.mp3`,
+    title,
+  });
+  if (artistName) params.set('artist', artistName);
+  return `/api/dashboard/media/${fileId}?${params.toString()}`;
 }
 
 async function getDownloadRegion() {
@@ -73,17 +80,18 @@ async function getDownloadRegion() {
   return undefined;
 }
 
-export default function AudioPlayer({
+export default function AudioRow({
   src,
   title,
   fileUrl,
   fileName,
   artistName,
+  featuredArtistName,
   thumbnailUrl,
   showDownload = true,
   onPlay,
   onDownload,
-}: AudioPlayerProps) {
+}: AudioRowProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -159,8 +167,13 @@ export default function AudioPlayer({
     }
   };
 
-  const downloadUrl = getDownloadUrl(fileUrl, fileName, title);
-  const hasArtistDetails = Boolean(artistName);
+  const artistCredit = artistName
+    ? featuredArtistName
+      ? `${artistName} ft ${featuredArtistName}`
+      : artistName
+    : '';
+  const downloadUrl = getDownloadUrl(fileUrl, fileName, title, artistCredit);
+  const hasArtistDetails = Boolean(artistCredit);
 
   const handleDownloadClick = async (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -241,7 +254,7 @@ export default function AudioPlayer({
         return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
       });
       const blob = new Blob(binaryData, { type: 'audio/mpeg' });
-      const filename = getDownloadPath(fileName || `${title}.mp3`, 'audio');
+      const filename = getDownloadPath(fileName || `${title}.mp3`, 'audio', artistCredit);
       const anchor = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       anchor.href = objectUrl;
@@ -345,6 +358,9 @@ export default function AudioPlayer({
       <div className="min-w-0 flex-1">
         <span className="block truncate text-xs font-semibold text-Eltext1 sm:text-sm">
           {title}
+        </span>
+        <span className="mt-0.5 block truncate text-[10px] text-secondry/60 sm:text-xs">
+          {artistCredit}
         </span>
       </div>
 

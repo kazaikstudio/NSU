@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Download } from 'lucide-react';
 import { registerClientDownload } from '@/lib/download-controls';
+import { getDownloadPath } from '@/lib/download';
 
 export interface FeaturedAudioTrack {
   id: string;
@@ -29,7 +30,9 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
     const match = fileUrl.match(/[?&]id=([^&]+)/);
     if (!match?.[1]) return fileUrl;
 
-    return `/api/dashboard/media/${match[1]}?download=1&filename=${encodeURIComponent(`${track.title}.mp3`)}`;
+    const params = new URLSearchParams({ download: '1', filename: `${track.title}.mp3`, title: track.title });
+    if (track.artistName) params.set('artist', track.artistName);
+    return `/api/dashboard/media/${match[1]}?${params.toString()}`;
   }
 
   function normalizeImageUrl(url?: string | null) {
@@ -112,7 +115,7 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
       const anchor = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       anchor.href = objectUrl;
-      anchor.download = `${track.title}.mp3`;
+      anchor.download = getDownloadPath(`${track.title}.mp3`, 'audio', track.artistName);
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();

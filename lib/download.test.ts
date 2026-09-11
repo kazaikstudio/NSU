@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 
 import { getAudioDownloadThumbnailUrl, getDownloadPath } from './download';
 
-test('mp3 download names end with the Nollstudios.org suffix', () => {
+test('audio download names include the title, artist, and Nollstudios.org suffix', () => {
   assert.equal(
-    getDownloadPath('My Song.mp3', 'audio'),
-    'My Song - Nollstudios.org.mp3',
+    getDownloadPath('My Song.mp3', 'audio', 'Example Artist'),
+    'My Song, By Example Artist (Nollstudios.org).mp3',
   );
 });
 

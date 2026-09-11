@@ -2,23 +2,33 @@ import React from 'react'
 
 const LoadingScreen = () => {
   return (
-<div className="loader-shell flex min-h-screen items-center justify-center bg-backnav px-6 py-10 transition-colors duration-300">
-  <div className="w-full max-w-sm rounded-[28px] border border-card1/15 bg-cardcl/80 p-8 text-center shadow-[0_20px_80px_rgba(2,48,71,0.18)] backdrop-blur-xl transition-all duration-300 dark:border-card1/10 dark:bg-cardcl/70">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-7 px-6 py-10">
+      {/* Spinner: a faint track ring with a spinning gradient "comet" on top */}
+      <div className="relative h-16 w-16">
+        <div className="absolute inset-0 rounded-full border-[5px] border-primary/10" />
+        <div
+          className="absolute inset-0 animate-spin rounded-full [animation-duration:900ms]"
+          style={{
+            background:
+              'conic-gradient(from 90deg, transparent 0deg, transparent 30deg, var(--color-navlink) 330deg)',
+            WebkitMask:
+              'radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px))',
+            mask: 'radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 5px))',
+          }}
+        />
+        <span className="absolute inset-0 m-auto h-1.5 w-1.5 rounded-full bg-navlink shadow-[0_0_16px_3px_var(--color-navlink)]" />
+      </div>
 
-    {/* Animated Spinner Ring */}
-    <div className="loader-ring mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border-4 border-card1/15 border-t-navlink animate-spin dark:border-card1/10" />
-
-    {/* Title */}
-    <h2 className="text-xl font-semibold text-primary">
-      Loading your experience
-    </h2>
-
-    {/* Description Paragraph */}
-    <p className="mt-2 text-sm text-secondary/80">
-      Please wait while N.S.U gets everything ready.
-    </p>
-  </div>
-</div>
+      {/* Text */}
+      <div className="text-center">
+        <h2 className="text-lg font-semibold tracking-tight text-primary">
+          Loading your experience
+        </h2>
+        <p className="mt-1.5 text-sm text-secondary/70">
+          Please wait while NSU gets everything ready.
+        </p>
+      </div>
+    </div>
   )
 }
 

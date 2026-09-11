@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowLeft, Bell, BellOff, Radio, Share2, Sparkles } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import AudioPlayer from '@/components/AudioPlayer';
+import AudioRow from '@/components/AudioRow';
 import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 import { getArtistById } from '@/lib/artists';
 import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
@@ -29,6 +29,7 @@ interface Track {
   album?: string | null;
   fileName: string;
   fileUrl?: string;
+  featuredArtistName?: string | null;
   downloadCount?: number;
   createdAt?: string;
 }
@@ -55,7 +56,8 @@ function getSubscriberId() {
 }
 
 function getDriveFileId(fileUrl: string) {
-  return fileUrl.match(/[?&]id=([^&]+)/)?.[1] || null;
+  const match = fileUrl.match(/\/api\/dashboard\/media\/([a-zA-Z0-9_-]+)|\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
+  return match?.[1] || match?.[2] || match?.[3] || null;
 }
 
 export default function PublicArtistDetailPage() {
@@ -371,7 +373,7 @@ export default function PublicArtistDetailPage() {
         </div>
 
         {/* About / Bio Section */}
-        <div className="mt-4 sm:mt-6 space-y-1 max-w-2xl">
+        <div className="hidden max-w-2xl space-y-1 sm:mt-6 sm:block">
           <h3 className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-primary">About</h3>
           <p className="text-xs sm:text-sm leading-relaxed text-secondry/90 line-clamp-3 xs:line-clamp-none">
             {artist.bio ||
@@ -380,26 +382,35 @@ export default function PublicArtistDetailPage() {
         </div>
 
         {/* Stats Row */}
-        <div className="mt-5 mx-auto text-center sm:text-left sm:mx-0 sm:mt-8 grid grid-cols-3 gap-2 border-t border-card1/10 pt-4 sm:pt-6 max-w-lg">
-          <div className="min-w-0">
-            <span className="block text-base xs:text-lg sm:text-2xl font-black text-primary truncate">
+        <div className="mt-5 mx-auto grid w-full max-w-3xl grid-cols-2 gap-2 border-t border-card1/10 pt-4 text-center sm:mx-0 sm:mt-8 sm:grid-cols-4 sm:gap-3 sm:pt-6 sm:text-left">
+          <div className="min-w-0 rounded-xl border border-card1/10 bg-cardcl/45 px-2.5 py-3 shadow-sm backdrop-blur-sm sm:px-4 sm:py-3.5">
+            <span className="block truncate text-lg font-black leading-none text-primary xs:text-xl sm:text-2xl">
               {artist.tracksCount || tracks.length}
             </span>
-            <span className="text-[10px] sm:text-xs font-medium text-secondry block truncate">Tracks</span>
+            <span className="mt-1.5 block truncate text-[10px] font-medium text-secondry sm:text-xs">Tracks</span>
           </div>
-          <div className="min-w-0">
-            <span className="block text-base xs:text-lg sm:text-2xl font-black text-primary truncate">
+          <div className="min-w-0 rounded-xl border border-card1/10 bg-cardcl/45 px-2.5 py-3 shadow-sm backdrop-blur-sm sm:px-4 sm:py-3.5">
+            <span className="block truncate text-lg font-black leading-none text-primary xs:text-xl sm:text-2xl">
               {formatNumber(artist.followers)}
             </span>
-            <span className="text-[10px] sm:text-xs font-medium text-secondry block truncate">Following</span>
+            <span className="mt-1.5 block truncate text-[10px] font-medium text-secondry sm:text-xs">Following</span>
           </div>
-          <div className="min-w-0">
-            <span className="block text-base xs:text-lg sm:text-2xl font-black text-primary truncate">
-              {activeTrackId ? formatNumber(activeTrackDownloads) : formatNumber(Number(artist.totalDownloads || 0))}
+          <div className="min-w-0 rounded-xl border border-card1/10 bg-cardcl/45 px-2.5 py-3 shadow-sm backdrop-blur-sm sm:px-4 sm:py-3.5">
+            <span className="block truncate text-lg font-black leading-none text-primary xs:text-xl sm:text-2xl">
+              {formatNumber(Number(artist.totalDownloads || 0))}
             </span>
-            <span className="text-[10px] sm:text-xs font-medium text-secondry block truncate">Downloads</span>
+            <span className="mt-1.5 block truncate text-[10px] font-medium text-secondry sm:text-xs">Total Downloads</span>
           </div>
+
+          <div className="min-w-0 rounded-xl border border-amber-400/20 bg-amber-400/8 px-2.5 py-3 shadow-sm shadow-amber-400/5 backdrop-blur-sm sm:px-4 sm:py-3.5">
+            <span className="block truncate text-lg font-black leading-none text-amber-400 xs:text-xl sm:text-2xl">
+              {activeTrackId ? formatNumber(activeTrackDownloads) : '0'}
+            </span>
+            <span className="mt-1.5 block truncate text-[10px] font-medium text-secondry sm:text-xs">Playing Downloads</span>
+          </div>
+
         </div>
+
       </div>
 
     </section>
@@ -411,7 +422,7 @@ export default function PublicArtistDetailPage() {
         <div>
           <div className="mb-6 flex items-end justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-primary tracking-tight">Released Tracks</h2>
+              <h3 className="text-2xl font-bold text-primary tracking-tight">Released Tracks</h3>
               <p className="mt-1 text-xs text-secondry">Listen to music uploaded by Noll Studio.</p>
             </div>
           </div>
@@ -432,7 +443,7 @@ export default function PublicArtistDetailPage() {
                 }
 
                 return (
-                  <AudioPlayer
+                  <AudioRow
                     key={track.id}
                     src={getPlayableAudioUrl(track.fileUrl)}
                     fileUrl={track.fileUrl}
@@ -441,6 +452,7 @@ export default function PublicArtistDetailPage() {
                     fileName={track.fileName}
                     createdAt={track.createdAt}
                     artistName={artist.name}
+                    featuredArtistName={track.featuredArtistName}
                     artistGenre={artist.genre}
                     downloadCount={track.downloadCount}
                     onPlay={() => void syncPlayCount(track.id, track.fileUrl || '')}

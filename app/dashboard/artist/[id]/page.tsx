@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { getArtistById } from '@/lib/artists';
-import AudioPlayer from '@/components/AudioPlayer';
 import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 
 interface Artist {
@@ -29,6 +28,7 @@ interface Track {
   fileName: string;
   fileUrl?: string;
   thumbnailUrl?: string;
+  featuredArtistName?: string | null;
   downloadCount?: number;
   createdAt?: string;
   uploadedAt: string;
@@ -107,6 +107,7 @@ export default function ArtistDetailPage() {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [trackTitle, setTrackTitle] = useState('');
+  const [featuredArtistName, setFeaturedArtistName] = useState('');
   const [albumName, setAlbumName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -125,10 +126,14 @@ export default function ArtistDetailPage() {
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [trackTitleDraft, setTrackTitleDraft] = useState('');
   const [trackAlbumDraft, setTrackAlbumDraft] = useState('');
+  const [trackFeaturedArtistDraft, setTrackFeaturedArtistDraft] = useState('');
 
   // Thumbnail editing state
   const [changingThumbnailId, setChangingThumbnailId] = useState<string | null>(null);
   const thumbnailInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+  // Inline audio preview state (simple play button per track)
+  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -179,6 +184,7 @@ export default function ArtistDetailPage() {
                   id: item.id,
                   title: item.title,
                   album: item.album || 'Single',
+                  featuredArtistName: item.featuredArtistName || null,
                   fileName: item.fileName,
                   fileUrl: item.fileUrl,
                   thumbnailUrl: item.thumbnailUrl,
@@ -307,12 +313,13 @@ export default function ArtistDetailPage() {
     setTrackTitle(cleanedName);
   };
 
-  const uploadMedia = async (file: File, kind: 'banner' | 'profile' | 'track', title = '', album = '', onProgress?: (progress: number) => void) => {
+  const uploadMedia = async (file: File, kind: 'banner' | 'profile' | 'track', title = '', album = '', featuredArtist = '', onProgress?: (progress: number) => void) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('kind', kind);
     formData.append('title', title);
     formData.append('album', album);
+    formData.append('featuredArtistName', featuredArtist);
     return await new Promise<Track>((resolve, reject) => {
       const request = new XMLHttpRequest();
       request.open('POST', `/api/dashboard/artists/${params.id}/media`);
@@ -352,11 +359,12 @@ export default function ArtistDetailPage() {
     setUploadProgress(0);
     setProcessMessage('Uploading track to Google Drive...');
     try {
-      const media = await uploadMedia(selectedFile, 'track', trackTitle, albumName || 'Single', setUploadProgress);
+      const media = await uploadMedia(selectedFile, 'track', trackTitle, albumName || 'Single', featuredArtistName, setUploadProgress);
       setTracks((prevTracks) => [{
         id: media.id,
         title: media.title,
         album: media.album || 'Single',
+        featuredArtistName: media.featuredArtistName || null,
         fileName: media.fileName,
         fileUrl: media.fileUrl,
         downloadCount: Number(media.downloadCount || 0),
@@ -364,6 +372,7 @@ export default function ArtistDetailPage() {
       }, ...prevTracks]);
       setSelectedFile(null);
       setTrackTitle('');
+      setFeaturedArtistName('');
       setAlbumName('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       setProcessMessage('Track saved to Google Drive and added to the list.');
@@ -416,6 +425,7 @@ export default function ArtistDetailPage() {
     setEditingTrackId(track.id);
     setTrackTitleDraft(track.title);
     setTrackAlbumDraft(track.album || '');
+    setTrackFeaturedArtistDraft(track.featuredArtistName || '');
   };
 
   const handleSaveTrackEdit = async () => {
@@ -431,17 +441,27 @@ export default function ArtistDetailPage() {
       const response = await fetch(`/api/dashboard/artists/${artist.id}/media?mediaId=${encodeURIComponent(editingTrackId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: trimmedTitle, album: trackAlbumDraft.trim() }),
+        body: JSON.stringify({
+          title: trimmedTitle,
+          album: trackAlbumDraft.trim(),
+          featuredArtistName: trackFeaturedArtistDraft.trim(),
+        }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Unable to update track information');
 
       setTracks((prevTracks) => prevTracks.map((track) => track.id === editingTrackId
-        ? { ...track, title: trimmedTitle, album: trackAlbumDraft.trim() || 'Single' }
+        ? {
+          ...track,
+          title: trimmedTitle,
+          album: trackAlbumDraft.trim() || 'Single',
+          featuredArtistName: trackFeaturedArtistDraft.trim() || null,
+        }
         : track));
       setEditingTrackId(null);
       setTrackTitleDraft('');
       setTrackAlbumDraft('');
+      setTrackFeaturedArtistDraft('');
       setProcessMessage('Track updated successfully.');
       setTimeout(() => setProcessMessage(''), 3000);
     } catch (error) {
@@ -485,6 +505,12 @@ export default function ArtistDetailPage() {
     }
   };
 
+  const togglePlayTrack = (track: Track) => {
+    if (!getPlayableAudioUrl(track.fileUrl)) return;
+    // Toggle playback; a single hidden <audio> element (below) follows this state.
+    setPlayingTrackId((current) => (current === track.id ? null : track.id));
+  };
+
   const handleDeleteTrack = async (id: string) => {
     try {
       const response = await fetch(`/api/dashboard/artists/${params.id}/media?mediaId=${encodeURIComponent(id)}`, {
@@ -517,14 +543,14 @@ export default function ArtistDetailPage() {
       let completedUploads = 0;
       if (selectedBanner) {
         setProcessMessage('Uploading banner to Google Drive...');
-        const media = await uploadMedia(selectedBanner, 'banner', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
+        const media = await uploadMedia(selectedBanner, 'banner', '', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
         setBannerUrl(media.fileUrl || null);
         setSelectedBanner(null);
         completedUploads += 1;
       }
       if (selectedProfile) {
         setProcessMessage('Uploading profile picture to Google Drive...');
-        const media = await uploadMedia(selectedProfile, 'profile', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
+        const media = await uploadMedia(selectedProfile, 'profile', '', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
         setProfileUrl(media.fileUrl || null);
         setSelectedProfile(null);
         completedUploads += 1;
@@ -547,8 +573,119 @@ export default function ArtistDetailPage() {
     }
   };
 
+  const playingTrack = tracks.find((track) => track.id === playingTrackId);
+  const playingTrackUrl = getPlayableAudioUrl(playingTrack?.fileUrl);
+  const editingTrack = tracks.find((track) => track.id === editingTrackId);
+
   return (
     <main className=" text-white">
+      {playingTrack && playingTrackUrl ? (
+        <audio
+          key={playingTrack.id}
+          src={playingTrackUrl}
+          autoPlay
+          onEnded={() => setPlayingTrackId(null)}
+          className="hidden"
+        />
+      ) : null}
+      {editingTrack ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-track-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setEditingTrackId(null);
+              setTrackTitleDraft('');
+              setTrackAlbumDraft('');
+              setTrackFeaturedArtistDraft('');
+            }
+          }}
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSaveTrackEdit();
+            }}
+            className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-400">Track details</p>
+                <h2 id="edit-track-title" className="mt-1 text-xl font-semibold text-white">Edit uploaded track</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingTrackId(null);
+                  setTrackTitleDraft('');
+                  setTrackAlbumDraft('');
+                  setTrackFeaturedArtistDraft('');
+                }}
+                className="text-2xl leading-none text-slate-400 transition hover:text-white"
+                aria-label="Abort editing"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <div>
+                <label htmlFor="edit-track-title-input" className="mb-1.5 block text-xs font-medium text-slate-300">Track title</label>
+                <input
+                  id="edit-track-title-input"
+                  autoFocus
+                  value={trackTitleDraft}
+                  onChange={(event) => setTrackTitleDraft(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-track-album-input" className="mb-1.5 block text-xs font-medium text-slate-300">Album / Project</label>
+                <input
+                  id="edit-track-album-input"
+                  value={trackAlbumDraft}
+                  onChange={(event) => setTrackAlbumDraft(event.target.value)}
+                  placeholder="Single"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-track-featured-artist-input" className="mb-1.5 block text-xs font-medium text-slate-300">Additional Artist</label>
+                <input
+                  id="edit-track-featured-artist-input"
+                  value={trackFeaturedArtistDraft}
+                  onChange={(event) => setTrackFeaturedArtistDraft(event.target.value)}
+                  placeholder="Featured Artist (optional)"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingTrackId(null);
+                  setTrackTitleDraft('');
+                  setTrackAlbumDraft('');
+                  setTrackFeaturedArtistDraft('');
+                }}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+              >
+                Abort
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
       <div className="mx-auto  overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 shadow-2xl">
 
         {/* BANNER & PROFILE PICTURE SECTION */}
@@ -794,6 +931,17 @@ export default function ArtistDetailPage() {
                 </div>
 
                 <div>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-300">Additional Artist (Optional)</label>
+                  <input
+                    type="text"
+                    value={featuredArtistName}
+                    onChange={(e) => setFeaturedArtistName(e.target.value)}
+                    placeholder="e.g. Featured Artist"
+                    className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3.5 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
                   <label className="mb-1.5 block text-xs font-medium text-slate-300">Album / Project (Optional)</label>
                   <input
                     type="text"
@@ -871,6 +1019,8 @@ export default function ArtistDetailPage() {
                   <thead className="border-b border-slate-800 bg-slate-900/50 text-xs uppercase tracking-wider text-slate-400">
                     <tr>
                       <th className="px-6 py-3.5">Thumbnail</th>
+                      <th className="px-6 py-3.5">Song Title</th>
+                      <th className="px-6 py-3.5">Artist</th>
                       <th className="px-6 py-3.5">Play</th>
                       <th className="px-6 py-3.5">Album</th>
                       <th className="px-6 py-3.5">Date Added</th>
@@ -880,7 +1030,7 @@ export default function ArtistDetailPage() {
                   <tbody className="divide-y divide-slate-800">
                     {tracks.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <svg className="h-8 w-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
@@ -931,26 +1081,31 @@ export default function ArtistDetailPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4">
+                            <span className="font-medium text-white">{track.title}</span>
+                          </td>
+                          <td className="px-6 py-4 text-slate-400">
+                            {artist.name}
+                            {track.featuredArtistName ? ` ft ${track.featuredArtistName}` : ''}
+                          </td>
+                          <td className="px-6 py-4">
                             {track.fileUrl ? (
-                              <AudioPlayer
-                                src={getPlayableAudioUrl(track.fileUrl) || ''}
-                                title={track.title}
-                                fileUrl={track.fileUrl}
-                                fileName={track.fileName}
-                                artistName={artist.name}
-                                showDownload={false}
-                                downloadCount={track.downloadCount}
-                                onDownload={(serverDownloadCount) => {
-                                  setTracks((currentTracks) => currentTracks.map((currentTrack) => currentTrack.id === track.id
-                                    ? {
-                                      ...currentTrack,
-                                      downloadCount: Number.isFinite(serverDownloadCount)
-                                        ? serverDownloadCount
-                                        : Number(currentTrack.downloadCount || 0) + 1,
-                                    }
-                                    : currentTrack));
-                                }}
-                              />
+                              <button
+                                type="button"
+                                onClick={() => togglePlayTrack(track)}
+                                aria-label={playingTrackId === track.id ? `Pause ${track.title}` : `Play ${track.title}`}
+                                title={playingTrackId === track.id ? 'Pause' : 'Play'}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-500"
+                              >
+                                {playingTrackId === track.id ? (
+                                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+                                  </svg>
+                                ) : (
+                                  <svg className="h-4 w-4 translate-x-px" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z" />
+                                  </svg>
+                                )}
+                              </button>
                             ) : (
                               <span className="text-xs text-slate-500">Unavailable</span>
                             )}
@@ -958,56 +1113,20 @@ export default function ArtistDetailPage() {
                           <td className="px-6 py-4 text-slate-400">{track.album}</td>
                           <td className="px-6 py-4 text-slate-400">{track.uploadedAt}</td>
                           <td className="px-6 py-4 text-right">
-                            {editingTrackId === track.id ? (
-                              <div className="flex flex-col items-end gap-2">
-                                <input
-                                  value={trackTitleDraft}
-                                  onChange={(e) => setTrackTitleDraft(e.target.value)}
-                                  className="w-48 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-white outline-none focus:border-indigo-500"
-                                  aria-label="Track title"
-                                />
-                                <input
-                                  value={trackAlbumDraft}
-                                  onChange={(e) => setTrackAlbumDraft(e.target.value)}
-                                  placeholder="Album / Project"
-                                  className="w-48 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-left text-sm text-white outline-none focus:border-indigo-500"
-                                  aria-label="Album or project"
-                                />
-                                <div className="flex justify-end gap-2">
-                                  <button
-                                    onClick={() => void handleSaveTrackEdit()}
-                                    className="text-xs font-medium text-emerald-400 transition hover:text-emerald-300"
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setEditingTrackId(null);
-                                      setTrackTitleDraft('');
-                                      setTrackAlbumDraft('');
-                                    }}
-                                    className="text-xs font-medium text-slate-400 transition hover:text-slate-300"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  onClick={() => startEditingTrack(track)}
-                                  className="text-xs font-medium text-indigo-400 transition hover:text-indigo-300"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => void handleDeleteTrack(track.id)}
-                                  className="text-xs font-medium text-red-400 transition hover:text-red-300"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            )}
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => startEditingTrack(track)}
+                                className="text-xs font-medium text-indigo-400 transition hover:text-indigo-300"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => void handleDeleteTrack(track.id)}
+                                className="text-xs font-medium text-red-400 transition hover:text-red-300"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
