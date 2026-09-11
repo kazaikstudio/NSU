@@ -338,7 +338,7 @@ export default function FeaturedAudioCards() {
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={() => setIsHovered(true)}
       onTouchEnd={() => setIsHovered(true)}
-      className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-10 pt-8 px-8"
+      className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-8 pt-3 sm:pb-10 sm:pt-8 sm:px-8"
       onWheel={(event) => {
         if (window.matchMedia('(min-width: 640px)').matches && event.deltaY !== 0) {
           event.preventDefault();
@@ -353,8 +353,8 @@ export default function FeaturedAudioCards() {
           Math.round(event.currentTarget.scrollLeft / cardWidth)
         );
       }}
-    >
-      <div className="flex gap-5">
+      >
+      <div className="flex gap-4 sm:gap-5">
         {tracks.map((track, index) => {
           const cardColor = CARD_COLORS[index % CARD_COLORS.length];
           const isSelected = activeTrackId === track.id;
@@ -461,9 +461,11 @@ export default function FeaturedAudioCards() {
 
               {/* Bottom Content Area: Contextually assigned to Card 1 or Card 2 */}
               {!isSelected ? (
-                <div className="flex items-center gap-30 text-xs text-white/50 relative z-10 group-hover:text-white/70 transition-colors">
+                <div className="flex items-center gap-20 text-xs text-white/50 relative z-10 group-hover:text-white/70 transition-colors">
                   <span className="italic font-light">Click me Listen .....</span>
-                  <span className="transform translate-x-0 group-hover:translate-x-1 transition-transform">⮞</span>
+                  <svg className="w-3.5 h-3.5 transform translate-x-0 group-hover:translate-x-1 transition-transform" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
                 </div>
               ) : (
                 <div className="mt-4 flex items-center justify-between relative z-10 transition-all duration-300 animate-fadeIn">

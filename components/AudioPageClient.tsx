@@ -118,7 +118,7 @@ export default function AudioPageClient() {
 
       <FeaturedAudioCards />
 
-      <p className="relative mt-6 rounded-2xl bg-cardcl/40 p-4 text-center text-sm font-medium text-secondry shadow-xl shadow-black/20 backdrop-blur-xl md:text-left">
+      <p className="relative mt-2 rounded-2xl bg-cardcl/40 p-2.5 sm:p-4 sm:mt-6 text-center text-sm font-medium text-secondry shadow-xl shadow-black/20 backdrop-blur-xl md:text-left">
         <span className="absolute -top-3 left-4 rounded-full border border-navlink/30 bg-navlink/10 px-3 py-0.5 text-[10px] font-semibold tracking-wider text-navlink uppercase shadow-sm">
           🔥 Hot & Fresh
         </span>
