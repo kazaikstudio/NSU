@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Mic2, Music } from 'lucide-react';
-import { getClientCachedData } from '@/lib/client-cache';
+import { getClientCachedData, readCachedData, writeCachedData } from '@/lib/client-cache';
 
 interface RegisteredArtist {
   id: string;
@@ -14,9 +14,12 @@ interface RegisteredArtist {
   profileUrl?: string | null;
 }
 
+const CACHE_KEY = 'artist-list';
+const cachedArtists = readCachedData<RegisteredArtist[]>(CACHE_KEY);
+
 export default function ArtistList({ searchTerm }: { searchTerm: string }) {
-  const [artists, setArtists] = useState<RegisteredArtist[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [artists, setArtists] = useState<RegisteredArtist[]>(cachedArtists || []);
+  const [loading, setLoading] = useState(cachedArtists == null);
   const [error, setError] = useState('');
   const loadedOnceRef = useRef(false);
 
@@ -31,6 +34,7 @@ export default function ArtistList({ searchTerm }: { searchTerm: string }) {
         if (cancelled) return;
         if (!Array.isArray(data.artists)) return;
         loadedOnceRef.current = true;
+        writeCachedData(CACHE_KEY, data.artists);
         setError('');
         setArtists((prev: RegisteredArtist[]) => {
           const byId = new Map(prev.map((artist) => [artist.id, artist]));
