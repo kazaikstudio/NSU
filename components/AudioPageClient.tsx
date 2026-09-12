@@ -36,6 +36,12 @@ interface TrendingArtist {
   downloads: number;
 }
 
+function rankTopArtists(artists: TrendingArtist[]): TrendingArtist[] {
+  return [...artists]
+    .sort((left, right) => right.downloads - left.downloads)
+    .slice(0, 5);
+}
+
 export default function AudioPageClient() {
   const [activeTab, setActiveTab] = useState<'music' | 'artist'>(() => {
     if (typeof window === 'undefined') return 'music';
@@ -47,7 +53,7 @@ export default function AudioPageClient() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const [topArtists, setTopArtists] = useState<TrendingArtist[]>(
-    () => readCachedData<TrendingArtist[]>('audio-page:trending-artists') || [],
+    () => rankTopArtists(readCachedData<TrendingArtist[]>('audio-page:trending-artists') || []),
   );
   const [musicCount, setMusicCount] = useState<number | null>(
     () => readCachedData<number>('audio-page:music-count'),
@@ -111,8 +117,7 @@ export default function AudioPageClient() {
         writeCachedData('audio-page:trending-artists', mapped);
         writeCachedData('audio-page:artist-count', mapped.length);
         setArtistCount(mapped.length);
-        const ranked = [...mapped].sort((left, right) => right.downloads - left.downloads);
-        const next = ranked.slice(0, 5);
+        const next = rankTopArtists(mapped);
         setTopArtists((prev) => {
           const same =
             prev.length === next.length &&
