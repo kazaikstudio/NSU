@@ -5,6 +5,7 @@ import { Music2, Mic2, Search, Mic } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Switchbutton from './Switchbutton';
 import ArtistList from './ArtistList';
+import { readCachedData, writeCachedData } from '@/lib/client-cache';
 
 const FeaturedAudioCards = dynamic(() => import('./FeaturedAudioCards'), {
   ssr: false,
@@ -45,6 +46,16 @@ export default function AudioPageClient() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
+  const [topArtists, setTopArtists] = useState<TrendingArtist[]>(
+    () => readCachedData<TrendingArtist[]>('audio-page:trending-artists') || [],
+  );
+  const [musicCount, setMusicCount] = useState<number | null>(
+    () => readCachedData<number>('audio-page:music-count'),
+  );
+  const [artistCount, setArtistCount] = useState<number | null>(
+    () => readCachedData<number>('audio-page:artist-count'),
+  );
+
   useEffect(() => {
     try {
       window.localStorage.setItem('nsu-active-tab', activeTab);
@@ -79,9 +90,6 @@ export default function AudioPageClient() {
     recognitionRef.current = null;
     setIsListening(false);
   }, []);
-  const [topArtists, setTopArtists] = useState<TrendingArtist[]>([]);
-  const [musicCount, setMusicCount] = useState<number | null>(null);
-  const [artistCount, setArtistCount] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,7 +108,9 @@ export default function AudioPageClient() {
         }));
 
         if (cancelled) return;
-        setArtistCount((payload.artists as DashboardArtist[] || []).length);
+        writeCachedData('audio-page:trending-artists', mapped);
+        writeCachedData('audio-page:artist-count', mapped.length);
+        setArtistCount(mapped.length);
         const ranked = [...mapped].sort((left, right) => right.downloads - left.downloads);
         const next = ranked.slice(0, 5);
         setTopArtists((prev) => {
@@ -132,7 +142,11 @@ export default function AudioPageClient() {
       try {
         const response = await fetch('/api/audio', { cache: 'no-store' });
         const data = await response.json();
-        if (!cancelled) setMusicCount((data.tracks as unknown[] || []).length);
+        if (!cancelled) {
+          const count = (data.tracks as unknown[] || []).length;
+          writeCachedData('audio-page:music-count', count);
+          setMusicCount(count);
+        }
       } catch {
         // keep last known count
       }

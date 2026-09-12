@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
 import { buildAudioDownloadName, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { registerClientDownload } from '@/lib/download-controls';
+import { readCachedData, writeCachedData } from '@/lib/client-cache';
 
 interface DownloadNoticePayload {
   status: 'downloading' | 'done' | 'error';
@@ -85,7 +86,29 @@ interface AudioCacheEntry {
   wasPlaying: boolean;
 }
 
+function audioCacheKey(src: string) {
+  return `audio-row:${src}`;
+}
+
 const audioCache = new Map<string, AudioCacheEntry>();
+
+function getAudioCacheEntry(src: string): AudioCacheEntry | undefined {
+  const cached = audioCache.get(src);
+  if (cached) return cached;
+
+  const restored = readCachedData<AudioCacheEntry>(audioCacheKey(src));
+  if (restored == null) {
+    audioCache.delete(src);
+    return undefined;
+  }
+  audioCache.set(src, restored);
+  return restored;
+}
+
+function saveAudioCacheEntry(src: string, entry: AudioCacheEntry) {
+  audioCache.set(src, entry);
+  writeCachedData(audioCacheKey(src), entry);
+}
 
 export default function AudioRow({
   src,
@@ -102,7 +125,7 @@ export default function AudioRow({
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentSrc, setCurrentSrc] = useState(src);
   const [isPlaying, setIsPlaying] = useState(() => {
-    const cached = audioCache.get(src);
+    const cached = getAudioCacheEntry(src);
     return cached?.wasPlaying ?? false;
   });
   const [isExpanded, setIsExpanded] = useState(false);
@@ -110,11 +133,12 @@ export default function AudioRow({
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'done' | 'error'>('idle');
   const downloadTimerRef = useRef<number | null>(null);
   const downloadProgressRef = useRef(0);
+  const lastPersistRef = useRef(0);
 
   if (currentSrc !== src) {
     setCurrentSrc(src);
     setPlayProgress(0);
-    setIsPlaying(audioCache.get(src)?.wasPlaying ?? false);
+    setIsPlaying(getAudioCacheEntry(src)?.wasPlaying ?? false);
     setIsExpanded(false);
   }
 
@@ -123,7 +147,7 @@ export default function AudioRow({
     if (!audio) return;
 
     audio.load();
-    const cached = audioCache.get(src);
+    const cached = getAudioCacheEntry(src);
     if (cached) {
       audio.currentTime = cached.currentTime;
       if (cached.wasPlaying) {
@@ -170,14 +194,14 @@ export default function AudioRow({
         await audio.play();
         setIsPlaying(true);
         setIsExpanded(true);
-        audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: true });
+        saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: true });
       } catch (err) {
         console.error('Play failed:', err);
       }
     } else {
       audio.pause();
       setIsPlaying(false);
-      audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: false });
+      saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: false });
     }
   };
 
@@ -189,7 +213,7 @@ export default function AudioRow({
 
     try {
       await audio.play();
-      audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: true });
+      saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: true });
     } catch (err) {
       console.error('Play failed:', err);
     }
@@ -344,25 +368,33 @@ export default function AudioRow({
       onPlay={() => {
         setIsPlaying(true);
         const audio = audioRef.current;
-        if (audio) audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: true });
+        if (audio) saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: true });
         onPlay?.();
       }}
       onPause={() => {
         setIsPlaying(false);
         const audio = audioRef.current;
-        if (audio) audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: false });
+        if (audio) saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: false });
       }}
       onTimeUpdate={() => {
         const audio = audioRef.current;
-        if (audio && isFinite(audio.duration) && audio.duration > 0) {
+        if (!audio) return;
+        if (isFinite(audio.duration) && audio.duration > 0) {
           setPlayProgress((audio.currentTime / audio.duration) * 100);
         }
-        if (audio) audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: !audio.paused });
+        const now = Date.now();
+        if (now - lastPersistRef.current >= 1000) {
+          lastPersistRef.current = now;
+          saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: !audio.paused });
+        } else {
+          audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: !audio.paused });
+        }
       }}
       onEnded={() => {
         setIsPlaying(false);
         setPlayProgress(0);
         audioCache.delete(src);
+        writeCachedData(audioCacheKey(src), null);
       }}
       className="sr-only"
       aria-label={`Audio player for ${title}`}

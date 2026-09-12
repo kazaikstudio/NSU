@@ -9,6 +9,9 @@ import {
 } from 'lucide-react';
 import { registerClientDownload } from '@/lib/download-controls';
 import { buildAudioDownloadName } from '@/lib/download';
+import { readCachedData, writeCachedData } from '@/lib/client-cache';
+
+const FEATURED_TRACKS_CACHE = 'audio-page:featured-tracks';
 
 export interface FeaturedAudioTrack {
   id: string;
@@ -108,11 +111,15 @@ const exampleTracks: FeaturedAudioTrack[] = [
 ];
 
 export default function FeaturedAudioCards() {
-  const [tracks, setTracks] = useState<FeaturedAudioTrack[]>([]);
+  const [tracks, setTracks] = useState<FeaturedAudioTrack[]>(
+    () => readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE) || [],
+  );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    () => readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE) === null,
+  );
   const [isHovered, setIsHovered] = useState(false);
 
   const [currentTime, setCurrentTime] = useState(0);
@@ -150,6 +157,7 @@ export default function FeaturedAudioCards() {
         const nextTracks = normalizeFeaturedTracks(data);
         if (nextTracks.length === 0) return;
 
+        writeCachedData(FEATURED_TRACKS_CACHE, nextTracks);
         setTracks((prev) => {
           const currentIds = new Set(prev.map((track) => track.id));
           const hasChanges =
