@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import AudioRow from './AudioRow';
+import { readCachedData, writeCachedData } from '@/lib/client-cache';
+
+const CACHE_KEY = 'audio:tracks';
+const cachedTracks = readCachedData<AudioTrack[]>(CACHE_KEY);
 
 interface AudioTrack {
   id: string;
@@ -47,8 +51,8 @@ async function fetchAudioTracks(): Promise<AudioTrack[]> {
 }
 
 export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
-  const [tracks, setTracks] = useState<AudioTrack[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tracks, setTracks] = useState<AudioTrack[]>(cachedTracks || []);
+  const [loading, setLoading] = useState(cachedTracks == null);
   const [error, setError] = useState('');
   const loadedOnceRef = useRef(false);
 
@@ -60,6 +64,7 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
         const loadedTracks = await fetchAudioTracks();
         if (cancelled) return;
         loadedOnceRef.current = true;
+        writeCachedData(CACHE_KEY, loadedTracks);
         setError('');
         setTracks((prev: AudioTrack[]) => {
           const currentIds = new Set(prev.map((track) => track.id));
