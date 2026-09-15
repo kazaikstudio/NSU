@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import Switchbutton from "../../components/Switchbutton";
+import DockBar from "../../components/DockBar";
 import HotComediesRowList from "../../components/HotComediesRowList";
 import DownloadModal from "../../components/DownloadModal";
 import { getClientCachedData, hasClientCachedData } from "@/lib/client-cache";
@@ -192,7 +192,7 @@ const Home = () => {
 
   return (
     <main className="min-h-screen pb-28">
-      <Switchbutton searchHref="/search" />
+      <DockBar searchHref="/search" />
 
       <div className="p-2 text-start text-primary">
         <div className="relative overflow-hidden rounded-lg bg-linear-to-r from-cardcl via-cardcl/90 to-rose-950/40 p-3 shadow-xl shadow-rose-500/30 backdrop-blur-md">

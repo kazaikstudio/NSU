@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Music2, Mic2, Search, Mic } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import Switchbutton from './Switchbutton';
+import DockBar from './DockBar';
 import ArtistList from './ArtistList';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
 
-const FeaturedAudioCards = dynamic(() => import('./FeaturedAudioCards'), {
+const AudioCardsLatest = dynamic(() => import('./AudioCardsLatest'), {
   ssr: false,
   loading: () => <p className="py-8 text-center text-sm text-slate-400">Loading audio experience...</p>,
 });
@@ -17,7 +17,7 @@ const AudioTrackList = dynamic(() => import('./AudioTrackList'), {
   loading: () => <p className="col-span-full py-10 text-center text-sm text-slate-400">Loading music library...</p>,
 });
 
-const TrendingCard = dynamic(() => import('./TrendingCard'), {
+const TrendingArtist = dynamic(() => import('./TrendingArtist'), {
   ssr: false,
   loading: () => <div className="my-4 h-16 rounded-2xl border border-card1/10 bg-cardcl/50" />,
 });
@@ -170,9 +170,9 @@ export default function AudioPageClient() {
 
   return (
     <main className="px-4 mb-10 py-5 max-w-9xl mx-auto text-primary">
-      <Switchbutton searchHref="/search" />
+      <DockBar searchHref="/search" />
 
-      <FeaturedAudioCards />
+      <AudioCardsLatest />
 
       <p className="relative mt-2 rounded-2xl bg-cardcl/40 p-2.5 sm:p-4 sm:mt-6 text-center text-sm font-medium text-secondry shadow-xl shadow-black/20 backdrop-blur-xl md:text-left">
         <span className="absolute -top-3 left-4 rounded-full border border-navlink/30 bg-navlink/10 px-3 py-0.5 text-[10px] font-semibold tracking-wider text-navlink uppercase shadow-sm">
@@ -192,12 +192,12 @@ export default function AudioPageClient() {
         {topArtists.length > 0 ? (
           topArtists.map((artist, index) => (
             <div key={artist.id} className="snap-start shrink-0">
-              <TrendingCard artist={artist} isTop={index === 0} />
+              <TrendingArtist artist={artist} isTop={index === 0} />
             </div>
           ))
         ) : (
           <div className="snap-start shrink-0">
-            <TrendingCard />
+            <TrendingArtist />
           </div>
         )}
       </div>

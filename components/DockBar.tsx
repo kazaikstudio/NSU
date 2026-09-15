@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Download, Headphones, Play } from 'lucide-react'
 import { useEffect, type Dispatch, type SetStateAction } from 'react'
 
-interface SwitchbuttonProps {
+interface DockBarProps {
   onScrollToSearch?: () => void
   searchHref?: string
   showSearch?: boolean
@@ -13,7 +13,7 @@ interface SwitchbuttonProps {
   setSearchQuery?: Dispatch<SetStateAction<string>>
 }
 
-const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
+const DockBar = ({ onScrollToSearch, searchHref }: DockBarProps) => {
   const pathname = usePathname() ?? ''
   const router = useRouter()
   const isAudio = pathname === '/Audio'
@@ -85,4 +85,4 @@ const Switchbutton = ({ onScrollToSearch, searchHref }: SwitchbuttonProps) => {
   )
 }
 
-export default Switchbutton
+export default DockBar

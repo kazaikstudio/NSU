@@ -110,7 +110,7 @@ const exampleTracks: FeaturedAudioTrack[] = [
   },
 ];
 
-export default function FeaturedAudioCards() {
+export default function AudioCardsLatest() {
   const [tracks, setTracks] = useState<FeaturedAudioTrack[]>(
     () => readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE) || [],
   );
@@ -128,10 +128,15 @@ export default function FeaturedAudioCards() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sliderRef = useRef<HTMLDivElement | null>(null);
   const activeTrackIdRef = useRef<string | null>(null);
+  const tracksRef = useRef<FeaturedAudioTrack[]>(tracks);
 
   useEffect(() => {
     activeTrackIdRef.current = activeTrackId;
   }, [activeTrackId]);
+
+  useEffect(() => {
+    tracksRef.current = tracks;
+  }, [tracks]);
 
   const scrollTrackIntoView = (trackId: string) => {
     if (!window.matchMedia('(max-width: 639px)').matches) return;
@@ -199,8 +204,36 @@ export default function FeaturedAudioCards() {
     if (!audio) return;
 
     const handleEnded = () => {
-      setIsPlaying(false);
+      const list = tracksRef.current;
+      if (list.length === 0) {
+        setIsPlaying(false);
+        setCurrentTime(0);
+        return;
+      }
+
+      const currentIdx = list.findIndex((track) => track.id === activeTrackIdRef.current);
+      const nextIndex = currentIdx === -1 ? 0 : (currentIdx + 1) % list.length;
+      const nextTrack = list[nextIndex];
+
+      if (!nextTrack) {
+        setIsPlaying(false);
+        setCurrentTime(0);
+        return;
+      }
+
+      setIsPlaying(true);
+      setCurrentIndex(nextIndex);
+      setActiveTrackId(nextTrack.id);
       setCurrentTime(0);
+      setDuration(0);
+      scrollTrackIntoView(nextTrack.id);
+
+      if (audioRef.current) {
+        audioRef.current.src = nextTrack.fileUrl;
+        audioRef.current.play().catch(() => {
+          setIsPlaying(false);
+        });
+      }
     };
 
     const handleTimeUpdate = () => {

@@ -3,7 +3,7 @@
 import { FormEvent, Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Download, Link as LinkIcon, X } from 'lucide-react'
-import Switchbutton from '../../../components/Switchbutton'
+import DockBar from '../../../components/DockBar'
 import { startYoutubeDownload } from '@/lib/youtube-download-manager'
 
 const SAVED_DOWNLOAD_LINK_KEY = 'nsu-download-link'
@@ -266,7 +266,7 @@ function DownloadForm() {
 
   return (
     <main className="min-h-screen pb-28 text-primary">
-      <Switchbutton />
+      <DockBar />
 
       {/* Hero */}
       <div className="mx-auto max-w-2xl px-4 pt-8 pb-6 text-center sm:pt-12 sm:pb-8">

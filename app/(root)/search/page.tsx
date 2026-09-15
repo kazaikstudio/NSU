@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Mic, MicOff, Music2, Video, Search, Mic2, ChevronRight } from 'lucide-react'
-import Switchbutton from '@/components/Switchbutton'
+import DockBar from '@/components/DockBar'
 import AudioRow from '@/components/AudioRow'
 
 function getPlayableAudioUrl(url: string) {
@@ -261,7 +261,7 @@ function SearchClient() {
 
   return (
     <main className="min-h-screen pb-28 text-primary">
-      <Switchbutton searchHref="/search" />
+      <DockBar searchHref="/search" />
 
       {/* Hero header */}
       <div className="mx-auto max-w-3xl px-4 pt-8 pb-6 text-center sm:pt-12 sm:pb-8">

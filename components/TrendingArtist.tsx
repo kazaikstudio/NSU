@@ -11,12 +11,12 @@ export interface Artist {
   downloads?: number;
 }
 
-interface TrendingCardProps {
+interface TrendingArtistProps {
   artist?: Artist;
   isTop?: boolean;
 }
 
-const TrendingCard: React.FC<TrendingCardProps> = ({ artist, isTop }) => {
+const TrendingArtist: React.FC<TrendingArtistProps> = ({ artist, isTop }) => {
   const router = useRouter();
 
   if (!artist) {
@@ -90,4 +90,4 @@ const TrendingCard: React.FC<TrendingCardProps> = ({ artist, isTop }) => {
   );
 };
 
-export default TrendingCard;
+export default TrendingArtist;

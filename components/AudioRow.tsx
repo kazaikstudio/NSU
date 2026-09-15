@@ -5,6 +5,7 @@ import { Download, Pause, Play } from 'lucide-react';
 import { buildAudioDownloadName, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { registerClientDownload } from '@/lib/download-controls';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
+import { playNextAfter, registerPlaybackEntry, unregisterPlaybackEntry, type PlaybackEntry } from '@/lib/audio-playback';
 
 interface DownloadNoticePayload {
   status: 'downloading' | 'done' | 'error';
@@ -135,6 +136,7 @@ export default function AudioRow({
   const downloadTimerRef = useRef<number | null>(null);
   const downloadProgressRef = useRef(0);
   const lastPersistRef = useRef(0);
+  const playbackEntryRef = useRef<PlaybackEntry>({ title: '', play: () => {} });
 
   if (currentSrc !== src) {
     setCurrentSrc(src);
@@ -183,6 +185,23 @@ export default function AudioRow({
     return () => {
       window.removeEventListener('play', handleGlobalPlay, true);
     };
+  }, []);
+
+  // Keep the auto-play queue entry in sync with this row's current title/play.
+  useEffect(() => {
+    playbackEntryRef.current.title = title;
+    playbackEntryRef.current.play = () => {
+      const node = audioRef.current;
+      if (!node || !node.paused) return;
+      node.play().catch(() => {});
+    };
+  });
+
+  // Register this row so a finished track advances to the next one.
+  useEffect(() => {
+    const entry = playbackEntryRef.current;
+    registerPlaybackEntry(entry);
+    return () => unregisterPlaybackEntry(entry);
   }, []);
 
   const togglePlay = async (e: React.MouseEvent) => {
@@ -396,6 +415,7 @@ export default function AudioRow({
         setPlayProgress(0);
         audioCache.delete(src);
         writeCachedData(audioCacheKey(src), null);
+        playNextAfter(playbackEntryRef.current);
       }}
       className="sr-only"
       aria-label={`Audio player for ${title}`}
