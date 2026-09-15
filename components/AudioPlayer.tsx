@@ -73,6 +73,7 @@ export default function AudioPlayer() {
   const playTrack = useCallback((target: PlayerTrack, resumeTime = 0) => {
     const audio = audioRef.current;
     if (!audio) return;
+    trackRef.current = target;
     setCurrentTime(0);
     setIsSeeking(false);
     setScrubTime(0);
