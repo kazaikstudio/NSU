@@ -22,9 +22,7 @@ interface DownloadEntry {
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
-  const [isDark, setIsDark] = useState(() =>
-    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
-  );
+  const [isDark, setIsDark] = useState(false);
   const navRef = useRef<HTMLHeadingElement>(null);
   const pathname = usePathname();
   const router = useRouter();

@@ -221,6 +221,7 @@ const Home = () => {
                       src={v.thumbnail}
                       alt={v.title}
                       fill
+                    sizes="(max-width: 640px) 96vw, (max-width:1280px) 33vw, 384px"
                       className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
                     />
                     <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/40 to-transparent opacity-90 transition-opacity group-hover:opacity-80" />
@@ -289,6 +290,7 @@ const Home = () => {
                     src={video.thumbnail}
                     alt={video.title}
                     fill
+                    sizes="(max-width: 640px) 96vw, (max-width:1280px) 33vw, 384px"
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                   />
 
@@ -393,6 +395,7 @@ const Home = () => {
                         src={video.thumbnail}
                         alt={video.title}
                         fill
+                    sizes="(max-width: 640px) 96vw, (max-width:1280px) 33vw, 384px"
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     </div>

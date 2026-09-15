@@ -43,11 +43,7 @@ function rankTopArtists(artists: TrendingArtist[]): TrendingArtist[] {
 }
 
 export default function AudioPageClient() {
-  const [activeTab, setActiveTab] = useState<'music' | 'artist'>(() => {
-    if (typeof window === 'undefined') return 'music';
-    const stored = window.localStorage.getItem('nsu-active-tab');
-    return stored === 'artist' ? 'artist' : 'music';
-  });
+  const [activeTab, setActiveTab] = useState<'music' | 'artist'>('music');
   const [artistSearchTerm, setArtistSearchTerm] = useState('');
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);

@@ -113,15 +113,11 @@ const exampleTracks: FeaturedAudioTrack[] = [
 ];
 
 export default function AudioCardsLatest() {
-  const [tracks, setTracks] = useState<FeaturedAudioTrack[]>(
-    () => readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE) || [],
-  );
+  const [tracks, setTracks] = useState<FeaturedAudioTrack[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [loading, setLoading] = useState(
-    () => readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE) === null,
-  );
+  const [loading, setLoading] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
 
   const [currentTime, setCurrentTime] = useState(0);
