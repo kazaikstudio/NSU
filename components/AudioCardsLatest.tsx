@@ -348,13 +348,23 @@ export default function AudioCardsLatest() {
       setDuration(0);
       scrollTrackIntoView(track.id);
 
-      if (audioRef.current) {
-        audioRef.current.src = track.fileUrl;
-        audioRef.current.play().catch((err) => {
-          console.error("Error playing audio:", err);
-          setIsPlaying(false);
-        });
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      // If this file is already the element's loaded/loading source (hover
+      // priming), don't reassign it — resetting src aborts the in-flight
+      // fetch and forces a slow restart.
+      if (audio.currentSrc && audio.currentSrc !== track.fileUrl) {
+        audio.src = track.fileUrl;
       }
+
+      void audio.play().catch((err) => {
+        // AbortError is expected when a still-buffering track is superseded
+        // by another click or a preload — not a real playback failure.
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        console.error("Error playing audio:", err);
+        setIsPlaying(false);
+      });
     }
   };
 

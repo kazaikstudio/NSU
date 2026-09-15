@@ -275,6 +275,9 @@ export default function AudioRow({
       setIsExpanded(true);
       saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: true });
     } catch (err) {
+      // AbortError is expected when playback is superseded by another track
+      // or a preload reset — not a real failure.
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Play failed:', err);
     }
   };
@@ -316,6 +319,9 @@ export default function AudioRow({
       await audio.play();
       saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: true });
     } catch (err) {
+      // AbortError is expected when playback is superseded by another track
+      // or a preload reset — not a real failure.
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('Play failed:', err);
     }
   };
