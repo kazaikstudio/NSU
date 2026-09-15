@@ -8,6 +8,7 @@ import AudioRow from '@/components/AudioRow';
 import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 import { getArtistById } from '@/lib/artists';
 import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
+import { playerTrackFor } from '@/lib/audio-player';
 
 interface Artist {
   id: string;
@@ -289,6 +290,21 @@ export default function PublicArtistDetailPage() {
     );
   }
 
+  const playerQueue = tracks
+    .filter((track) => track.fileUrl)
+    .map((track) => playerTrackFor(
+      track.id,
+      track.title,
+      getPlayableAudioUrl(track.fileUrl || ''),
+      {
+        artist: track.featuredArtistName
+          ? `${artist.name} ft ${track.featuredArtistName}`
+          : artist.name,
+        fileUrl: track.fileUrl ?? undefined,
+        fileName: track.fileName ?? undefined,
+      },
+    ));
+
   return (
     <main className="min-h-screen pb-24 text-primary selection:bg-amber-400 selection:text-cardcl">
     {/* Hero Header Section */}
@@ -457,6 +473,8 @@ export default function PublicArtistDetailPage() {
                     downloadCount={track.downloadCount}
                     onPlay={() => void syncPlayCount(track.id, track.fileUrl || '')}
                     onDownload={(serverDownloadCount) => syncDownloadCount(track.id, serverDownloadCount)}
+                    playerQueue={playerQueue}
+                    playerQueueIndex={playerQueue.findIndex((q) => q.id === track.id)}
                   />
                 );
               })}

@@ -1,6 +1,7 @@
 export interface PlaybackEntry {
   title: string;
   play: () => void;
+  prime?: () => void;
 }
 
 const registry: PlaybackEntry[] = [];
@@ -20,4 +21,11 @@ export function playNextAfter(entry: PlaybackEntry) {
   if (index === -1) return;
   const next = registry[index + 1];
   next?.play();
+}
+
+export function primeNextAfter(entry: PlaybackEntry) {
+  const index = registry.indexOf(entry);
+  if (index === -1) return;
+  const next = registry[index + 1];
+  next?.prime?.();
 }

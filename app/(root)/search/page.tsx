@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { Mic, MicOff, Music2, Video, Search, Mic2, ChevronRight } from 'lucide-react'
 import DockBar from '@/components/DockBar'
 import AudioRow from '@/components/AudioRow'
+import { playerTrackFor } from '@/lib/audio-player'
 
 function getPlayableAudioUrl(url: string) {
   const match = url.match(/[?&]id=([^&]+)/)
@@ -259,6 +260,22 @@ function SearchClient() {
     [tracks.length, artists.length],
   )
 
+  const playerQueue = tracks
+    .filter((track) => track.fileUrl)
+    .map((track) => playerTrackFor(
+      track.id,
+      track.title,
+      getPlayableAudioUrl(track.fileUrl),
+      {
+        artist: track.featuredArtistName
+          ? `${track.artistName} ft ${track.featuredArtistName}`
+          : track.artistName,
+        thumbnailUrl: track.thumbnailUrl ?? undefined,
+        fileUrl: track.fileUrl,
+        fileName: track.fileName ?? undefined,
+      },
+    ))
+
   return (
     <main className="min-h-screen pb-28 text-primary">
       <DockBar searchHref="/search" />
@@ -358,6 +375,8 @@ function SearchClient() {
                       artistGenre={track.artistGenre}
                       thumbnailUrl={track.thumbnailUrl ?? undefined}
                       downloadCount={track.downloadCount}
+                      playerQueue={playerQueue}
+                      playerQueueIndex={playerQueue.findIndex((q) => q.id === track.id)}
                     />
                   ))}
                 </div>

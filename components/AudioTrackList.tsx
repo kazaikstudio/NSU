@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import AudioRow from './AudioRow';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
+import { playerTrackFor } from '@/lib/audio-player';
 
 const CACHE_KEY = 'audio:tracks';
 const cachedTracks = readCachedData<AudioTrack[]>(CACHE_KEY);
@@ -101,6 +102,22 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
     )
   );
 
+  const playerQueue = filteredTracks
+    .filter((track) => track.fileUrl)
+    .map((track) => playerTrackFor(
+      track.id,
+      track.title,
+      getPlayableAudioUrl(track.fileUrl),
+      {
+        artist: track.featuredArtistName
+          ? `${track.artistName} ft ${track.featuredArtistName}`
+          : track.artistName,
+        thumbnailUrl: normalizeImageUrl(track.thumbnailUrl),
+        fileUrl: track.fileUrl,
+        fileName: track.fileName,
+      },
+    ));
+
   if (loading) return <p className="col-span-full py-16 text-center text-sm text-slate-400">Loading uploaded music...</p>;
   if (error) return <p className="col-span-full py-16 text-center text-sm text-red-400">{error}</p>;
   if (filteredTracks.length === 0) {
@@ -124,6 +141,8 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
             artistGenre={track.artistGenre}
             downloadCount={track.downloadCount}
             thumbnailUrl={normalizeImageUrl(track.thumbnailUrl)}
+            playerQueue={playerQueue}
+            playerQueueIndex={playerQueue.findIndex((q) => q.id === track.id)}
           />
         );
       })}

@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
 import { buildAudioDownloadName, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { registerClientDownload } from '@/lib/download-controls';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
-import { playNextAfter, registerPlaybackEntry, unregisterPlaybackEntry, type PlaybackEntry } from '@/lib/audio-playback';
+import { playNextAfter, primeNextAfter, registerPlaybackEntry, unregisterPlaybackEntry, type PlaybackEntry } from '@/lib/audio-playback';
+import { primeAudioStart } from '@/lib/audio-preload';
+import { openAudioPlayer, requestPlaybackToggle, type PlayerTrack } from '@/lib/audio-player';
+import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying, type NowPlayingSnapshot } from '@/lib/audio-now-playing';
 
 interface DownloadNoticePayload {
   status: 'downloading' | 'done' | 'error';
@@ -32,6 +35,13 @@ interface AudioRowProps {
   onPlay?: () => void;
   onDownload?: (downloadCount?: number) => void;
   onNext?: () => void;
+  playerQueue?: PlayerTrack[];
+  playerQueueIndex?: number;
+  // When set, the row does not own an <audio> element — clicks play through
+  // the parent (e.g. the full-screen player's audio) instead. This keeps the
+  // exact same row visuals/behaviour inside the player's track list.
+  delegatedPlay?: () => void;
+  progress?: number;
 }
 
 function getDownloadUrl(fileUrl: string | undefined, fileName: string | undefined, title: string, artistName?: string) {
@@ -123,13 +133,19 @@ export default function AudioRow({
   showDownload = true,
   onPlay,
   onDownload,
+  playerQueue,
+  playerQueueIndex = 0,
+  delegatedPlay,
+  progress,
 }: AudioRowProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const sourceKey = useId();
   const [currentSrc, setCurrentSrc] = useState(src);
   const [isPlaying, setIsPlaying] = useState(() => {
     const cached = getAudioCacheEntry(src);
     return cached?.wasPlaying ?? false;
   });
+  const [registrySnapshot, setRegistrySnapshot] = useState<NowPlayingSnapshot | undefined>(() => getNowPlaying(src));
   const [isExpanded, setIsExpanded] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'done' | 'error'>('idle');
@@ -142,6 +158,7 @@ export default function AudioRow({
     setCurrentSrc(src);
     setPlayProgress(0);
     setIsPlaying(getAudioCacheEntry(src)?.wasPlaying ?? false);
+    setRegistrySnapshot(getNowPlaying(src));
     setIsExpanded(false);
   }
 
@@ -187,9 +204,25 @@ export default function AudioRow({
     };
   }, []);
 
+  // Mirror the shared now-playing registry so this row keeps showing as the
+  // active/playing row even when another element (e.g. the full-screen player)
+  // is streaming the same file and has paused this row's own audio element.
+  useEffect(() => {
+    return subscribeNowPlaying(src, (snapshot) => {
+      setRegistrySnapshot(snapshot);
+    });
+  }, [src]);
+
+  // Start buffering this track early so clicking play starts almost instantly.
+  const primeAudio = () => {
+    if (delegatedPlay) return;
+    primeAudioStart(src, audioRef.current);
+  };
+
   // Keep the auto-play queue entry in sync with this row's current title/play.
   useEffect(() => {
     playbackEntryRef.current.title = title;
+    playbackEntryRef.current.prime = primeAudio;
     playbackEntryRef.current.play = () => {
       const node = audioRef.current;
       if (!node || !node.paused) return;
@@ -206,30 +239,78 @@ export default function AudioRow({
 
   const togglePlay = async (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    // Row rendered inside the full-screen player: playback is delegated to the
+    // player's audio element, so toggle that source instead of this row's own.
+    if (delegatedPlay) {
+      if (registryPlaying) {
+        requestPlaybackToggle(src);
+      } else {
+        delegatedPlay();
+      }
+      return;
+    }
+
     const audio = audioRef.current;
     if (!audio) return;
 
-    if (audio.paused) {
-      try {
-        await audio.play();
-        setIsPlaying(true);
-        setIsExpanded(true);
-        saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: true });
-      } catch (err) {
-        console.error('Play failed:', err);
-      }
-    } else {
+    // If this row's own element is already producing sound, pause it.
+    if (!audio.paused) {
       audio.pause();
       setIsPlaying(false);
       saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: false });
+      return;
+    }
+
+    // The actual file is streaming somewhere else (e.g. the full-screen player),
+    // so toggle that source instead of starting a duplicate playback.
+    if (registryPlaying) {
+      requestPlaybackToggle(src);
+      return;
+    }
+
+    try {
+      await audio.play();
+      setIsPlaying(true);
+      setIsExpanded(true);
+      saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: true });
+    } catch (err) {
+      console.error('Play failed:', err);
     }
   };
 
   const handleRowClick = async () => {
-    const audio = audioRef.current;
     setIsExpanded(true);
 
-    if (!audio || !audio.paused) return;
+    if (delegatedPlay) {
+      // Inside the full-screen player, row click behaves exactly like the page
+      // rows: if this file is currently playing, toggle (pause) the streaming
+      // source; otherwise switch the player to this track.
+      if (registryPlaying) {
+        requestPlaybackToggle(src);
+        return;
+      }
+      delegatedPlay();
+      return;
+    }
+
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    // If this row's own element is already producing sound, pause it (toggle).
+    if (!audio.paused) {
+      audio.pause();
+      setIsPlaying(false);
+      saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: false });
+      return;
+    }
+
+    // If the file is streaming elsewhere (full-screen player), toggle that source
+    // instead of starting a second playback here.
+    if (registryPlaying) {
+      requestPlaybackToggle(src);
+      return;
+    }
 
     try {
       await audio.play();
@@ -246,6 +327,11 @@ export default function AudioRow({
     : '';
   const downloadUrl = getDownloadUrl(fileUrl, fileName, title, artistCredit);
   const hasArtistDetails = Boolean(artistCredit);
+  const registryPlaying = registrySnapshot?.isPlaying ?? false;
+  // A row looks "playing" if its own <audio> is playing OR the shared registry
+  // says this file is being streamed (e.g. by the full-screen player), which
+  // keeps the clicked row highlighted even after the player closes.
+  const isEffectivelyPlaying = isPlaying || registryPlaying;
 
   const handleDownloadClick = async (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -380,34 +466,63 @@ export default function AudioRow({
     }
   };
 
-  const audioTag = (
+  const audioTag = delegatedPlay ? null : (
     <audio
       ref={audioRef}
       preload="none"
       src={src}
-      onPlay={() => {
-        setIsPlaying(true);
-        const audio = audioRef.current;
-        if (audio) saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: true });
-        onPlay?.();
-      }}
-      onPause={() => {
-        setIsPlaying(false);
-        const audio = audioRef.current;
-        if (audio) saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: false });
-      }}
+onPlay={() => {
+          setIsPlaying(true);
+          const audio = audioRef.current;
+          if (audio) saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: true });
+          reportNowPlaying({
+            src,
+            currentTime: audio?.currentTime ?? 0,
+            isPlaying: true,
+            title,
+            artist: artistCredit || undefined,
+            thumbnailUrl,
+            duration: audio?.duration,
+          }, sourceKey);
+          primeNextAfter(playbackEntryRef.current);
+          onPlay?.();
+        }}
+        onPause={() => {
+          setIsPlaying(false);
+          const audio = audioRef.current;
+          if (audio) saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: false });
+          reportNowPlaying({
+            src,
+            currentTime: audio?.currentTime ?? 0,
+            isPlaying: false,
+            title,
+            artist: artistCredit || undefined,
+            thumbnailUrl,
+            duration: audio?.duration,
+          }, sourceKey);
+        }}
       onTimeUpdate={() => {
         const audio = audioRef.current;
         if (!audio) return;
+        const nextTime = audio.currentTime;
         if (isFinite(audio.duration) && audio.duration > 0) {
-          setPlayProgress((audio.currentTime / audio.duration) * 100);
+          setPlayProgress((nextTime / audio.duration) * 100);
         }
+        reportNowPlaying({
+          src,
+          currentTime: nextTime,
+          isPlaying: !audio.paused,
+          title,
+          artist: artistCredit || undefined,
+          thumbnailUrl,
+          duration: audio.duration,
+        }, sourceKey);
         const now = Date.now();
         if (now - lastPersistRef.current >= 1000) {
           lastPersistRef.current = now;
-          saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: !audio.paused });
+          saveAudioCacheEntry(src, { currentTime: nextTime, wasPlaying: !audio.paused });
         } else {
-          audioCache.set(src, { currentTime: audio.currentTime, wasPlaying: !audio.paused });
+          audioCache.set(src, { currentTime: nextTime, wasPlaying: !audio.paused });
         }
       }}
       onEnded={() => {
@@ -415,6 +530,7 @@ export default function AudioRow({
         setPlayProgress(0);
         audioCache.delete(src);
         writeCachedData(audioCacheKey(src), null);
+        clearNowPlaying(src);
         playNextAfter(playbackEntryRef.current);
       }}
       className="sr-only"
@@ -426,45 +542,82 @@ export default function AudioRow({
     <button
       type="button"
       onClick={togglePlay}
-      aria-label={isPlaying ? 'Pause track' : 'Play track'}
+      aria-label={isEffectivelyPlaying ? 'Pause track' : 'Play track'}
       className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-400 text-white transition-all duration-200 hover:bg-amber-300 hover:scale-105 active:scale-95 focus:outline-none cursor-pointer ${
-        isPlaying ? 'shadow-lg shadow-amber-400/50' : 'shadow-md shadow-amber-400/20'
+        isEffectivelyPlaying ? 'shadow-lg shadow-amber-400/50' : 'shadow-md shadow-amber-400/20'
       }`}
     >
-      {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" className="ml-0.5" />}
+      {isEffectivelyPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" className="ml-0.5" />}
     </button>
   );
 
   if (!hasArtistDetails) {
     return (
-      <div onClick={handleRowClick} className="cursor-pointer">
+      <div onClick={handleRowClick} onPointerEnter={primeAudio} onFocus={primeAudio} className="cursor-pointer">
         {audioTag}
-        {isExpanded ? playButton : <div className="text-Eltext1 text-sm font-semibold truncate">{title}</div>}
+        {isExpanded || isEffectivelyPlaying ? playButton : <div className="text-Eltext1 text-sm font-semibold truncate">{title}</div>}
       </div>
     );
   }
 
+  // Progress bar stays live no matter who is streaming the file: the row's own
+  // <audio> (playProgress) or another source like the full-screen player
+  // (registry snapshot fed through the `progress` prop in the player).
+  const registryProgress =
+    registrySnapshot?.duration && registrySnapshot.duration > 0
+      ? Math.min(100, (registrySnapshot.currentTime / registrySnapshot.duration) * 100)
+      : 0;
+  const progressBarVisible = isEffectivelyPlaying;
+  const progressBarValue = delegatedPlay ? (progress ?? 0) : isPlaying ? playProgress : registryProgress;
+
   return (
     <article
       onClick={handleRowClick}
+      onPointerEnter={primeAudio}
+      onFocus={primeAudio}
       className="group relative flex min-w-0 items-center gap-3 sm:gap-3 px-3 py-2.5 transition cursor-pointer text-Eltext1 sm:px-4 sm:py-3 bg-cardcl/40 shadow-lg shadow-black/5"
       >
       {/* Active gradient overlay — fades left-to-right when playing */}
       <div
         aria-hidden
         className={`pointer-events-none absolute inset-0 bg-linear-to-r from-amber-400/20 to-transparent transition-opacity duration-300 group-hover:opacity-100 ${
-          isPlaying ? 'opacity-100' : 'opacity-0'
+          isEffectivelyPlaying ? 'opacity-100' : 'opacity-0'
         }`}
       />
       {audioTag}
 
       {/* Thumbnail */}
-      <div className="shrink-0 h-10 w-10 sm:h-11 sm:w-11 rounded-md overflow-hidden bg-mrow/60 flex items-center justify-center">
+      <div
+        className="shrink-0 h-10 w-10 sm:h-11 sm:w-11 rounded-md overflow-hidden bg-mrow/60 flex items-center justify-center cursor-pointer group/thumb"
+        onClick={(e) => {
+          e.stopPropagation();
+          // Inside the full-screen player, treat the thumbnail like the play
+          // button so it switches/toggles the track without closing the player.
+          if (delegatedPlay) {
+            void togglePlay(e);
+            return;
+          }
+          openAudioPlayer({
+            track: {
+              id: src,
+              title,
+              artist: artistCredit || undefined,
+              src,
+              thumbnailUrl,
+            },
+            queue: playerQueue && playerQueue.length > 0 ? playerQueue : undefined,
+            queueIndex: playerQueueIndex >= 0 ? playerQueueIndex : 0,
+          });
+        }}
+        title={delegatedPlay ? 'Play track' : 'Open full screen player'}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={thumbnailUrl || '/noll.jpg'}
           alt={thumbnailUrl ? title : 'Default music thumbnail'}
-          className="h-full w-full object-cover"
+          onPointerEnter={primeAudio}
+          onFocus={primeAudio}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover/thumb:scale-110"
         />
       </div>
 
@@ -501,12 +654,12 @@ export default function AudioRow({
       {/* Playback progress bar — bottom border style, visible while clicked & playing */}
       <div
         className={`absolute inset-x-0 bottom-0 h-0.5 bg-black/10 transition-opacity duration-300 ${
-          isExpanded && isPlaying ? 'opacity-100' : 'opacity-0'
+          progressBarVisible ? 'opacity-100' : 'opacity-0'
         }`}
       >
         <div
           className="h-full bg-amber-400 transition-[width] duration-200 ease-linear"
-          style={{ width: `${playProgress}%` }}
+          style={{ width: `${progressBarValue}%` }}
         />
       </div>
     </article>

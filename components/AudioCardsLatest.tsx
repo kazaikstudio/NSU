@@ -10,6 +10,8 @@ import {
 import { registerClientDownload } from '@/lib/download-controls';
 import { buildAudioDownloadName } from '@/lib/download';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
+import { primeAudioStart } from '@/lib/audio-preload';
+import { openAudioPlayer } from '@/lib/audio-player';
 
 const FEATURED_TRACKS_CACHE = 'audio-page:featured-tracks';
 
@@ -126,9 +128,11 @@ export default function AudioCardsLatest() {
   const [duration, setDuration] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const preloadRef = useRef<HTMLAudioElement | null>(null);
   const sliderRef = useRef<HTMLDivElement | null>(null);
   const activeTrackIdRef = useRef<string | null>(null);
   const tracksRef = useRef<FeaturedAudioTrack[]>(tracks);
+  const preloadedForIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     activeTrackIdRef.current = activeTrackId;
@@ -138,6 +142,19 @@ export default function AudioCardsLatest() {
     tracksRef.current = tracks;
   }, [tracks]);
 
+  // Pause this carousel when another audio element starts playing.
+  useEffect(() => {
+    const handleGlobalPlay = (e: Event) => {
+      const audio = audioRef.current;
+      if (audio && e.target !== audio) {
+        audio.pause();
+        setIsPlaying(false);
+      }
+    };
+    window.addEventListener('play', handleGlobalPlay, true);
+    return () => window.removeEventListener('play', handleGlobalPlay, true);
+  }, []);
+
   const scrollTrackIntoView = (trackId: string) => {
     if (!window.matchMedia('(max-width: 639px)').matches) return;
 
@@ -146,6 +163,30 @@ export default function AudioCardsLatest() {
         `[data-track-id="${CSS.escape(trackId)}"]`
       );
       trackCard?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    });
+  };
+
+  // Start buffering the very start of this track so clicking it plays quickly,
+  // while never downloading more than the first moments.
+  const primeTrack = (fileUrl: string) => {
+    if (isPlaying) return;
+    primeAudioStart(fileUrl, audioRef.current);
+  };
+
+  const toPlayerTrack = (track: FeaturedAudioTrack) => ({
+    id: track.id,
+    title: track.title || 'Untitled Track',
+    artist: track.artist || track.artistName,
+    src: track.fileUrl,
+    thumbnailUrl: getTrackThumbnailUrl(track),
+    fileUrl: track.fileUrl,
+  });
+
+  const openPlayer = (track: FeaturedAudioTrack, index: number) => {
+    openAudioPlayer({
+      track: toPlayerTrack(track),
+      queue: tracksRef.current.map(toPlayerTrack),
+      queueIndex: index,
     });
   };
 
@@ -254,6 +295,26 @@ export default function AudioCardsLatest() {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
     };
   }, [activeTrackId]);
+
+  // Near the end of the current track, buffer the start of the next one so the
+  // auto-advance starts immediately. Bounded so only the tail of the song is
+  // pre-downloaded, keeping data usage low.
+  useEffect(() => {
+    if (!activeTrackId || preloadedForIdRef.current === activeTrackId) return;
+
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const remaining = (duration > 0 ? duration : audio.duration) - currentTime;
+    if (!Number.isFinite(remaining) || remaining < 0 || remaining > 20) return;
+
+    const list = tracksRef.current;
+    const currentIdx = list.findIndex((track) => track.id === activeTrackId);
+    const next = currentIdx === -1 ? null : list[(currentIdx + 1) % list.length];
+    if (next) primeAudioStart(next.fileUrl, preloadRef.current, { budgetMs: 20000 });
+
+    preloadedForIdRef.current = activeTrackId;
+  }, [activeTrackId, currentTime, duration]);
 
   // Auto-slide effect every 5 seconds
   useEffect(() => {
@@ -415,6 +476,7 @@ export default function AudioCardsLatest() {
   return (
   <div className="w-full max-w-9xl mx-auto">
     <audio ref={audioRef} preload="none" />
+    <audio ref={preloadRef} preload="none" className="hidden" />
 
     <div
       ref={sliderRef}
@@ -452,6 +514,8 @@ export default function AudioCardsLatest() {
               key={track.id}
               data-track-id={track.id}
               onClick={() => handleTogglePlay(track)}
+              onPointerEnter={() => primeTrack(track.fileUrl)}
+              onFocus={() => primeTrack(track.fileUrl)}
               className={`w-full shrink-0 snap-center sm:w-96 rounded-3xl p-5 bg-Audicard/90 backdrop-blur-xl border flex flex-col justify-between cursor-pointer transition-all duration-500 relative overflow-hidden group ${
                 isSelected ? '' : 'hover:bg-Audicard'
               }`}
@@ -495,7 +559,14 @@ export default function AudioCardsLatest() {
                   </div>
 
                   {/* Right: Modern Floating Thumbnail Image with Soft Glow */}
-                  <div className="relative group/btn w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shrink-0 shadow-lg bg-neutral-900 border border-white/10">
+                  <div
+                    className="relative group/btn w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shrink-0 shadow-lg bg-neutral-900 border border-white/10 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openPlayer(track, index);
+                    }}
+                    title="Open full screen player"
+                  >
                     <Image
                       fill
                       unoptimized

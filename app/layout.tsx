@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import ClientRequestCache from "@/components/ClientRequestCache";
+import AudioPlayer from "@/components/AudioPlayer";
 
 export const metadata: Metadata = {
   title: "Noll Studios - NSU | Creative Studio",
@@ -46,6 +47,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <ClientRequestCache />
+        <AudioPlayer />
         {children}
       </body>
     </html>
