@@ -84,13 +84,11 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
     };
 
     void loadTracks();
-    const interval = window.setInterval(loadTracks, 30000);
     const handleFocus = () => void loadTracks();
     window.addEventListener('focus', handleFocus);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
     };
   }, []);

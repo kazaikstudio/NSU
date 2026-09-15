@@ -92,7 +92,6 @@ const Home = () => {
         setError("");
 
         const endpoint = `/api/youtube/videos?channelId=${CHANNEL_ID}`;
-        console.log("Fetching from:", endpoint);
 
         const payload = await getClientCachedData(`home:${CHANNEL_ID}`, async () => {
           const res = await fetch(endpoint);

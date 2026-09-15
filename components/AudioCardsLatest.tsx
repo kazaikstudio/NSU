@@ -228,13 +228,11 @@ export default function AudioCardsLatest() {
     };
 
     void syncTracks();
-    const timer = window.setInterval(syncTracks, 30000);
     const handleFocus = () => void syncTracks();
     window.addEventListener('focus', handleFocus);
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
       window.removeEventListener('focus', handleFocus);
     };
   }, []);

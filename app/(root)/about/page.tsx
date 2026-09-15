@@ -204,7 +204,7 @@ export default function About() {
               opacity-10 blur-xl transition duration-500 group-hover:opacity-20" />
               <div className="relative aspect-square overflow-hidden rounded-2xl border border-white/30 bg-cardcl/10 backdrop-blur-xl shadow-2xl dark:border-zinc-700/50">
                 <Image
-                  src="/Pic/Noll visuals.png"
+                  src="/Pic/Noll visuals.jpg"
                   alt="Noll Studio Creative Space"
                   fill
                   sizes="(max-width: 1024px) 100vw, 50vw"

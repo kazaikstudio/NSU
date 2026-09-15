@@ -113,12 +113,12 @@ export async function GET() {
       }));
 
       const tracks = storageCards.length > 0 ? storageCards : fallbackTracks;
-      return NextResponse.json({ tracks, storageItems: storageRows, fallback: storageCards.length === 0 });
+      return NextResponse.json({ tracks, storageItems: storageRows, fallback: storageCards.length === 0 }, { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=600, stale-while-revalidate=3600' } });
     }
 
-    return NextResponse.json({ tracks: rows, storageItems: storageRows, fallback: false });
+    return NextResponse.json({ tracks: rows, storageItems: storageRows, fallback: false }, { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=600, stale-while-revalidate=3600' } });
   } catch (error) {
     console.error('Audio route failed, falling back to demo tracks.', error);
-    return NextResponse.json({ tracks: fallbackTracks, fallback: true });
+    return NextResponse.json({ tracks: fallbackTracks, fallback: true }, { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=600, stale-while-revalidate=3600' } });
   }
 }

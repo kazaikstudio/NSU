@@ -372,7 +372,10 @@ export async function GET(req: Request) {
     const liveFeed = rssVideos.length > 0 ? { videos: rssVideos, shorts: [] } : null;
     const fallbackFeed = liveFeed ?? getFallbackFeed();
     return withCors(
-      NextResponse.json({ videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: !liveFeed }),
+      NextResponse.json(
+        { videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: !liveFeed },
+        { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=600, stale-while-revalidate=86400' } }
+      ),
       req
     );
   }
@@ -383,7 +386,13 @@ export async function GET(req: Request) {
       videos,
       shorts: [],
     };
-    return withCors(NextResponse.json({ videos: payload.videos, shorts: payload.shorts, fallback: false }), req);
+    return withCors(
+      NextResponse.json(
+        { videos: payload.videos, shorts: payload.shorts, fallback: false },
+        { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=600, stale-while-revalidate=86400' } }
+      ),
+      req
+    );
   } catch (err: unknown) {
     const videos = await fetchAllVideosWithInnertube(channelId);
     const rssVideos = videos.length > 0 ? videos : await fetchVideosFromRss(channelId).catch(() => []);
@@ -393,7 +402,10 @@ export async function GET(req: Request) {
       err instanceof Error ? err.message : "Unknown error occurred";
     console.warn(`YouTube videos fallback active: ${errorMessage}`);
     return withCors(
-      NextResponse.json({ videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: !liveFeed, error: errorMessage }),
+      NextResponse.json(
+        { videos: fallbackFeed.videos, shorts: fallbackFeed.shorts, fallback: !liveFeed, error: errorMessage },
+        { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=600, stale-while-revalidate=86400' } }
+      ),
       req
     );
   }

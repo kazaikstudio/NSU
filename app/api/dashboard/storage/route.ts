@@ -83,6 +83,12 @@ export async function GET(request: Request) {
   const isTalkShowFilter = sourceFilter === 'talk-show';
   const isPrimaryFilter = sourceFilter === 'primary';
 
+  // Pagination caps on the public lists (home feed, Comedy row) so the browser
+  // never downloads the entire table just to render a row of 5 cards.
+  const rawLimit = url.searchParams.get('limit');
+  const limit = rawLimit ? Math.min(500, Math.max(1, Number(rawLimit) || 50)) : 500;
+  const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
+
   if (!pool) {
     return NextResponse.json({
       items: getInMemoryStorageItems().slice().reverse(),

@@ -285,10 +285,13 @@ export async function GET(request: Request) {
     if (!trackById.has(track.id)) trackById.set(track.id, track);
   }
 
-  return NextResponse.json({
-    tracks: Array.from(trackById.values()),
-    artists,
-    videos,
-    dbAvailable,
-  });
+  return NextResponse.json(
+    {
+      tracks: Array.from(trackById.values()),
+      artists,
+      videos,
+      dbAvailable,
+    },
+    { headers: { 'Cache-Control': 'public, max-age=60, s-maxage=600, stale-while-revalidate=86400' } }
+  );
 }

@@ -63,13 +63,11 @@ export default function ArtistList({ searchTerm }: { searchTerm: string }) {
     };
 
     void loadArtists();
-    const interval = window.setInterval(loadArtists, 30000);
     const handleFocus = () => void loadArtists();
     window.addEventListener('focus', handleFocus);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
     };
   }, []);

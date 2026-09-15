@@ -130,12 +130,10 @@ export default function AudioPageClient() {
     };
 
     void loadArtists();
-    const interval = window.setInterval(loadArtists, 30000);
     const handleFocus = () => void loadArtists();
     window.addEventListener('focus', handleFocus);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
     };
   }, []);
@@ -158,12 +156,10 @@ export default function AudioPageClient() {
     };
 
     void loadMusicCount();
-    const interval = window.setInterval(loadMusicCount, 30000);
     const handleFocus = () => void loadMusicCount();
     window.addEventListener('focus', handleFocus);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
     };
   }, []);
