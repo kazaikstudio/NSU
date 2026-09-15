@@ -202,7 +202,7 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
         <audio
           ref={audioRef}
           src={track.fileUrl}
-          preload="metadata"
+          preload="none"
           className="sr-only"
           onEnded={onEnded}
           aria-label={`${track.title} audio`}

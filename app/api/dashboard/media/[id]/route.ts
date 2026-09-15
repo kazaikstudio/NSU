@@ -4,19 +4,19 @@ import { getMediaDownloadCount, incrementMediaPlayCount, recordDownloadRegion } 
 
 export const runtime = 'nodejs';
 
-async function fetchGoogleDriveFile(id: string, range?: string) {
+async function fetchGoogleDriveFile(id: string, range?: string, method: 'GET' | 'HEAD' = 'GET') {
   const baseUrl = `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`;
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
     ...(range ? { Range: range } : {}),
   };
 
-  const response = await fetch(baseUrl, { headers, redirect: 'follow' });
+  const response = await fetch(baseUrl, { headers, redirect: 'follow', method });
 
   const isHtml = (res: Response) =>
     res.status === 200 && res.headers.get('content-type')?.includes('text/html');
 
-  if (!isHtml(response)) return response;
+  if (!isHtml(response) || method === 'HEAD') return response;
 
   const bodyText = await response.text();
 
@@ -53,7 +53,11 @@ async function fetchGoogleDriveFile(id: string, range?: string) {
   );
 }
 
-export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+async function handleMediaRequest(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+  method: 'GET' | 'HEAD',
+) {
   const { id } = await context.params;
   if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
     return NextResponse.json({ error: 'Invalid media file id' }, { status: 400 });
@@ -65,9 +69,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const artistName = searchParams.get('artist') || undefined;
   const title = searchParams.get('title') || undefined;
   const downloadRegion = searchParams.get('region');
+  const isDownload = searchParams.get('download') === '1';
   let updatedDownloadCount: number | null = null;
 
-  if (searchParams.get('download') === '1') {
+  if (isDownload) {
     try {
       updatedDownloadCount = await incrementMediaPlayCount(id);
       if (downloadRegion) {
@@ -86,7 +91,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       console.error('Unable to record artist play:', error);
     }
   }
-  const response = await fetchGoogleDriveFile(id, range ?? undefined);
+
+  const response = await fetchGoogleDriveFile(id, range ?? undefined, method);
 
   if (!response.ok && response.status !== 206) {
     return NextResponse.json({ error: 'Unable to load audio from Google Drive' }, { status: response.status });
@@ -104,7 +110,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (contentLength) headers.set('Content-Length', contentLength);
   if (contentRange) headers.set('Content-Range', contentRange);
   headers.set('Accept-Ranges', 'bytes');
-  headers.set('Cache-Control', 'public, max-age=3600');
+  headers.set('Vary', 'Range');
+  headers.set(
+    'Cache-Control',
+    isDownload ? 'no-store' : 'public, max-age=604800, stale-while-revalidate=86400',
+  );
 
   if (updatedDownloadCount !== null) {
     headers.set('X-NSU-Download-Count', String(updatedDownloadCount));
@@ -118,5 +128,13 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     headers.set('X-NSU-Thumbnail-Url', getAudioDownloadThumbnailUrl());
   }
 
-  return new NextResponse(response.body, { status: response.status, headers });
+  return new NextResponse(method === 'HEAD' ? null : response.body, { status: response.status, headers });
+}
+
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  return handleMediaRequest(request, context, 'GET');
+}
+
+export async function HEAD(request: Request, context: { params: Promise<{ id: string }> }) {
+  return handleMediaRequest(request, context, 'HEAD');
 }

@@ -381,7 +381,7 @@ export default function FeaturedAudioCards() {
 
   return (
   <div className="w-full max-w-9xl mx-auto">
-    <audio ref={audioRef} />
+    <audio ref={audioRef} preload="none" />
 
     <div
       ref={sliderRef}

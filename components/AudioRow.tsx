@@ -19,6 +19,7 @@ interface AudioRowProps {
   title: string;
   fileUrl?: string;
   album?: string | null;
+  resolution?: string;
   fileName?: string;
   createdAt?: string;
   artistName?: string;
@@ -363,7 +364,7 @@ export default function AudioRow({
   const audioTag = (
     <audio
       ref={audioRef}
-      preload="metadata"
+      preload="none"
       src={src}
       onPlay={() => {
         setIsPlaying(true);
