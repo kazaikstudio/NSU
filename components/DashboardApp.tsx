@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { LayoutDashboard, Users, History, HardDrive, LogOut, Video } from 'lucide-react';
 import { clampUploadProgress, formatUploadStatusMessage } from '@/lib/talk-show-upload';
+import { getStoredThumbnailUrl } from '@/lib/media-url';
 import type { DashboardUser } from '@/lib/dashboard-auth';
 import DashboardCharts from '@/components/DashboardCharts';
 
@@ -42,10 +43,7 @@ interface StorageItem {
 function getStorageThumbnailUrl(fileUrl: string, thumbnailUrl?: string | null) {
   if (thumbnailUrl) return thumbnailUrl;
 
-  const driveId = fileUrl.match(/\/api\/dashboard\/media\/([^/?]+)/)?.[1]
-    || fileUrl.match(/[?&]id=([^&]+)/)?.[1];
-
-  return driveId ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveId)}&sz=w320` : null;
+  return getStoredThumbnailUrl(fileUrl, null, 320);
 }
 
 interface HistoryItem {
@@ -140,6 +138,8 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
 
   const [newArtistName, setNewArtistName] = useState('');
   const [newArtistGenre, setNewArtistGenre] = useState('');
+  const [savingArtist, setSavingArtist] = useState(false);
+  const [artistCreateProgress, setArtistCreateProgress] = useState(0);
 
   const [storageItems, setStorageItems] = useState<StorageItem[]>(() => dashboardDataCache?.storageItems ?? []);
   const [totalUploads, setTotalUploads] = useState(() => dashboardDataCache?.totalUploads ?? 0);
@@ -188,7 +188,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
         if (!membersResponse.ok) throw new Error(membersData.error || 'Unable to load members');
         if (!mediaResponse.ok) throw new Error(mediaData.error || 'Unable to load upload count');
         if (!historyResponse.ok) throw new Error(historyData.error || 'Unable to load activity history');
-        if (!storageResponse.ok) throw new Error(storageData.error || 'Unable to load Drive storage');
+        if (!storageResponse.ok) throw new Error(storageData.error || 'Unable to load storage');
         if (!regionsResponse.ok) throw new Error(regionsData.error || 'Unable to load download regions');
 
         setArtists(artistsData.artists || []);
@@ -276,9 +276,16 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
 
   const handleAddArtist = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newArtistName || !newArtistGenre) return;
+    if (!newArtistName || !newArtistGenre || savingArtist) return;
 
     setArtistMessage('');
+    setSavingArtist(true);
+    setArtistCreateProgress(10);
+
+    const progressTimer = window.setInterval(() => {
+      setArtistCreateProgress((current) => Math.min(current + 18, 92));
+    }, 180);
+
     try {
       const response = await fetch('/api/dashboard/artists', {
         method: 'POST',
@@ -288,15 +295,23 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to save artist');
 
+      setArtistCreateProgress(100);
       setArtists((prev) => [data.artist, ...prev]);
       setNewArtistName('');
       setNewArtistGenre('');
       setIsModalOpen(false);
       setArtistMessage('Artist added successfully.');
     } catch (error) {
+      setArtistCreateProgress(0);
       setArtistMessage(error instanceof Error ? error.message : 'Unable to save artist');
+    } finally {
+      window.clearInterval(progressTimer);
+      setSavingArtist(false);
+      window.setTimeout(() => {
+        setArtistCreateProgress(0);
+      }, 500);
     }
-  }, [newArtistName, newArtistGenre]);
+  }, [newArtistName, newArtistGenre, savingArtist]);
 
   const handleDeleteArtist = useCallback(async (id: string) => {
     const response = await fetch(`/api/dashboard/artists/${id}`, { method: 'DELETE' });
@@ -1201,7 +1216,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
               <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
                 <h3 className="text-base font-bold tracking-tight">Talk Show Uploads</h3>
                 <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Drag & drop video files here or click to choose a file to upload to the Talk Show Drive.
+                  Drag & drop video files here or click to choose a file to upload to storage.
                 </p>
 
                 <form
@@ -1580,7 +1595,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                   <div>
                     <h2 className="text-xl font-bold tracking-tight">Storage Overview</h2>
                     <p className={`mt-1 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                      Google Drive capacity used by your uploaded media.
+                      Storage capacity used by your uploaded media.
                     </p>
                   </div>
                   <div className="inline-flex items-center gap-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 px-3.5 py-1.5 shadow-sm">
@@ -1616,7 +1631,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                                 {entry.limit ? `${formatBytes(entry.limit)} limit` : 'No storage limit'}
                               </p>
                               <div className="flex items-center justify-end gap-3 text-xs font-medium pt-1">
-                                <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>My Drive: <strong className="font-mono text-indigo-400">{formatBytes(entry.usedInDrive)}</strong></span>
+                                <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>In use: <strong className="font-mono text-indigo-400">{formatBytes(entry.usedInDrive)}</strong></span>
                                 <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Trash: <strong className="font-mono text-slate-300">{formatBytes(entry.usedInTrash)}</strong></span>
                               </div>
                             </div>
@@ -1651,7 +1666,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                       <div>
                         <p className="text-3xl font-bold tracking-tight">{formatBytes(driveStorage.used)}</p>
-                        <p className="text-xs font-medium text-slate-400">used across Drive</p>
+                        <p className="text-xs font-medium text-slate-400">used across storage</p>
                       </div>
                       <p className="text-sm font-semibold text-slate-300">
                         {driveStorage.limit ? `${formatBytes(driveStorage.limit)} total limit` : 'No storage limit reported'}
@@ -1668,13 +1683,13 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                     ) : null}
 
                     <div className="flex flex-wrap gap-6 pt-2 text-xs font-medium text-slate-400 border-t border-slate-800/80">
-                      <span>My Drive: <strong className="font-mono text-indigo-400">{formatBytes(driveStorage.usedInDrive)}</strong></span>
+                      <span>In use: <strong className="font-mono text-indigo-400">{formatBytes(driveStorage.usedInDrive)}</strong></span>
                       <span>Trash: <strong className="font-mono text-slate-300">{formatBytes(driveStorage.usedInTrash)}</strong></span>
                     </div>
                   </div>
                 ) : (
                   <div className="mt-6 rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-center text-sm font-medium text-rose-400">
-                    {driveStorageError || 'Drive storage usage is unavailable.'}
+                    {driveStorageError || 'Storage usage is unavailable.'}
                   </div>
                 )}
               </div>
@@ -1794,6 +1809,21 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                 />
               </div>
 
+              {savingArtist && (
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                    <span>Creating profile</span>
+                    <span>{artistCreateProgress}%</span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-800/80">
+                    <div
+                      className="h-full rounded-full bg-linear-to-r from-indigo-500 via-blue-500 to-cyan-400 transition-all duration-300"
+                      style={{ width: `${artistCreateProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Footer Actions */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-700/30">
                 <button
@@ -1807,9 +1837,10 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-linear-to-r from-indigo-600 to-indigo-700 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30 hover:from-indigo-500 hover:to-indigo-600 transition-all"
+                  disabled={savingArtist}
+                  className="rounded-xl bg-linear-to-r from-indigo-600 to-indigo-700 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30 hover:from-indigo-500 hover:to-indigo-600 transition-all disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Add Artist
+                  {savingArtist ? 'Creating…' : 'Add Artist'}
                 </button>
               </div>
             </form>

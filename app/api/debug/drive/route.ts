@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { testDriveAuth } from '@/lib/google-drive';
+import { testBucketAuth } from '@/lib/railway-storage';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
-  const result = await testDriveAuth();
+  const result = await testBucketAuth();
   if (result.ok) {
     return NextResponse.json({ ok: true });
   }

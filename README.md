@@ -20,12 +20,39 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 ## Environment variables
 
-This app requires a YouTube Data API key for the `/api/youtube/videos` route.
+This app requires a few server-side variables for the live `nollstudios.org` deployment and the Railway backend.
 
-Add the following environment variable in Railway (and locally if needed):
+Add the following settings to your Railway service variables (and locally if needed):
 
 ```bash
+# Public site origin
+NEXT_PUBLIC_SITE_URL=https://nollstudios.org
+SITE_URL=https://nollstudios.org
+APP_URL=https://nollstudios.org
+
+# Postgres / Railway database
+DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@your-public-host.proxy.rlwy.net:PORT/railway
+DATABASE_PUBLIC_URL=postgresql://postgres:YOUR_PASSWORD@your-public-host.proxy.rlwy.net:PORT/railway
+POSTGRES_URL=postgresql://postgres:YOUR_PASSWORD@your-public-host.proxy.rlwy.net:PORT/railway
+PGHOST=your-public-host.proxy.rlwy.net
+PGPORT=5432
+PGDATABASE=railway
+PGUSER=postgres
+PGPASSWORD=YOUR_PASSWORD
+
+# Dashboard auth
+DASHBOARD_EMAIL=admin@nollstudios.org
+DASHBOARD_PASSWORD=change-me
+
+# YouTube
 YOUTUBE_API_KEY=your_api_key_here
+
+# Railway bucket storage
+RAILWAY_BUCKET_ENDPOINT=https://your-bucket-endpoint.example
+RAILWAY_BUCKET_NAME=your-bucket-name
+RAILWAY_BUCKET_ACCESS_KEY=your-access-key
+RAILWAY_BUCKET_SECRET_KEY=your-secret-key
+RAILWAY_BUCKET_REGION=auto
 ```
 
 If you must, `NEXT_PUBLIC_YOUTUBE_API_KEY` or `VITE_YOUTUBE_API_KEY` may also be used, but `YOUTUBE_API_KEY` is recommended for the server-side route.

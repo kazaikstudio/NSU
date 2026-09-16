@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { buildAudioDownloadName, getAudioDownloadThumbnailUrl } from '@/lib/download';
-import { getMediaDownloadCount, incrementMediaPlayCount, recordDownloadRegion } from '@/lib/media-play';
+import { getArtistTotalDownloads, getArtistTotalPlays, getMediaDownloadCount, getMediaPlayCount, incrementMediaPlayCount, incrementMediaPlayCountForListen, recordDownloadRegion } from '@/lib/media-play';
+import { getBucketObject, headBucketObject, isBucketKey, isBucketNotFoundError } from '@/lib/railway-storage';
 
 export const runtime = 'nodejs';
 
@@ -53,13 +54,33 @@ async function fetchGoogleDriveFile(id: string, range?: string, method: 'GET' | 
   );
 }
 
+async function fetchBucketFile(id: string, range?: string, method: 'GET' | 'HEAD' = 'GET') {
+  try {
+    return method === 'HEAD' ? await headBucketObject(id) : await getBucketObject(id, range);
+  } catch (error) {
+    if (!isBucketNotFoundError(error)) {
+      console.error('Unable to load audio from the Railway bucket:', error);
+    }
+    return NextResponse.json({ error: 'Unable to load audio from the Railway bucket' }, { status: 404 });
+  }
+}
+
+async function fetchMediaFile(id: string, range?: string, method: 'GET' | 'HEAD' = 'GET') {
+  if (isBucketKey(id)) {
+    return fetchBucketFile(id, range, method);
+  }
+
+  return fetchGoogleDriveFile(id, range ?? undefined, method);
+}
+
 async function handleMediaRequest(
   request: Request,
   context: { params: Promise<{ id: string }> },
   method: 'GET' | 'HEAD',
 ) {
   const { id } = await context.params;
-  if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+  const decodedId = typeof id === 'string' ? decodeURIComponent(id) : '';
+  if (!decodedId || !/^[A-Za-z0-9._/-]+$/.test(decodedId) || decodedId.includes('..')) {
     return NextResponse.json({ error: 'Invalid media file id' }, { status: 400 });
   }
 
@@ -72,9 +93,14 @@ async function handleMediaRequest(
   const isDownload = searchParams.get('download') === '1';
   let updatedDownloadCount: number | null = null;
 
+  let artistTotalDownloads: number | null = null;
+  let trackPlays: number | null = null;
+  let artistTotalPlays: number | null = null;
+
   if (isDownload) {
     try {
-      updatedDownloadCount = await incrementMediaPlayCount(id);
+      updatedDownloadCount = await incrementMediaPlayCount(decodedId);
+      artistTotalDownloads = await getArtistTotalDownloads(decodedId);
       if (downloadRegion) {
         await recordDownloadRegion(downloadRegion);
       }
@@ -85,22 +111,30 @@ async function handleMediaRequest(
 
   if (searchParams.get('play') === '1') {
     try {
-      const trackDownloads = await getMediaDownloadCount(id);
-      return NextResponse.json({ trackDownloads });
+      trackPlays = await incrementMediaPlayCountForListen(decodedId);
+      artistTotalPlays = await getArtistTotalPlays(decodedId);
+      return NextResponse.json({ trackDownloads: await getMediaDownloadCount(decodedId), trackPlays, artistTotalPlays });
     } catch (error) {
       console.error('Unable to record artist play:', error);
+      try {
+        trackPlays = await getMediaPlayCount(decodedId);
+        artistTotalPlays = await getArtistTotalPlays(decodedId);
+        return NextResponse.json({ trackDownloads: await getMediaDownloadCount(decodedId), trackPlays, artistTotalPlays });
+      } catch {
+        return NextResponse.json({ error: 'Unable to record artist play' }, { status: 500 });
+      }
     }
   }
 
-  const response = await fetchGoogleDriveFile(id, range ?? undefined, method);
+  const response = await fetchMediaFile(decodedId, range ?? undefined, method);
 
   if (!response.ok && response.status !== 206) {
-    return NextResponse.json({ error: 'Unable to load audio from Google Drive' }, { status: response.status });
+    return NextResponse.json({ error: 'Unable to load audio from storage' }, { status: response.status });
   }
 
   const contentType = response.headers.get('content-type');
   if (contentType && /text\/html|text\/plain|application\/json/i.test(contentType)) {
-    return NextResponse.json({ error: 'Google Drive returned a text page instead of audio' }, { status: 502 });
+    return NextResponse.json({ error: 'Storage returned a text page instead of audio' }, { status: 502 });
   }
 
   const headers = new Headers();
@@ -118,6 +152,15 @@ async function handleMediaRequest(
 
   if (updatedDownloadCount !== null) {
     headers.set('X-NSU-Download-Count', String(updatedDownloadCount));
+  }
+  if (artistTotalDownloads !== null) {
+    headers.set('X-NSU-Artist-Download-Count', String(artistTotalDownloads));
+  }
+  if (trackPlays !== null) {
+    headers.set('X-NSU-Play-Count', String(trackPlays));
+  }
+  if (artistTotalPlays !== null) {
+    headers.set('X-NSU-Artist-Play-Count', String(artistTotalPlays));
   }
 
   if (requestedFilename) {

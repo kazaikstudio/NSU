@@ -18,6 +18,42 @@ export async function getMediaDownloadCount(
   return Number(result.rows[0]?.trackDownloads ?? 0);
 }
 
+export async function getArtistTotalDownloads(
+  driveFileId: string,
+  queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),
+) {
+  await ensureDatabaseReady();
+
+  const result = await queryFn(
+    `SELECT artists.total_downloads AS "artistDownloads"
+     FROM artist_media
+     INNER JOIN artists ON artists.id::text = artist_media.artist_id
+     WHERE artist_media.drive_file_id = $1 AND artist_media.kind = 'track'
+     LIMIT 1`,
+    [driveFileId],
+  );
+
+  return Number(result.rows[0]?.artistDownloads ?? 0);
+}
+
+export async function getArtistTotalPlays(
+  driveFileId: string,
+  queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),
+) {
+  await ensureDatabaseReady();
+
+  const result = await queryFn(
+    `SELECT artists.total_plays AS "artistPlays"
+     FROM artist_media
+     INNER JOIN artists ON artists.id::text = artist_media.artist_id
+     WHERE artist_media.drive_file_id = $1 AND artist_media.kind = 'track'
+     LIMIT 1`,
+    [driveFileId],
+  );
+
+  return Number(result.rows[0]?.artistPlays ?? 0);
+}
+
 export async function incrementMediaPlayCount(
   driveFileId: string,
   queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),
@@ -47,6 +83,52 @@ export async function incrementMediaPlayCount(
 
   const nextValue = Number(result.rows[0]?.trackDownloads ?? 0);
   return nextValue;
+}
+
+export async function getMediaPlayCount(
+  driveFileId: string,
+  queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),
+) {
+  await ensureDatabaseReady();
+
+  const result = await queryFn(
+    `SELECT play_count AS "trackPlays"
+     FROM artist_media
+     WHERE drive_file_id = $1 AND kind = 'track'`,
+    [driveFileId],
+  );
+
+  return Number(result.rows[0]?.trackPlays ?? 0);
+}
+
+export async function incrementMediaPlayCountForListen(
+  driveFileId: string,
+  queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),
+) {
+  await ensureDatabaseReady();
+
+  await queryFn(
+    `UPDATE artist_media
+     SET play_count = COALESCE(play_count, 0) + 1
+     WHERE drive_file_id = $1 AND kind = 'track'`,
+    [driveFileId],
+  );
+
+  await queryFn(
+    `UPDATE artists
+     SET total_plays = COALESCE(total_plays, 0) + 1
+     WHERE id::text = (SELECT artist_id FROM artist_media WHERE drive_file_id = $1 LIMIT 1)`,
+    [driveFileId],
+  );
+
+  const result = await queryFn(
+    `SELECT play_count AS "trackPlays"
+     FROM artist_media
+     WHERE drive_file_id = $1 AND kind = 'track'`,
+    [driveFileId],
+  );
+
+  return Number(result.rows[0]?.trackPlays ?? 0);
 }
 
 export async function recordDownloadRegion(

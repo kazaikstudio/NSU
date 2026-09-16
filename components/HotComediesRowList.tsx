@@ -1,8 +1,10 @@
 'use client';
 
 import type { KeyboardEvent, MouseEvent } from 'react';
+import Image from 'next/image';
 import { Download } from 'lucide-react';
 import { registerClientDownload } from '@/lib/download-controls';
+import { extractStoredFileId } from '@/lib/media-url';
 
 type HotComedyItem = {
   id: string;
@@ -24,7 +26,7 @@ export default function HotComediesRowList({ items, onOpenAction }: HotComediesR
 
     const safeTitle = (item.title || 'download').trim() || 'download';
     const fileUrl = item.fileUrl || '';
-    const fileId = fileUrl.match(/[?&]id=([^&]+)/)?.[1];
+    const fileId = extractStoredFileId(fileUrl);
     const downloadUrl = fileId
       ? `/api/dashboard/media/${fileId}?download=1&filename=${encodeURIComponent(`${safeTitle}.mp4`)}`
       : fileUrl;
@@ -119,9 +121,11 @@ export default function HotComediesRowList({ items, onOpenAction }: HotComediesR
           className="group relative flex items-center gap-3 rounded-xl bg-white/10 p-2.5 text-left shadow-sm transition-all duration-300 hover:bg-card1/10 hover:border-card1/40"
         >
           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-black sm:h-20 sm:w-20">
-            <img
+            <Image
               src={item.thumbnail}
               alt={item.title}
+              width={80}
+              height={80}
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
           </div>

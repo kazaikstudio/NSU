@@ -358,7 +358,7 @@ export default function ArtistDetailPage() {
 
     setIsUploading(true);
     setUploadProgress(0);
-    setProcessMessage('Uploading track to Google Drive...');
+    setProcessMessage('Uploading track to storage...');
     try {
       const media = await uploadMedia(selectedFile, 'track', trackTitle, albumName || 'Single', featuredArtistName, setUploadProgress);
       setTracks((prevTracks) => [{
@@ -376,7 +376,7 @@ export default function ArtistDetailPage() {
       setFeaturedArtistName('');
       setAlbumName('');
       if (fileInputRef.current) fileInputRef.current.value = '';
-      setProcessMessage('Track saved to Google Drive and added to the list.');
+      setProcessMessage('Track saved to storage and added to the list.');
       setTimeout(() => {
         setProcessMessage('');
         setUploadProgress(0);
@@ -546,14 +546,14 @@ export default function ArtistDetailPage() {
       const imageUploads = [selectedBanner, selectedProfile].filter(Boolean).length;
       let completedUploads = 0;
       if (selectedBanner) {
-        setProcessMessage('Uploading banner to Google Drive...');
+        setProcessMessage('Uploading banner to storage...');
         const media = await uploadMedia(selectedBanner, 'banner', '', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
         setBannerUrl(media.fileUrl || null);
         setSelectedBanner(null);
         completedUploads += 1;
       }
       if (selectedProfile) {
-        setProcessMessage('Uploading profile picture to Google Drive...');
+        setProcessMessage('Uploading profile picture to storage...');
         const media = await uploadMedia(selectedProfile, 'profile', '', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
         setProfileUrl(media.fileUrl || null);
         setSelectedProfile(null);

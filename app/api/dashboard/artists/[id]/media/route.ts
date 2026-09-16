@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool, { ensureDatabaseReady } from '@/lib/db';
-import { deleteFromGoogleDrive, saveFileLocally, uploadToGoogleDrive } from '@/lib/google-drive';
+import { saveFileLocally } from '@/lib/local-storage';
+import { deleteStoredObject, uploadToBucket } from '@/lib/railway-storage';
 import { recordActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
@@ -26,12 +27,14 @@ async function ensureMediaTable() {
       thumbnail_url TEXT,
       thumbnail_drive_file_id TEXT,
       featured_artist_name TEXT,
+      play_count INTEGER NOT NULL DEFAULT 0,
       download_count INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
   await pool.query(`
     ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS play_count INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
     ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
@@ -46,7 +49,7 @@ export async function GET(_request: Request, context: Context) {
   try {
     await ensureMediaTable();
     const { rows } = await pool.query(
-      `SELECT id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", drive_file_id AS "driveFileId", thumbnail_url AS "thumbnailUrl", download_count AS "downloadCount", created_at AS "createdAt"
+      `SELECT id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", drive_file_id AS "driveFileId", thumbnail_url AS "thumbnailUrl", play_count AS "playCount", download_count AS "downloadCount", created_at AS "createdAt"
        FROM artist_media WHERE artist_id = $1 ORDER BY created_at DESC`,
       [id]
     );
@@ -90,13 +93,13 @@ export async function PUT(request: Request, context: Context) {
     let thumbnailUrl: string | null = null;
     let thumbnailDriveFileId: string | null = null;
     if (thumbnail instanceof File) {
-      const driveFile = await uploadToGoogleDrive({
+      const storageFile = await uploadToBucket({
         name: `artist-thumbnail-${Date.now()}-${thumbnail.name}`,
         mimeType: thumbnail.type,
         bytes: await thumbnail.arrayBuffer(),
       });
-      thumbnailUrl = driveFile.publicUrl;
-      thumbnailDriveFileId = driveFile.id;
+      thumbnailUrl = storageFile.publicUrl;
+      thumbnailDriveFileId = storageFile.id;
     }
 
     const previousThumbnail = thumbnail instanceof File
@@ -122,7 +125,7 @@ export async function PUT(request: Request, context: Context) {
 
     const previous = previousThumbnail.rows[0];
     if (thumbnail instanceof File && previous?.thumbnailDriveFileId) {
-      await Promise.allSettled([deleteFromGoogleDrive(previous.thumbnailDriveFileId)]);
+      await Promise.allSettled([deleteStoredObject(previous.thumbnailDriveFileId)]);
     }
 
     await recordActivity({
@@ -161,8 +164,8 @@ export async function DELETE(request: Request, context: Context) {
     const media = rows[0];
     if (media.driveFileId || media.thumbnailDriveFileId) {
       await Promise.allSettled([
-        ...(media.driveFileId ? [deleteFromGoogleDrive(media.driveFileId)] : []),
-        ...(media.thumbnailDriveFileId ? [deleteFromGoogleDrive(media.thumbnailDriveFileId)] : []),
+        ...(media.driveFileId ? [deleteStoredObject(media.driveFileId)] : []),
+        ...(media.thumbnailDriveFileId ? [deleteStoredObject(media.thumbnailDriveFileId)] : []),
       ]);
     }
 
@@ -198,18 +201,18 @@ export async function POST(request: Request, context: Context) {
       return NextResponse.json({ error: 'Track title is required' }, { status: 400 });
     }
 
-    let driveFile: { id: string; publicUrl: string; name: string; mimeType: string };
+    let storageFile: { id: string; publicUrl: string; name: string; mimeType: string };
     let uploadError: string | null = null;
     try {
-      driveFile = await uploadToGoogleDrive({
+      storageFile = await uploadToBucket({
         name: file.name,
         mimeType: file.type || 'application/octet-stream',
         bytes: await file.arrayBuffer(),
       });
     } catch (error) {
       uploadError = error instanceof Error ? error.message : String(error);
-      console.warn('Google Drive upload failed, falling back to local storage', uploadError);
-      driveFile = await saveFileLocally({
+      console.warn('Bucket upload failed, falling back to local storage', uploadError);
+      storageFile = await saveFileLocally({
         name: file.name,
         mimeType: file.type || 'application/octet-stream',
         bytes: await file.arrayBuffer(),
@@ -232,17 +235,17 @@ export async function POST(request: Request, context: Context) {
         `INSERT INTO artist_media (id, artist_id, kind, title, album, featured_artist_name, file_name, mime_type, file_url, drive_file_id, download_count)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0)
          RETURNING id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", download_count AS "downloadCount", created_at AS "createdAt"`,
-        [mediaId, artistId, kind, mediaTitle, album, featuredArtistName, file.name, file.type || 'application/octet-stream', driveFile.publicUrl, driveFile.id]
+        [mediaId, artistId, kind, mediaTitle, album, featuredArtistName, file.name, file.type || 'application/octet-stream', storageFile.publicUrl, storageFile.id]
       );
 
       if (kind === 'banner' || kind === 'profile') {
-        await pool.query(`UPDATE artists SET ${kind === 'banner' ? 'banner_url' : 'profile_url'} = $1 WHERE id::text = $2`, [driveFile.publicUrl, artistId]);
+        await pool.query(`UPDATE artists SET ${kind === 'banner' ? 'banner_url' : 'profile_url'} = $1 WHERE id::text = $2`, [storageFile.publicUrl, artistId]);
         await pool.query('DELETE FROM artist_media WHERE id = ANY($1::text[])', [previousMedia.rows.map((media) => media.id)]);
         await Promise.allSettled(
           previousMedia.rows
             .map((media) => media.driveFileId)
             .filter((fileId): fileId is string => Boolean(fileId))
-            .map((fileId) => deleteFromGoogleDrive(fileId))
+            .map((fileId) => deleteStoredObject(fileId))
         );
       }
 
@@ -264,7 +267,7 @@ export async function POST(request: Request, context: Context) {
           album,
           fileName: file.name,
           mimeType: file.type || 'application/octet-stream',
-          fileUrl: driveFile.publicUrl,
+          fileUrl: storageFile.publicUrl,
           downloadCount: 0,
           createdAt: new Date().toISOString(),
         },

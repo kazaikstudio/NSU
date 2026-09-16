@@ -140,14 +140,15 @@ export async function POST(request: Request) {
     await ensureArtistsTable();
 
     const artistId = `artist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const rowId = `artist-row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const result = await pool.query(
       `
-        INSERT INTO artists (artist_id, name, genre, tracks_count, status)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO artists (id, artist_id, name, genre, tracks_count, status)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id::text AS id, name, genre, tracks_count AS "tracksCount", status, profile_url AS "profileUrl"
       `,
-      [artistId, name, genre, 0, 'Active']
+      [rowId, artistId, name, genre, 0, 'Active']
     );
 
     const artist = result.rows[0];
@@ -172,4 +173,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }
-

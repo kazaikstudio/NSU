@@ -7,6 +7,7 @@ import DockBar from "../../components/DockBar";
 import HotComediesRowList from "../../components/HotComediesRowList";
 import DownloadModal from "../../components/DownloadModal";
 import { getClientCachedData, hasClientCachedData } from "@/lib/client-cache";
+import { getStoredThumbnailUrl } from "@/lib/media-url";
 
 type HomeMediaItem = {
   id: string;
@@ -30,12 +31,7 @@ type TalkShowStorageItem = {
 };
 
 function getTalkShowThumbnailUrl(fileUrl: string | undefined) {
-  if (!fileUrl) return null;
-
-  const driveId = fileUrl.match(/\/api\/dashboard\/media\/([^/?]+)/)?.[1]
-    || fileUrl.match(/[?&]id=([^&]+)/)?.[1];
-
-  return driveId ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveId)}&sz=w640` : null;
+  return getStoredThumbnailUrl(fileUrl, null, 640);
 }
 
 const CHANNEL_ID = "UCDwZ_ENzU7LIDA5F8EYf1Jg";

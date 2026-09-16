@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import { artistsSeed } from '@/lib/artists';
-import { deleteFromGoogleDrive } from '@/lib/google-drive';
+import { deleteStoredObject } from '@/lib/railway-storage';
 import { recordActivity } from '@/lib/activity';
 import { getDatabaseConnectionString } from '@/lib/db';
 
@@ -42,6 +42,8 @@ async function ensureArtistsTable() {
           name TEXT NOT NULL,
           genre TEXT NOT NULL,
           tracks_count INTEGER NOT NULL DEFAULT 0,
+          total_plays INTEGER NOT NULL DEFAULT 0,
+          total_downloads INTEGER NOT NULL DEFAULT 0,
           status TEXT NOT NULL DEFAULT 'Active',
           bio TEXT DEFAULT '',
           followers INTEGER DEFAULT 0,
@@ -59,10 +61,11 @@ async function ensureArtistsTable() {
         ADD COLUMN IF NOT EXISTS artist_id TEXT,
         ADD COLUMN IF NOT EXISTS email TEXT,
         ADD COLUMN IF NOT EXISTS tracks_count INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS total_downloads INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS total_plays INTEGER NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Active',
         ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT '',
         ADD COLUMN IF NOT EXISTS followers INTEGER DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS total_downloads INTEGER NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS featured_track TEXT DEFAULT '',
         ADD COLUMN IF NOT EXISTS monthly_listeners INTEGER DEFAULT 0,
         ADD COLUMN IF NOT EXISTS banner_url TEXT,
@@ -102,13 +105,21 @@ async function ensureArtistMediaTable() {
       mime_type TEXT NOT NULL,
       file_url TEXT NOT NULL,
       drive_file_id TEXT,
+      thumbnail_url TEXT,
+      thumbnail_drive_file_id TEXT,
+      featured_artist_name TEXT,
+      play_count INTEGER NOT NULL DEFAULT 0,
       download_count INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
   await pool.query(`
     ALTER TABLE artist_media
-    ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0
+    ADD COLUMN IF NOT EXISTS play_count INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
+    ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
+    ADD COLUMN IF NOT EXISTS featured_artist_name TEXT
   `);
 }
 
@@ -129,6 +140,7 @@ export async function GET(
       bio: fallbackArtist.bio,
       followers: fallbackArtist.followers,
       totalDownloads: 0,
+      totalPlays: 0,
       featuredTrack: fallbackArtist.featuredTrack,
       monthlyListeners: fallbackArtist.monthlyListeners,
       bannerUrl: fallbackArtist.bannerUrl || null,
@@ -151,6 +163,7 @@ export async function GET(
           bio,
           followers,
           total_downloads AS "totalDownloads",
+          total_plays AS "totalPlays",
           featured_track AS "featuredTrack",
           monthly_listeners AS "monthlyListeners",
           banner_url AS "bannerUrl",
@@ -177,6 +190,7 @@ export async function GET(
         bio: artist.bio || '',
         followers: Number(artist.followers || 0),
         totalDownloads: Number(artist.totalDownloads || 0),
+        totalPlays: Number(artist.totalPlays || 0),
         featuredTrack: artist.featuredTrack || '',
         monthlyListeners: Number(artist.monthlyListeners || 0),
         bannerUrl: artist.bannerUrl || null,
@@ -198,6 +212,7 @@ export async function GET(
       bio: fallbackArtist.bio,
       followers: fallbackArtist.followers,
       totalDownloads: 0,
+      totalPlays: 0,
       featuredTrack: fallbackArtist.featuredTrack,
       monthlyListeners: fallbackArtist.monthlyListeners,
       bannerUrl: fallbackArtist.bannerUrl || null,
@@ -227,7 +242,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       `UPDATE artists
        SET name = $1, genre = $2, updated_at = NOW()
        WHERE id::text = $3
-       RETURNING id, name, genre, tracks_count AS "tracksCount", status, bio, followers, total_downloads AS "totalDownloads", featured_track AS "featuredTrack", monthly_listeners AS "monthlyListeners", banner_url AS "bannerUrl", profile_url AS "profileUrl"`,
+       RETURNING id, name, genre, tracks_count AS "tracksCount", status, bio, followers, total_downloads AS "totalDownloads", total_plays AS "totalPlays", featured_track AS "featuredTrack", monthly_listeners AS "monthlyListeners", banner_url AS "bannerUrl", profile_url AS "profileUrl"`,
       [name, genre, id]
     );
 
@@ -246,6 +261,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         bio: artist.bio || '',
         followers: Number(artist.followers || 0),
         totalDownloads: Number(artist.totalDownloads || 0),
+        totalPlays: Number(artist.totalPlays || 0),
         featuredTrack: artist.featuredTrack || '',
         monthlyListeners: Number(artist.monthlyListeners || 0),
         bannerUrl: artist.bannerUrl || null,
@@ -270,10 +286,18 @@ export async function DELETE(
   try {
     await ensureArtistsTable();
     await ensureArtistMediaTable();
-    const mediaResult = await pool.query<{ driveFileId: string | null }>(
-      'SELECT drive_file_id AS "driveFileId" FROM artist_media WHERE artist_id::text = $1',
+
+    const mediaResult = await pool.query<{ driveFileId: string | null; thumbnailDriveFileId: string | null }>(
+      'SELECT drive_file_id AS "driveFileId", thumbnail_drive_file_id AS "thumbnailDriveFileId" FROM artist_media WHERE artist_id::text = $1',
       [id]
     );
+
+    const fileIdsToDelete = [...new Set(
+      mediaResult.rows
+        .flatMap((media) => [media.driveFileId, media.thumbnailDriveFileId])
+        .filter((fileId): fileId is string => Boolean(fileId))
+    )];
+
     const result = await pool.query('DELETE FROM artists WHERE id::text = $1', [id]);
 
     if (result.rowCount === 0) {
@@ -281,18 +305,17 @@ export async function DELETE(
     }
 
     await pool.query('DELETE FROM artist_media WHERE artist_id::text = $1', [id]);
+
     const driveDeletes = await Promise.allSettled(
-      mediaResult.rows
-        .map((media) => media.driveFileId)
-        .filter((fileId): fileId is string => Boolean(fileId))
-        .map((fileId) => deleteFromGoogleDrive(fileId))
+      fileIdsToDelete.map((fileId) => deleteStoredObject(fileId))
     );
-    const failedDriveDeletes = driveDeletes.filter((result) => result.status === 'rejected').length;
+    const failedDriveDeletes = driveDeletes.filter((deleteResult) => deleteResult.status === 'rejected').length;
+
     await recordActivity({
       action: 'deleted',
       entityType: 'artist',
       entityId: id,
-      description: `Deleted artist ${id} and all related media${failedDriveDeletes ? ` (${failedDriveDeletes} Drive files could not be deleted)` : ''}`,
+      description: `Deleted artist ${id} and all related media${failedDriveDeletes ? ` (${failedDriveDeletes} storage files could not be deleted)` : ''}`,
     });
 
     return NextResponse.json({ success: true, failedDriveDeletes });

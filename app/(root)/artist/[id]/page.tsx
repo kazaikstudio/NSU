@@ -20,6 +20,7 @@ interface Artist {
   followers: number;
   monthlyListeners: number;
   totalDownloads: number;
+  totalPlays?: number;
   bannerUrl?: string | null;
   profileUrl?: string | null;
 }
@@ -32,6 +33,7 @@ interface Track {
   fileUrl?: string;
   featuredArtistName?: string | null;
   downloadCount?: number;
+  playCount?: number;
   createdAt?: string;
 }
 
@@ -57,8 +59,9 @@ function getSubscriberId() {
 }
 
 function getDriveFileId(fileUrl: string) {
-  const match = fileUrl.match(/\/api\/dashboard\/media\/([a-zA-Z0-9_-]+)|\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
-  return match?.[1] || match?.[2] || match?.[3] || null;
+  const match = fileUrl.match(/\/api\/dashboard\/media\/([^?]+)|\/d\/([^?]+)|[?&]id=([^&]+)/i);
+  const value = match?.[1] || match?.[2] || match?.[3];
+  return value ? decodeURIComponent(value) : null;
 }
 
 export default function PublicArtistDetailPage() {
@@ -72,6 +75,7 @@ export default function PublicArtistDetailPage() {
   const [shareStatus, setShareStatus] = useState('');
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [activeTrackDownloads, setActiveTrackDownloads] = useState(0);
+  const [activeTrackPlays, setActiveTrackPlays] = useState(0);
   const latestTrackId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -228,44 +232,66 @@ export default function PublicArtistDetailPage() {
     const driveFileId = getDriveFileId(fileUrl);
     if (!driveFileId) return;
 
+    const currentTrack = tracks.find((track) => track.id === trackId);
     setActiveTrackId(trackId);
-    setActiveTrackDownloads(Number(tracks.find((track) => track.id === trackId)?.downloadCount || 0));
+    setActiveTrackDownloads(Number(currentTrack?.downloadCount || 0));
+    setActiveTrackPlays(Number(currentTrack?.playCount || 0));
 
     try {
-      const response = await fetch(`/api/dashboard/media/${driveFileId}?play=1`, { method: 'GET', cache: 'no-store' });
+      const response = await fetch(`/api/dashboard/media/${encodeURIComponent(driveFileId)}/play`, { method: 'GET', cache: 'no-store' });
       if (!response.ok) return;
       const result = await response.json();
-      const updatedCount = Number(result.trackDownloads || 0);
-      setActiveTrackDownloads(updatedCount);
+      const updatedPlayCount = Number(result.trackPlays || 0);
+      const updatedDownloadCount = Number(result.trackDownloads || 0);
+      setActiveTrackPlays(updatedPlayCount);
+      setActiveTrackDownloads(updatedDownloadCount);
       setTracks((currentTracks) => currentTracks.map((track) => track.id === trackId
-        ? { ...track, downloadCount: updatedCount }
+        ? {
+            ...track,
+            playCount: updatedPlayCount,
+            downloadCount: updatedDownloadCount,
+          }
         : track));
+      setArtist((currentArtist) => currentArtist
+        ? {
+            ...currentArtist,
+            totalPlays: Number(result.artistTotalPlays || currentArtist.totalPlays || 0),
+            totalDownloads: Number(result.artistTotalDownloads || currentArtist.totalDownloads || 0),
+          }
+        : currentArtist);
     } catch {
       // Playback continues even if the DB result is delayed; the UI already updated optimistically.
     }
   };
 
-  const syncDownloadCount = (trackId: string, serverDownloadCount?: number) => {
+  const syncDownloadCount = (
+    trackId: string,
+    serverDownloadUpdate?: { trackDownloads?: number; artistTotalDownloads?: number },
+  ) => {
+    const nextTrackCount = Number.isFinite(serverDownloadUpdate?.trackDownloads)
+      ? Number(serverDownloadUpdate?.trackDownloads)
+      : undefined;
+    const nextArtistTotal = Number.isFinite(serverDownloadUpdate?.artistTotalDownloads)
+      ? Number(serverDownloadUpdate?.artistTotalDownloads)
+      : undefined;
+
     setTracks((currentTracks) => currentTracks.map((track) => track.id === trackId
       ? {
         ...track,
-        downloadCount: Number.isFinite(serverDownloadCount)
-          ? serverDownloadCount
-          : Number(track.downloadCount || 0) + 1,
+        downloadCount: nextTrackCount ?? Number(track.downloadCount || 0) + 1,
       }
       : track));
-    // Keep the artist-level total in step with the dashboard's
-    // `artists.total_downloads`, which the server also increments by one per
-    // download. This keeps the front-end stat and the dashboard chart in sync.
+
     setArtist((currentArtist) => currentArtist
-      ? { ...currentArtist, totalDownloads: Number(currentArtist.totalDownloads || 0) + 1 }
+      ? {
+        ...currentArtist,
+        totalDownloads: nextArtistTotal ?? Number(currentArtist.totalDownloads || 0),
+      }
       : currentArtist);
+
     if (activeTrackId === trackId) {
-      setActiveTrackDownloads((count) => (
-        typeof serverDownloadCount === 'number' && Number.isFinite(serverDownloadCount)
-          ? serverDownloadCount
-          : count + 1
-      ));
+      const currentDownloadValue = nextTrackCount ?? Number(tracks.find((track) => track.id === trackId)?.downloadCount || 0) + 1;
+      setActiveTrackDownloads(currentDownloadValue);
     }
   };
 
@@ -302,6 +328,8 @@ export default function PublicArtistDetailPage() {
           : artist.name,
         fileUrl: track.fileUrl ?? undefined,
         fileName: track.fileName ?? undefined,
+        playCount: Number(track.playCount || 0),
+        downloadCount: Number(track.downloadCount || 0),
       },
     ));
 
@@ -411,18 +439,18 @@ export default function PublicArtistDetailPage() {
             </span>
             <span className="mt-1.5 block truncate text-[10px] font-medium text-secondry sm:text-xs">Following</span>
           </div>
-          <div className="min-w-0 rounded-xl border border-card1/10 bg-cardcl/45 px-2.5 py-3 shadow-sm backdrop-blur-sm sm:px-4 sm:py-3.5">
-            <span className="block truncate text-lg font-black leading-none text-primary xs:text-xl sm:text-2xl">
-              {formatNumber(Number(artist.totalDownloads || 0))}
-            </span>
-            <span className="mt-1.5 block truncate text-[10px] font-medium text-secondry sm:text-xs">Total Downloads</span>
-          </div>
-
           <div className="min-w-0 rounded-xl border border-amber-400/20 bg-amber-400/8 px-2.5 py-3 shadow-sm shadow-amber-400/5 backdrop-blur-sm sm:px-4 sm:py-3.5">
             <span className="block truncate text-lg font-black leading-none text-amber-400 xs:text-xl sm:text-2xl">
+              {activeTrackId ? formatNumber(activeTrackPlays) : formatNumber(Number(artist.totalPlays || 0))}
+            </span>
+            <span className="mt-1.5 block truncate text-[10px] font-medium text-secondry sm:text-xs">Plays</span>
+          </div>
+
+          <div className="min-w-0 rounded-xl border border-cyan-400/20 bg-cyan-500/8 px-2.5 py-3 shadow-sm shadow-cyan-400/5 backdrop-blur-sm sm:px-4 sm:py-3.5">
+            <span className="block truncate text-lg font-black leading-none text-cyan-400 xs:text-xl sm:text-2xl">
               {activeTrackId ? formatNumber(activeTrackDownloads) : '0'}
             </span>
-            <span className="mt-1.5 block truncate text-[10px] font-medium text-secondry sm:text-xs">Playing Downloads</span>
+            <span className="mt-1.5 block truncate text-[10px] font-medium text-secondry sm:text-xs">Downloads</span>
           </div>
 
         </div>
@@ -471,8 +499,9 @@ export default function PublicArtistDetailPage() {
                     featuredArtistName={track.featuredArtistName}
                     artistGenre={artist.genre}
                     downloadCount={track.downloadCount}
+                    playCount={track.playCount}
                     onPlay={() => void syncPlayCount(track.id, track.fileUrl || '')}
-                    onDownload={(serverDownloadCount) => syncDownloadCount(track.id, serverDownloadCount)}
+                    onDownload={(countUpdate) => syncDownloadCount(track.id, countUpdate)}
                     playerQueue={playerQueue}
                     playerQueueIndex={playerQueue.findIndex((q) => q.id === track.id)}
                   />

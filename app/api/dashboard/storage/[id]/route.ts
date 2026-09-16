@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import path from 'path';
-import os from 'os';
 import { promises as fs } from 'fs';
-import { deleteFromGoogleDrive, getTalkShowGoogleConfig, saveFileLocally, uploadToGoogleDrive } from '@/lib/google-drive';
+import { saveFileLocally, getLocalUploadsDir } from '@/lib/local-storage';
+import { deleteStoredObject, uploadToBucket } from '@/lib/railway-storage';
 import { deleteInMemoryStorageItem, updateInMemoryStorageItemTitle } from '@/lib/storage-items';
 import { getDatabaseConnectionString } from '@/lib/db';
 
@@ -56,9 +56,9 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   if (thumbnail instanceof File) {
     if (!thumbnail.type.startsWith('image/')) return NextResponse.json({ error: 'Thumbnail must be an image' }, { status: 400 });
     try {
-      const driveFile = await uploadToGoogleDrive({ name: `thumbnail-${Date.now()}-${thumbnail.name}`, mimeType: thumbnail.type, bytes: await thumbnail.arrayBuffer() }, getTalkShowGoogleConfig());
-      thumbnailUrl = driveFile.publicUrl;
-      thumbnailDriveFileId = driveFile.id;
+      const storageFile = await uploadToBucket({ name: `thumbnail-${Date.now()}-${thumbnail.name}`, mimeType: thumbnail.type, bytes: await thumbnail.arrayBuffer() });
+      thumbnailUrl = storageFile.publicUrl;
+      thumbnailDriveFileId = storageFile.id;
     } catch {
       const localFile = await saveFileLocally({ name: thumbnail.name, mimeType: thumbnail.type, bytes: await thumbnail.arrayBuffer() });
       thumbnailUrl = localFile.publicUrl;
@@ -93,12 +93,11 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       const previousThumbnailDriveId = previousResult.rows[0].thumbnailDriveFileId as string | null;
       try {
         if (previousThumbnailDriveId) {
-          await deleteFromGoogleDrive(previousThumbnailDriveId, getTalkShowGoogleConfig());
+          await deleteStoredObject(previousThumbnailDriveId);
         }
         if (previousThumbnailUrl?.startsWith('/api/uploads/')) {
           const fileName = previousThumbnailUrl.replace(/^\/api\/uploads\//, '');
-          const configured = process.env.LOCAL_UPLOAD_DIR && process.env.LOCAL_UPLOAD_DIR.trim();
-          const uploadsDir = configured || path.join(os.tmpdir(), 'nsu-uploads');
+          const uploadsDir = getLocalUploadsDir();
           await fs.unlink(path.join(uploadsDir, fileName)).catch(() => {});
         }
       } catch (error) {
@@ -154,20 +153,18 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     if (thumbnailDriveId) driveFileIds.add(thumbnailDriveId);
 
     try {
-      await Promise.all([...driveFileIds].map((fileId) => deleteFromGoogleDrive(fileId, getTalkShowGoogleConfig())));
+      await Promise.all([...driveFileIds].map((fileId) => deleteStoredObject(fileId)));
+
+      const uploadsDir = getLocalUploadsDir();
 
       if (fileUrl.startsWith('/api/uploads/')) {
         const fileName = fileUrl.replace(/^\/api\/uploads\//, '');
-        const configured = process.env.LOCAL_UPLOAD_DIR && process.env.LOCAL_UPLOAD_DIR.trim();
-        const uploadsDir = configured || path.join(os.tmpdir(), 'nsu-uploads');
         const filePath = path.join(uploadsDir, fileName);
         await fs.unlink(filePath).catch(() => {});
       }
 
       if (thumbnailUrl.startsWith('/api/uploads/')) {
         const fileName = thumbnailUrl.replace(/^\/api\/uploads\//, '');
-        const configured = process.env.LOCAL_UPLOAD_DIR && process.env.LOCAL_UPLOAD_DIR.trim();
-        const uploadsDir = configured || path.join(os.tmpdir(), 'nsu-uploads');
         await fs.unlink(path.join(uploadsDir, fileName)).catch(() => {});
       }
     } catch (err) {

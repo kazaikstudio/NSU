@@ -16,12 +16,14 @@ async function ensureMediaCounters() {
       mime_type TEXT NOT NULL,
       file_url TEXT NOT NULL,
       drive_file_id TEXT,
+      play_count INTEGER NOT NULL DEFAULT 0,
       download_count INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
   await pool.query(`
     ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS play_count INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0
   `);
 }
@@ -34,10 +36,20 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
   try {
     await ensureMediaCounters();
-    const mediaResult = await pool.query<{ trackDownloads: number }>(
-      `SELECT download_count AS "trackDownloads"
-       FROM artist_media
-       WHERE drive_file_id = $1 AND kind = 'track'`,
+    const mediaResult = await pool.query<{
+      trackPlays: number;
+      trackDownloads: number;
+      artistTotalPlays: number;
+      artistTotalDownloads: number;
+    }>(
+      `SELECT am.play_count AS "trackPlays",
+              am.download_count AS "trackDownloads",
+              artists.total_plays AS "artistTotalPlays",
+              artists.total_downloads AS "artistTotalDownloads"
+       FROM artist_media am
+       LEFT JOIN artists ON artists.id::text = am.artist_id
+       WHERE am.drive_file_id = $1 AND am.kind = 'track'
+       LIMIT 1`,
       [driveFileId]
     );
 
@@ -45,7 +57,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     if (!media) return NextResponse.json({ error: 'Track not found' }, { status: 404 });
 
     return NextResponse.json({
+      trackPlays: Number(media.trackPlays || 0),
       trackDownloads: Number(media.trackDownloads || 0),
+      artistTotalPlays: Number(media.artistTotalPlays || 0),
+      artistTotalDownloads: Number(media.artistTotalDownloads || 0),
     });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });

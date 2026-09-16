@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import path from 'path';
-import os from 'os';
 import { promises as fs } from 'fs';
-import { deleteFromGoogleDrive, getTalkShowGoogleConfig } from '@/lib/google-drive';
+import { deleteStoredObject } from '@/lib/railway-storage';
+import { getLocalUploadsDir } from '@/lib/local-storage';
 import { getDatabaseConnectionString } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -27,12 +27,15 @@ export async function DELETE() {
       .flatMap((row) => [row.driveFileId, row.fileUrl?.match(/\/api\/dashboard\/media\/([^/?]+)/)?.[1]])
       .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
-    await Promise.all(driveFileIds.map((id) => deleteFromGoogleDrive(id, getTalkShowGoogleConfig()).catch((error) => {
-      console.warn('Unable to remove legacy member profile from Talk Show Drive', error);
-    })));
+    await Promise.all(driveFileIds.map(async (id) => {
+      try {
+        await deleteStoredObject(id);
+      } catch (error) {
+        console.warn('Unable to remove legacy member profile from storage', error);
+      }
+    }));
 
-    const configured = process.env.LOCAL_UPLOAD_DIR && process.env.LOCAL_UPLOAD_DIR.trim();
-    const uploadsDir = configured || path.join(os.tmpdir(), 'nsu-uploads');
+    const uploadsDir = getLocalUploadsDir();
     await Promise.all(rows
       .map((row) => row.fileUrl as string | undefined)
       .filter((url): url is string => Boolean(url?.startsWith('/api/uploads/')))

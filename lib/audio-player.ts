@@ -6,22 +6,33 @@ export interface PlayerTrack {
   thumbnailUrl?: string;
   fileUrl?: string;
   fileName?: string;
+  playCount?: number;
+  downloadCount?: number;
 }
 
 export function playerTrackFor(
   id: string,
   title: string,
   src: string,
-  options: { artist?: string; thumbnailUrl?: string; fileUrl?: string; fileName?: string } = {},
+  options: {
+    artist?: string;
+    thumbnailUrl?: string;
+    fileUrl?: string;
+    fileName?: string;
+    playCount?: number;
+    downloadCount?: number;
+  } = {},
 ): PlayerTrack {
   return {
     id,
     title: title || 'Untitled Track',
     artist: options.artist,
     src,
-    thumbnailUrl: options.thumbnailUrl,
+    thumbnailUrl: options.thumbnailUrl || '/noll.jpg',
     fileUrl: options.fileUrl,
     fileName: options.fileName,
+    playCount: typeof options.playCount === 'number' ? options.playCount : undefined,
+    downloadCount: typeof options.downloadCount === 'number' ? options.downloadCount : undefined,
   };
 }
 

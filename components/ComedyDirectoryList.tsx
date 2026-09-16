@@ -3,6 +3,7 @@
 import type { MouseEvent } from 'react';
 import { Download, Flame } from 'lucide-react';
 import { registerClientDownload } from '@/lib/download-controls';
+import { extractStoredFileId } from '@/lib/media-url';
 
 export type ComedyDirectoryItem = {
   id: string;
@@ -34,8 +35,7 @@ export default function ComedyDirectoryList({
     const safeTitle = (item.title || 'download').trim() || 'download';
 
     const getDownloadUrl = (fileUrl: string) => {
-      const match = fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
-      const fileId = match ? (match[1] || match[2]) : null;
+      const fileId = extractStoredFileId(fileUrl);
       if (!fileId) return fileUrl;
 
       return `/api/dashboard/media/${fileId}?download=1&filename=${encodeURIComponent(`${safeTitle}.mp4`)}`;

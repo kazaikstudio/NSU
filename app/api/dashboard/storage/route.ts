@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
-import { getConfiguredDriveStorageEntries, getTalkShowGoogleConfig, saveFileLocally, uploadToGoogleDrive } from '@/lib/google-drive';
+import { saveFileLocally } from '@/lib/local-storage';
+import { getConfiguredStorageEntries, uploadToBucket } from '@/lib/railway-storage';
 import { recordActivity } from '@/lib/activity';
-import { getInMemoryStorageItems, inMemoryStorageItems, pushInMemoryStorageItem } from '@/lib/storage-items';
+import { getInMemoryStorageItems, pushInMemoryStorageItem } from '@/lib/storage-items';
 import { getDatabaseConnectionString } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -55,15 +56,7 @@ export async function GET(request: Request) {
   let driveStorageEntries: Array<{ label: string; used: number; limit: number | null; usedInDrive: number; usedInTrash: number; error?: string }> = [];
 
   try {
-    const configuredEntries = await getConfiguredDriveStorageEntries();
-    driveStorageEntries = configuredEntries.map((entry) => ({
-      label: entry.label,
-      used: entry.storage?.used ?? 0,
-      limit: entry.storage?.limit ?? null,
-      usedInDrive: entry.storage?.usedInDrive ?? 0,
-      usedInTrash: entry.storage?.usedInTrash ?? 0,
-      error: entry.error,
-    }));
+    driveStorageEntries = await getConfiguredStorageEntries();
 
     const firstConfiguredEntry = driveStorageEntries.find((entry) => !entry.error && entry.used > 0) ?? driveStorageEntries[0];
     if (firstConfiguredEntry) {
@@ -85,10 +78,6 @@ export async function GET(request: Request) {
 
   // Pagination caps on the public lists (home feed, Comedy row) so the browser
   // never downloads the entire table just to render a row of 5 cards.
-  const rawLimit = url.searchParams.get('limit');
-  const limit = rawLimit ? Math.min(500, Math.max(1, Number(rawLimit) || 50)) : 500;
-  const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
-
   if (!pool) {
     return NextResponse.json({
       items: getInMemoryStorageItems().slice().reverse(),
@@ -179,20 +168,17 @@ export async function POST(request: Request) {
 
   if (uploadedFile) {
     try {
-      const driveFile = await uploadToGoogleDrive(
-        {
-          name: uploadedFile.name,
-          mimeType: uploadedFile.type || 'application/octet-stream',
-          bytes: await uploadedFile.arrayBuffer(),
-        },
-        getTalkShowGoogleConfig()
-      );
+      const storageFile = await uploadToBucket({
+        name: uploadedFile.name,
+        mimeType: uploadedFile.type || 'application/octet-stream',
+        bytes: await uploadedFile.arrayBuffer(),
+      });
 
-      publicUrl = driveFile.publicUrl;
-  uploadedDriveFileId = driveFile.id;
+      publicUrl = storageFile.publicUrl;
+      uploadedDriveFileId = storageFile.id;
     } catch (error) {
       uploadError = error instanceof Error ? error.message : String(error);
-      console.warn('Talk Show Drive upload failed, falling back to local storage', uploadError);
+      console.warn('Bucket upload failed, falling back to local storage', uploadError);
       const localFile = await saveFileLocally({
         name: uploadedFile.name,
         mimeType: uploadedFile.type || 'application/octet-stream',

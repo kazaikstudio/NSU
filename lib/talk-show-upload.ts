@@ -8,12 +8,12 @@ export function clampUploadProgress(value: number) {
 
 export function formatUploadStatusMessage(uploadError: string | null) {
   if (!uploadError) {
-    return 'Uploaded to Talk Show Drive.';
+    return 'Uploaded to storage.';
   }
 
-  if (uploadError.includes('Unable to reach Google Drive')) {
-    return 'Uploaded locally because Google Drive was unavailable. The file is saved and ready in storage.';
+  if (uploadError.includes('Unable to reach')) {
+    return 'Uploaded locally because storage was unavailable. The file is saved and ready in storage.';
   }
 
-  return `Uploaded locally because Google Drive was unavailable. ${uploadError}`;
+  return `Uploaded locally because storage was unavailable. ${uploadError}`;
 }

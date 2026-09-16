@@ -29,13 +29,13 @@ const DockBar = ({ onScrollToSearch, searchHref }: DockBarProps) => {
   const navLinkBase =
     'relative rounded-xl px-3 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap'
   const navLinkActive =
-    'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30'
+    'bg-linear-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30'
   const navLinkInactive =
     'text-white/40 hover:text-white/80 hover:bg-white/[0.06]'
 
   const searchBtnBase = `flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 active:scale-95 ${
     isSearch
-      ? 'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30'
+      ? 'bg-linear-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30'
       : 'bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white'
   }`
 

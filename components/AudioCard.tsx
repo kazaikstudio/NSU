@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Download } from 'lucide-react';
 import { registerClientDownload } from '@/lib/download-controls';
 import { buildAudioDownloadName } from '@/lib/download';
+import { extractStoredFileId } from '@/lib/media-url';
 
 export interface FeaturedAudioTrack {
   id: string;
@@ -27,12 +28,12 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
   function getDownloadUrl(fileUrl: string | undefined) {
     if (!fileUrl) return undefined;
 
-    const match = fileUrl.match(/[?&]id=([^&]+)/);
-    if (!match?.[1]) return fileUrl;
+    const fileId = extractStoredFileId(fileUrl);
+    if (!fileId) return fileUrl;
 
     const params = new URLSearchParams({ download: '1', filename: `${track.title}.mp3`, title: track.title });
     if (track.artistName) params.set('artist', track.artistName);
-    return `/api/dashboard/media/${match[1]}?${params.toString()}`;
+    return `/api/dashboard/media/${fileId}?${params.toString()}`;
   }
 
   function normalizeImageUrl(url?: string | null) {

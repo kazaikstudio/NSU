@@ -4,6 +4,15 @@ import { Pool, PoolClient } from 'pg';
 type DatabasePool = Pick<Pool, 'query' | 'connect' | 'end'>;
 
 export function resolveDatabaseConnectionString(env: NodeJS.ProcessEnv = process.env) {
+  const isPrivateRailwayHostname = (value: string) => {
+    try {
+      const hostname = new URL(value).hostname.toLowerCase();
+      return hostname.endsWith('.railway.internal') || hostname === 'railway.internal';
+    } catch {
+      return false;
+    }
+  };
+
   const candidateUrls = [
     env.DATABASE_URL,
     env.POSTGRES_URL,
@@ -15,7 +24,8 @@ export function resolveDatabaseConnectionString(env: NodeJS.ProcessEnv = process
 
   const validDirectUrl = candidateUrls.find((value) => {
     const lower = value.toLowerCase();
-    return !/USER:PASSWORD|USERNAME:PASSWORD|user:password|username:password|your_railway_postgres_url|replace_with|example\.com|<username>|<password>/i.test(value)
+    return !isPrivateRailwayHostname(value)
+      && !/USER:PASSWORD|USERNAME:PASSWORD|user:password|username:password|your_railway_postgres_url|replace_with|example\.com|<username>|<password>/i.test(value)
       && !/\/\$\{.*\}/.test(value)
       && !lower.includes('placeholder');
   });
@@ -92,6 +102,8 @@ const initDatabase = async () => {
           name VARCHAR(255) NOT NULL,
           genre VARCHAR(100) NOT NULL,
           tracks_count INT DEFAULT 0,
+          total_plays INTEGER NOT NULL DEFAULT 0,
+          total_downloads INTEGER NOT NULL DEFAULT 0,
           status VARCHAR(50) DEFAULT 'Active',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -116,6 +128,7 @@ const initDatabase = async () => {
         ADD COLUMN IF NOT EXISTS email VARCHAR(255),
         ADD COLUMN IF NOT EXISTS tracks_count INTEGER NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS total_downloads INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS total_plays INTEGER NOT NULL DEFAULT 0,
         ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'Active',
         ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
       `);
@@ -143,6 +156,10 @@ const initDatabase = async () => {
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           PRIMARY KEY (artist_id, subscriber_id)
         );
+      `);
+      await client.query(`
+        ALTER TABLE artist_media
+        ADD COLUMN IF NOT EXISTS play_count INTEGER NOT NULL DEFAULT 0
       `);
       console.log('Database tables verified/created successfully.');
     } finally {

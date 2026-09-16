@@ -9,6 +9,7 @@ import { playNextAfter, primeNextAfter, registerPlaybackEntry, unregisterPlaybac
 import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer, requestPlaybackToggle, type PlayerTrack } from '@/lib/audio-player';
 import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying, type NowPlayingSnapshot } from '@/lib/audio-now-playing';
+import { recordTrackPlay } from '@/lib/media-url';
 
 interface DownloadNoticePayload {
   status: 'downloading' | 'done' | 'error';
@@ -16,6 +17,11 @@ interface DownloadNoticePayload {
   progress?: number;
   downloadedBytes?: number;
   totalBytes?: number;
+}
+
+interface DownloadCountUpdate {
+  trackDownloads?: number;
+  artistTotalDownloads?: number;
 }
 
 interface AudioRowProps {
@@ -30,10 +36,11 @@ interface AudioRowProps {
   featuredArtistName?: string | null;
   artistGenre?: string | null;
   downloadCount?: number;
+  playCount?: number;
   showDownload?: boolean;
   thumbnailUrl?: string;
   onPlay?: () => void;
-  onDownload?: (downloadCount?: number) => void;
+  onDownload?: (countUpdate?: DownloadCountUpdate) => void;
   onNext?: () => void;
   playerQueue?: PlayerTrack[];
   playerQueueIndex?: number;
@@ -47,8 +54,8 @@ interface AudioRowProps {
 function getDownloadUrl(fileUrl: string | undefined, fileName: string | undefined, title: string, artistName?: string) {
   if (!fileUrl) return undefined;
 
-  const match = fileUrl.match(/\/media\/([a-zA-Z0-9_-]+)(?:[/?#]|$)|[?&]id=([a-zA-Z0-9_-]+)/);
-  const fileId = match?.[1] || match?.[2];
+  const match = fileUrl.match(/\/api\/dashboard\/media\/([^?]+)|\/media\/([^?]+)|[?&]id=([^&]+)/i);
+  const fileId = match?.[1] || match?.[2] || match?.[3];
   if (!fileId) return fileUrl;
 
   const params = new URLSearchParams({
@@ -130,6 +137,8 @@ export default function AudioRow({
   artistName,
   featuredArtistName,
   thumbnailUrl,
+  downloadCount,
+  playCount,
   showDownload = true,
   onPlay,
   onDownload,
@@ -270,6 +279,7 @@ export default function AudioRow({
     }
 
     try {
+      recordTrackPlay(src);
       await audio.play();
       setIsPlaying(true);
       setIsExpanded(true);
@@ -316,6 +326,7 @@ export default function AudioRow({
     }
 
     try {
+      recordTrackPlay(src);
       await audio.play();
       saveAudioCacheEntry(src, { currentTime: audio.currentTime, wasPlaying: true });
     } catch (err) {
@@ -382,6 +393,7 @@ export default function AudioRow({
         throw new Error('Download failed: the server returned a text page instead of audio.');
       }
       const serverDownloadCount = Number(response.headers.get('X-NSU-Download-Count'));
+      const serverArtistTotalDownloadCount = Number(response.headers.get('X-NSU-Artist-Download-Count'));
 
       const total = Number(response.headers.get('content-length')) || 0;
       const reader = response.body?.getReader();
@@ -445,7 +457,10 @@ export default function AudioRow({
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(objectUrl);
-      onDownload?.(Number.isFinite(serverDownloadCount) ? serverDownloadCount : undefined);
+      onDownload?.({
+        trackDownloads: Number.isFinite(serverDownloadCount) ? serverDownloadCount : undefined,
+        artistTotalDownloads: Number.isFinite(serverArtistTotalDownloadCount) ? serverArtistTotalDownloadCount : undefined,
+      });
 
       window.clearInterval(progressTimer);
       downloadProgressRef.current = 100;
@@ -592,51 +607,65 @@ onPlay={() => {
       />
       {audioTag}
 
-      {/* Thumbnail */}
-      <div
-        className="shrink-0 h-10 w-10 sm:h-11 sm:w-11 rounded-md overflow-hidden bg-mrow/60 flex items-center justify-center cursor-pointer group/thumb"
-        onClick={(e) => {
-          e.stopPropagation();
-          // Inside the full-screen player, treat the thumbnail like the play
-          // button so it switches/toggles the track without closing the player.
-          if (delegatedPlay) {
-            void togglePlay(e);
-            return;
-          }
-          openAudioPlayer({
-            track: {
-              id: src,
-              title,
-              artist: artistCredit || undefined,
-              src,
-              thumbnailUrl,
-            },
-            queue: playerQueue && playerQueue.length > 0 ? playerQueue : undefined,
-            queueIndex: playerQueueIndex >= 0 ? playerQueueIndex : 0,
-          });
-        }}
-        title={delegatedPlay ? 'Play track' : 'Open full screen player'}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={thumbnailUrl || '/noll.jpg'}
-          alt={thumbnailUrl ? title : 'Default music thumbnail'}
-          onPointerEnter={primeAudio}
-          onFocus={primeAudio}
-          className="h-full w-full object-cover transition-transform duration-300 group-hover/thumb:scale-110"
-        />
-      </div>
+      <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-3">
+        <div className="shrink-0">
+          <div
+            className="h-10 w-10 sm:h-11 sm:w-11 rounded-md overflow-hidden bg-mrow/60 flex items-center justify-center cursor-pointer group/thumb"
+            onClick={(e) => {
+              e.stopPropagation();
+              // Inside the full-screen player, treat the thumbnail like the play
+              // button so it switches/toggles the track without closing the player.
+              if (delegatedPlay) {
+                void togglePlay(e);
+                return;
+              }
+              openAudioPlayer({
+                track: {
+                  id: src,
+                  title,
+                  artist: artistCredit || undefined,
+                  src,
+                  thumbnailUrl,
+                  playCount: Number.isFinite(playCount) ? playCount : 0,
+                  downloadCount: Number.isFinite(downloadCount) ? downloadCount : 0,
+                },
+                queue: playerQueue && playerQueue.length > 0 ? playerQueue : undefined,
+                queueIndex: playerQueueIndex >= 0 ? playerQueueIndex : 0,
+              });
+            }}
+            title={delegatedPlay ? 'Play track' : 'Open full screen player'}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={thumbnailUrl || '/noll.jpg'}
+              alt={thumbnailUrl ? title : 'Default music thumbnail'}
+              onPointerEnter={primeAudio}
+              onFocus={primeAudio}
+              className="h-full w-full object-cover transition-transform duration-300 group-hover/thumb:scale-110"
+            />
+          </div>
+          {showDownload && downloadUrl && (
+            <div className="mt-1 text-center text-[9px] font-semibold text-secondry/70">
+              {Number.isFinite(downloadCount) ? Number(downloadCount).toLocaleString() : '0'}
+            </div>
+          )}
+        </div>
 
-      {/* Title */}
-      <div className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-semibold text-Eltext1 sm:text-sm">
-          {title}
-        </span>
-        <span className="mt-0.5 block truncate text-[10px] text-secondry/60 sm:text-xs">
-          {artistCredit}
-        </span>
+        {/* Title + artist + plays */}
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="block min-w-0 truncate text-xs font-semibold text-Eltext1 sm:text-sm">
+              {title}
+            </span>
+            <span className="shrink-0 text-[10px] font-medium text-amber-400">
+              {Number.isFinite(playCount) ? Number(playCount).toLocaleString() : '0'} plays
+            </span>
+          </div>
+          <span className="mt-0.5 block truncate text-[10px] text-secondry/60 sm:text-xs">
+            {artistCredit}
+          </span>
+        </div>
       </div>
-
 
       {/* Play / Pause button */}
       {playButton}

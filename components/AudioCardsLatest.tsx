@@ -9,9 +9,10 @@ import {
 } from 'lucide-react';
 import { registerClientDownload } from '@/lib/download-controls';
 import { buildAudioDownloadName } from '@/lib/download';
-import { readCachedData, writeCachedData } from '@/lib/client-cache';
+import { writeCachedData } from '@/lib/client-cache';
 import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer } from '@/lib/audio-player';
+import { extractStoredFileId, getStoredThumbnailUrl, recordTrackPlay } from '@/lib/media-url';
 
 const FEATURED_TRACKS_CACHE = 'audio-page:featured-tracks';
 
@@ -49,7 +50,7 @@ function getTrackThumbnailUrl(track: FeaturedAudioTrack) {
   if (track.coverUrl) return track.coverUrl;
 
   if (track.thumbnailDriveFileId) {
-    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(track.thumbnailDriveFileId)}&sz=w400`;
+    return getStoredThumbnailUrl(`/api/dashboard/media/${track.thumbnailDriveFileId}`, null, 400) ?? '/noll.jpg';
   }
 
   return '/noll.jpg';
@@ -358,6 +359,7 @@ export default function AudioCardsLatest() {
         audio.src = track.fileUrl;
       }
 
+      recordTrackPlay(track.fileUrl);
       void audio.play().catch((err) => {
         // AbortError is expected when a still-buffering track is superseded
         // by another click or a preload — not a real playback failure.
@@ -369,12 +371,12 @@ export default function AudioCardsLatest() {
   };
 
   const getDownloadUrl = (track: FeaturedAudioTrack) => {
-    const match = track.fileUrl.match(/[?&]id=([^&]+)/);
-    if (!match?.[1]) return track.fileUrl;
+    const fileId = extractStoredFileId(track.fileUrl);
+    if (!fileId) return track.fileUrl;
 
     const params = new URLSearchParams({ download: '1', filename: `${track.title}.mp3`, title: track.title });
     if (track.artist) params.set('artist', track.artist);
-    return `/api/dashboard/media/${match[1]}?${params.toString()}`;
+    return `/api/dashboard/media/${fileId}?${params.toString()}`;
   };
 
   const handleDownloadClick = async (event: React.MouseEvent<HTMLButtonElement>, track: FeaturedAudioTrack) => {
@@ -479,7 +481,14 @@ export default function AudioCardsLatest() {
 
   return (
   <div className="w-full max-w-9xl mx-auto">
-    <audio ref={audioRef} preload="none" />
+    <audio
+      ref={audioRef}
+      preload="none"
+      onPlay={() => {
+        const currentTrack = tracks.find((track) => track.id === activeTrackId);
+        if (currentTrack) recordTrackPlay(currentTrack.fileUrl);
+      }}
+    />
     <audio ref={preloadRef} preload="none" className="hidden" />
 
     <div

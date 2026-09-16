@@ -6,6 +6,7 @@ import { ChevronLeft, Download, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack,
 import { closeAudioPlayer, requestPlaybackToggle, subscribeAudioPlayer, subscribePlaybackToggle, type PlayerOpenPayload, type PlayerTrack } from '@/lib/audio-player';
 import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying } from '@/lib/audio-now-playing';
 import { buildAudioDownloadName } from '@/lib/download';
+import { extractStoredFileId, recordTrackPlay } from '@/lib/media-url';
 
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
@@ -22,9 +23,28 @@ function getStreamSrc(audio: HTMLAudioElement | null) {
   return audio?.getAttribute('data-src') || audio?.src || '';
 }
 
-function extractFileId(src: string) {
-  const match = src.match(/\/media\/([a-zA-Z0-9_-]+)(?:[/?#]|$)|[?&]id=([a-zA-Z0-9_-]+)/);
-  return match?.[1] || match?.[2] || null;
+export function extractFileId(src: string) {
+  if (!src) return null;
+
+  const directMatch = extractStoredFileId(src);
+  if (directMatch) return directMatch;
+
+  const fallbackMatch = src.match(/[?&]id=([^&]+)/i);
+  if (!fallbackMatch?.[1]) return null;
+
+  try {
+    return decodeURIComponent(fallbackMatch[1]);
+  } catch {
+    return fallbackMatch[1];
+  }
+}
+
+export function getMetricLabel(metric: 'plays' | 'downloads', count: number) {
+  const normalized = Number.isFinite(count) ? count : 0;
+  if (metric === 'downloads') {
+    return normalized === 1 ? 'Download' : 'Downloads';
+  }
+  return normalized === 1 ? 'Play' : 'Plays';
 }
 
 function buildDownloadUrl(src: string, title: string, artist?: string) {
@@ -60,6 +80,7 @@ export default function AudioPlayer() {
   const [scrubTime, setScrubTime] = useState(0);
   const [registryPlaying, setRegistryPlaying] = useState(false);
   const [downloadCount, setDownloadCount] = useState<number | null>(null);
+  const [playCount, setPlayCount] = useState<number | null>(null);
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
 
@@ -68,6 +89,36 @@ export default function AudioPlayer() {
       payloadRef.current = next;
       setPayload(next);
     });
+  }, []);
+
+  const syncTrackCounts = useCallback(async (target: PlayerTrack | null) => {
+    if (!target) return;
+
+    const fileId = extractFileId(target.src);
+    const fallbackPlayCount = typeof target.playCount === 'number' ? Number(target.playCount) : null;
+    const fallbackDownloadCount = typeof target.downloadCount === 'number' ? Number(target.downloadCount) : null;
+
+    if (!fileId) {
+      setPlayCount(fallbackPlayCount);
+      setDownloadCount(fallbackDownloadCount);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/dashboard/media/${encodeURIComponent(fileId)}/play`, { cache: 'no-store' });
+      if (!res.ok) {
+        setPlayCount(fallbackPlayCount);
+        setDownloadCount(fallbackDownloadCount);
+        return;
+      }
+
+      const data = await res.json();
+      setPlayCount(typeof data.trackPlays === 'number' ? Number(data.trackPlays) : fallbackPlayCount);
+      setDownloadCount(typeof data.trackDownloads === 'number' ? Number(data.trackDownloads) : fallbackDownloadCount);
+    } catch {
+      setPlayCount(fallbackPlayCount);
+      setDownloadCount(fallbackDownloadCount);
+    }
   }, []);
 
   const playTrack = useCallback((target: PlayerTrack, resumeTime = 0) => {
@@ -112,8 +163,9 @@ export default function AudioPlayer() {
     indexRef.current = bounded;
     setQueueIndex(bounded);
     setTrack(target);
+    void syncTrackCounts(target);
     playTrack(target);
-  }, [playTrack]);
+  }, [playTrack, syncTrackCounts]);
 
   const handleOpen = useCallback((next: PlayerOpenPayload | null) => {
     payloadRef.current = next;
@@ -142,7 +194,9 @@ export default function AudioPlayer() {
     setTrack(next.track);
     setCurrentTime(0);
     setDuration(0);
-    setDownloadCount(null);
+    setPlayCount(typeof next.track.playCount === 'number' ? Number(next.track.playCount) : null);
+    setDownloadCount(typeof next.track.downloadCount === 'number' ? Number(next.track.downloadCount) : null);
+    void syncTrackCounts(next.track);
 
     const snapshot = getNowPlaying(next.track.src);
     const audio = audioRef.current;
@@ -162,7 +216,7 @@ export default function AudioPlayer() {
 
     const resumeTime = snapshot?.isPlaying ? snapshot.currentTime : 0;
     playTrack(next.track, resumeTime);
-  }, [playTrack]);
+  }, [playTrack, syncTrackCounts]);
 
   useEffect(() => {
     return subscribeAudioPlayer(handleOpen);
@@ -177,25 +231,6 @@ export default function AudioPlayer() {
     return subscribeNowPlaying(track.src, (snapshot) => {
       setRegistryPlaying(snapshot?.isPlaying ?? false);
     });
-  }, [track]);
-
-  // Fetch the download count for the current track from the database.
-  useEffect(() => {
-    const fileId = track ? extractFileId(track.src) : null;
-    if (!track || !fileId) return;
-
-    let cancelled = false;
-
-    fetch(`/api/dashboard/media/${fileId}?play=1`, { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled && typeof data.trackDownloads === 'number') {
-          setDownloadCount(data.trackDownloads);
-        }
-      })
-      .catch(() => {});
-
-    return () => { cancelled = true; };
   }, [track]);
 
   const pickShuffleIndex = () => {
@@ -283,6 +318,7 @@ export default function AudioPlayer() {
       return;
     }
 
+    recordTrackPlay(track.src);
     void audio.play().catch(() => {});
     setIsPlaying(true);
   };
@@ -359,6 +395,21 @@ export default function AudioPlayer() {
               preload="none"
               className="hidden"
               onPlay={() => {
+                const currentSrc = trackRef.current?.src || '';
+                if (currentSrc) {
+                  setPlayCount((current) => {
+                    const base = current ?? 0;
+                    return Number.isFinite(base) ? base + 1 : 1;
+                  });
+                  recordTrackPlay(currentSrc);
+                  void fetch(`/api/dashboard/media/${encodeURIComponent(extractFileId(currentSrc) || '')}/play`, { cache: 'no-store' })
+                    .then((res) => res.ok ? res.json() : null)
+                    .then((data) => {
+                      if (!data || typeof data.trackPlays !== 'number') return;
+                      setPlayCount(Number(data.trackPlays));
+                    })
+                    .catch(() => {});
+                }
                 setIsPlaying(true);
                 const audio = audioRef.current;
                 if (audio) {
@@ -435,181 +486,185 @@ export default function AudioPlayer() {
                 <div aria-hidden className="pointer-events-none absolute -bottom-32 left-1/3 h-112 w-md rounded-full bg-blue-600/10 blur-[120px]" />
 
                 {/* Main Container */}
-                <div className="relative flex h-full w-full flex-col justify-between overflow-y-auto bg-[#0b0e14]/80 shadow-[0_0_50px_rgba(0,0,0,0.8)] backdrop-blur-3xl px-6 py-8 sm:px-10 sm:py-10 scrollbar-none [&::-webkit-scrollbar]:hidden border border-white/6">
-
-                  {/* Top Navigation Bar */}
-                  <div className="flex items-center justify-between w-full">
-                    <button
-                      type="button"
-                      onClick={handleClose}
-                      aria-label="Close full screen player"
-                      className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/4 border border-white/8 text-white/80 transition-all hover:bg-white/8 hover:text-white hover:scale-[1.02] active:scale-95 shadow-lg shadow-black/20"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-
-                    <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/3 border border-white/6 backdrop-blur-md">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-xs font-medium text-white/90 tracking-wide uppercase">Playing Music</span>
-                    </div>
-
-                    {/* Requirement 1: Menu button changed to download icon button */}
-                    {downloadUrl ? (
-                      <a
-                        href={downloadUrl}
-                        download={buildAudioDownloadName(track.title, track.artist)}
-                        aria-label="Download track"
-                        className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 transition-all hover:bg-cyan-500/20 hover:scale-[1.02] active:scale-95 shadow-lg shadow-cyan-950/30"
+                <div className="relative flex h-full w-full flex-col justify-between overflow-hidden border border-white/8 bg-[#0b0e13]/80 px-5 py-6 shadow-[0_30px_80px_rgba(0,0,0,0.7)] backdrop-blur-2xl sm:px-8">
+                  <div className="mx-auto flex w-full max-w-90 flex-col">
+                    {/* Top Navigation Bar */}
+                    <div className="flex items-center justify-between w-full">
+                      <button
+                        type="button"
+                        onClick={handleClose}
+                        aria-label="Close full screen player"
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/80 transition-all hover:scale-[1.02] hover:bg-white/10 hover:text-white active:scale-95"
                       >
-                        <Download className="h-5 w-5" />
-                      </a>
-                    ) : (
-                      <div className="h-11 w-11" />
-                    )}
-                  </div>
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
 
-                  {/* Center Album Art & Info */}
-                  <div className="my-auto flex flex-col items-center py-4">
-                    <div className="relative aspect-square w-full max-w-[320px] overflow-hidden rounded-4xl border border-white/8 shadow-[0_20px_50px_rgba(0,0,0,0.7)] bg-neutral-900 group">
-                      <Image
-                        fill
-                        unoptimized
-                        src={track.thumbnailUrl || '/noll.jpg'}
-                        alt={track.title}
-                        sizes="320px"
-                        className="object-cover transition-transform duration-700 group-hover:scale-105"
-                      />
-                      <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent opacity-60" />
-                    </div>
-
-                    {/* Track Info & Requirement 2: Love replaced with download counts */}
-                    <div className="mt-8 w-full max-w-[320px] flex items-center justify-between px-1">
-                      <div className="truncate text-left pr-3">
-                        <h2 className="truncate text-xl font-bold text-white tracking-tight sm:text-2xl">{track.title || 'Untitled Track'}</h2>
-                        <p className="mt-1.5 truncate text-sm font-medium text-white/40">{track.artist || 'Audio Track'}</p>
+                      <div className="flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/8 px-3 py-1.5 backdrop-blur-md">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
+                        <span className="text-[10px] font-medium tracking-[0.18em] text-white/80 uppercase">Playing</span>
                       </div>
 
-                      {/* Download counts displayed where the love icon was */}
-                      {downloadCount !== null && (
-                        <div className="flex flex-col items-end shrink-0 pl-2 py-1 px-3 rounded-xl bg-white/3 border border-white/6">
-                          <span className="text-xs font-mono font-bold text-cyan-400">
-                            {downloadCount.toLocaleString()}
-                          </span>
-                          <span className="text-[10px] font-medium text-white/40 tracking-wider uppercase">
-                            {downloadCount === 1 ? 'Download' : 'Downloads'}
-                          </span>
-                        </div>
+                      {downloadUrl ? (
+                        <a
+                          href={downloadUrl}
+                          download={buildAudioDownloadName(track.title, track.artist)}
+                          aria-label="Download track"
+                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-500/10 text-cyan-300 transition-all hover:scale-[1.02] hover:bg-cyan-500/15 active:scale-95"
+                        >
+                          <Download className="h-5 w-5" />
+                        </a>
+                      ) : (
+                        <div className="h-11 w-11" />
                       )}
                     </div>
 
-                    {/* Range Slider / Progress Bar with Dynamic Playing Progress Fill & Fully Rounded Thumb */}
-                    <div className="mt-7 w-full max-w-[320px]">
-                      <div className="relative flex items-center">
-                        <input
-                          type="range"
-                          min={0}
-                          max={duration > 0 ? duration : 0}
-                          step={0.1}
-                          value={isSeeking ? scrubTime : Math.min(currentTime, duration)}
-                          onChange={(e) => {
-                            setScrubTime(Number(e.target.value));
-                            setIsSeeking(true);
-                          }}
-                          onPointerDown={() => setIsSeeking(true)}
-                          onPointerUp={() => {
-                            const audio = audioRef.current;
-                            if (audio && Number.isFinite(scrubTime)) audio.currentTime = scrubTime;
-                            setCurrentTime(scrubTime);
-                            setIsSeeking(false);
-                            reportNowPlaying({
-                              src: getStreamSrc(audio),
-                              currentTime: scrubTime,
-                              isPlaying: audio ? !audio.paused : false,
-                              title: trackRef.current?.title || 'Untitled Track',
-                              artist: trackRef.current?.artist,
-                              thumbnailUrl: trackRef.current?.thumbnailUrl,
-                              duration: audio?.duration,
-                            }, sourceKey);
-                          }}
-                          style={{
-                            background: `linear-gradient(to right, rgb(6 182 212) ${((isSeeking ? scrubTime : currentTime) / (duration > 0 ? duration : 1)) * 100}%, rgba(255, 255, 255, 0.1) ${((isSeeking ? scrubTime : currentTime) / (duration > 0 ? duration : 1)) * 100}%)`
-                          }}
-                          aria-label="Seek"
-                          className="w-full h-2 rounded-full appearance-none cursor-pointer focus:outline-none transition-all
-                            [&::-webkit-slider-thumb]:appearance-none
-                            [&::-webkit-slider-thumb]:w-4
-                            [&::-webkit-slider-thumb]:h-4
-                            [&::-webkit-slider-thumb]:rounded-full
-                            [&::-webkit-slider-thumb]:bg-cyan-400
-                            [&::-webkit-slider-thumb]:shadow-[0_0_12px_rgba(6,182,212,0.8)]
-                            [&::-webkit-slider-thumb]:transition-transform
-                            [&::-webkit-slider-thumb]:hover:scale-125
-                            [&::-moz-range-thumb]:w-4
-                            [&::-moz-range-thumb]:h-4
-                            [&::-moz-range-thumb]:rounded-full
-                            [&::-moz-range-thumb]:bg-cyan-400
-                            [&::-moz-range-thumb]:border-0
-                            [&::-moz-range-thumb]:shadow-[0_0_12px_rgba(6,182,212,0.8)]"
+                    {/* Center Album Art & Info */}
+                    <div className="my-auto flex flex-col items-center pt-6">
+                      <div className="relative aspect-square w-full overflow-hidden rounded-4xl border border-white/10 bg-[#111827] shadow-[0_24px_60px_rgba(0,0,0,0.55)] ring-1 ring-white/5">
+                        <Image
+                          fill
+                          unoptimized
+                          src={track.thumbnailUrl || '/noll.jpg'}
+                          alt={track.title}
+                          sizes="360px"
+                          className="object-cover transition-transform duration-700 hover:scale-[1.04]"
                         />
+                        <div className="absolute inset-0 bg-linear-to-t from-black/35 via-transparent to-transparent" />
                       </div>
-                      <div className="mt-2.5 flex items-center justify-between text-xs font-mono text-white/40">
-                        <span>{formatTime(isSeeking ? scrubTime : currentTime)}</span>
-                        <span>{formatTime(duration)}</span>
+
+                      <div className="mt-7 w-full text-left">
+                        <h2 className="truncate text-[1.7rem] font-black tracking-tighter text-white sm:text-[2rem]">{track.title || 'Untitled Track'}</h2>
+                        <p className="mt-1.5 truncate text-sm font-medium text-white/45">{track.artist || 'Audio Track'}</p>
+                      </div>
+
+                      <div className="mt-4 flex w-full items-center justify-center gap-7 text-center">
+                        <div className="flex flex-col items-center">
+                          <span className="text-base font-bold text-white">
+                            {(downloadCount ?? 0).toLocaleString()}
+                          </span>
+                          <span className="text-[10px] font-medium tracking-[0.12em] text-white/45 uppercase">
+                            {getMetricLabel('downloads', downloadCount ?? 0)}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col items-center">
+                          <span className="text-base font-bold text-white">
+                            {(playCount ?? 0).toLocaleString()}
+                          </span>
+                          <span className="text-[10px] font-medium tracking-[0.12em] text-white/45 uppercase">
+                            {getMetricLabel('plays', playCount ?? 0)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Range Slider / Progress Bar with Dynamic Playing Progress Fill & Fully Rounded Thumb */}
+                      <div className="mt-7 w-full">
+                        <div className="relative flex items-center">
+                          <input
+                            type="range"
+                            min={0}
+                            max={duration > 0 ? duration : 0}
+                            step={0.1}
+                            value={isSeeking ? scrubTime : Math.min(currentTime, duration)}
+                            onChange={(e) => {
+                              setScrubTime(Number(e.target.value));
+                              setIsSeeking(true);
+                            }}
+                            onPointerDown={() => setIsSeeking(true)}
+                            onPointerUp={() => {
+                              const audio = audioRef.current;
+                              if (audio && Number.isFinite(scrubTime)) audio.currentTime = scrubTime;
+                              setCurrentTime(scrubTime);
+                              setIsSeeking(false);
+                              reportNowPlaying({
+                                src: getStreamSrc(audio),
+                                currentTime: scrubTime,
+                                isPlaying: audio ? !audio.paused : false,
+                                title: trackRef.current?.title || 'Untitled Track',
+                                artist: trackRef.current?.artist,
+                                thumbnailUrl: trackRef.current?.thumbnailUrl,
+                                duration: audio?.duration,
+                              }, sourceKey);
+                            }}
+                            style={{
+                              background: `linear-gradient(to right, rgb(34 211 238) ${((isSeeking ? scrubTime : currentTime) / (duration > 0 ? duration : 1)) * 100}%, rgba(255, 255, 255, 0.12) ${((isSeeking ? scrubTime : currentTime) / (duration > 0 ? duration : 1)) * 100}%)`
+                            }}
+                            aria-label="Seek"
+                            className="w-full h-2 rounded-full appearance-none cursor-pointer focus:outline-none transition-all
+                              [&::-webkit-slider-thumb]:appearance-none
+                              [&::-webkit-slider-thumb]:w-4
+                              [&::-webkit-slider-thumb]:h-4
+                              [&::-webkit-slider-thumb]:rounded-full
+                              [&::-webkit-slider-thumb]:bg-cyan-400
+                              [&::-webkit-slider-thumb]:shadow-[0_0_12px_rgba(34,211,238,0.8)]
+                              [&::-webkit-slider-thumb]:transition-transform
+                              [&::-webkit-slider-thumb]:hover:scale-125
+                              [&::-moz-range-thumb]:w-4
+                              [&::-moz-range-thumb]:h-4
+                              [&::-moz-range-thumb]:rounded-full
+                              [&::-moz-range-thumb]:bg-cyan-400
+                              [&::-moz-range-thumb]:border-0
+                              [&::-moz-range-thumb]:shadow-[0_0_12px_rgba(34,211,238,0.8)]"
+                          />
+                        </div>
+                        <div className="mt-2.5 flex items-center justify-between text-[11px] font-medium text-white/40">
+                          <span>{formatTime(isSeeking ? scrubTime : currentTime)}</span>
+                          <span>{formatTime(duration)}</span>
+                        </div>
                       </div>
                     </div>
+
+                    {/* Bottom Control Buttons */}
+                    <div className="mt-8 mb-2 flex items-center justify-between w-full mx-auto">
+                      <button
+                        type="button"
+                        onClick={handleToggleShuffle}
+                        aria-label={isShuffle ? 'Shuffle on' : 'Shuffle off'}
+                        aria-pressed={isShuffle}
+                        className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all ${isShuffle ? 'text-cyan-300 bg-cyan-500/10 border border-cyan-400/20' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+                      >
+                        <Shuffle className="h-5 w-5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handlePrev}
+                        disabled={!hasMultipleTracks}
+                        aria-label="Previous track"
+                        className="flex h-11 w-11 items-center justify-center text-white/80 transition-all hover:text-white disabled:opacity-20 disabled:cursor-not-allowed hover:scale-110 active:scale-95"
+                      >
+                        <SkipBack className="h-6 w-6 fill-current" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleTogglePlay}
+                        aria-label={isEffectivelyPlaying ? 'Pause' : 'Play'}
+                        className="flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-tr from-cyan-400 via-sky-500 to-blue-600 text-slate-950 shadow-[0_0_28px_rgba(34,211,238,0.5)] transition-all hover:scale-105 hover:shadow-[0_0_36px_rgba(34,211,238,0.7)] active:scale-95"
+                      >
+                        {isEffectivelyPlaying ? <Pause className="h-7 w-7 fill-current" /> : <Play className="h-7 w-7 fill-current ml-1" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleNext}
+                        disabled={!hasMultipleTracks}
+                        aria-label="Next track"
+                        className="flex h-11 w-11 items-center justify-center text-white/80 transition-all hover:text-white disabled:opacity-20 disabled:cursor-not-allowed hover:scale-110 active:scale-95"
+                      >
+                        <SkipForward className="h-6 w-6 fill-current" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleToggleRepeat}
+                        aria-label={repeatMode === 'off' ? 'Repeat off' : repeatMode === 'all' ? 'Repeat all' : 'Repeat one'}
+                        className={`flex h-11 w-11 items-center justify-center rounded-2xl transition-all ${repeatMode !== 'off' ? 'text-cyan-300 bg-cyan-500/10 border border-cyan-400/20' : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+                      >
+                        {repeatMode === 'one' ? <Repeat1 className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
+                      </button>
+                    </div>
                   </div>
-
-                  {/* Bottom Control Buttons */}
-                  <div className="mb-2 flex items-center justify-between w-full max-w-[320px] mx-auto px-2">
-                    <button
-                      type="button"
-                      onClick={handleToggleShuffle}
-                      aria-label={isShuffle ? 'Shuffle on' : 'Shuffle off'}
-                      aria-pressed={isShuffle}
-                      className={`p-2.5 rounded-xl transition-all ${isShuffle ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20' : 'text-white/40 hover:text-white hover:bg-white/4'}`}
-                    >
-                      <Shuffle className="h-5 w-5" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handlePrev}
-                      disabled={!hasMultipleTracks}
-                      aria-label="Previous track"
-                      className="p-2.5 text-white/80 hover:text-white transition-all disabled:opacity-20 disabled:cursor-not-allowed hover:scale-110 active:scale-95"
-                    >
-                      <SkipBack className="h-6 w-6 fill-current" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleTogglePlay}
-                      aria-label={isEffectivelyPlaying ? 'Pause' : 'Play'}
-                      className="flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-tr from-cyan-400 to-blue-500 text-slate-950 shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(6,182,212,0.6)] active:scale-95"
-                    >
-                      {isEffectivelyPlaying ? <Pause className="h-7 w-7 fill-current" /> : <Play className="h-7 w-7 fill-current ml-1" />}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleNext}
-                      disabled={!hasMultipleTracks}
-                      aria-label="Next track"
-                      className="p-2.5 text-white/80 hover:text-white transition-all disabled:opacity-20 disabled:cursor-not-allowed hover:scale-110 active:scale-95"
-                    >
-                      <SkipForward className="h-6 w-6 fill-current" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleToggleRepeat}
-                      aria-label={repeatMode === 'off' ? 'Repeat off' : repeatMode === 'all' ? 'Repeat all' : 'Repeat one'}
-                      className={`p-2.5 rounded-xl transition-all ${repeatMode !== 'off' ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20' : 'text-white/40 hover:text-white hover:bg-white/4'}`}
-                    >
-                      {repeatMode === 'one' ? <Repeat1 className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
-                    </button>
-                  </div>
-
                 </div>
               </div>
             ) : null}
