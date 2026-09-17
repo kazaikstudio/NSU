@@ -24,7 +24,7 @@ export type BucketStorageUsage = {
 
 const BUCKET_KEY_PREFIX = 'media-';
 
-export type BucketFolder = 'music' | 'images' | 'videos';
+export type BucketFolder = 'music' | 'images' | 'videos' | 'members';
 
 function readFirstEnvValue(names: string[]) {
   return names
@@ -86,6 +86,19 @@ export function resolveBucketFolderName(upload: Partial<StorageUpload> & { kind?
   const type = (upload.type || '').trim().toLowerCase();
   const mimeType = (upload.mimeType || '').trim().toLowerCase();
   const kind = (upload.kind || '').trim().toLowerCase();
+
+  if (
+    kind === 'member' ||
+    kind === 'members' ||
+    kind === 'member-pic' ||
+    kind === 'members-pic' ||
+    type === 'member' ||
+    type === 'members' ||
+    type === 'member-pic' ||
+    type === 'members-pic'
+  ) {
+    return 'members' as const;
+  }
 
   if (kind === 'banner' || kind === 'profile' || mimeType.startsWith('image/') || type === 'image') {
     return 'images' as const;

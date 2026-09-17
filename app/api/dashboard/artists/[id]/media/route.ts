@@ -203,9 +203,10 @@ export async function POST(request: Request, context: Context) {
 
     let storageFile: { id: string; publicUrl: string; name: string; mimeType: string };
     let uploadError: string | null = null;
+    const uploadName = title.trim() || file.name;
     try {
       storageFile = await uploadToBucket({
-        name: file.name,
+        name: uploadName,
         mimeType: file.type || 'application/octet-stream',
         bytes: await file.arrayBuffer(),
       });
@@ -213,7 +214,7 @@ export async function POST(request: Request, context: Context) {
       uploadError = error instanceof Error ? error.message : String(error);
       console.warn('Bucket upload failed, falling back to local storage', uploadError);
       storageFile = await saveFileLocally({
-        name: file.name,
+        name: uploadName,
         mimeType: file.type || 'application/octet-stream',
         bytes: await file.arrayBuffer(),
       });
