@@ -22,6 +22,8 @@ type RawFormat = {
   format_id?: string;
   url?: string;
   manifest_url?: string;
+  signatureCipher?: string;
+  cipher?: string;
   ext?: string;
   format_note?: string;
   height?: number;
@@ -36,8 +38,38 @@ type RawFormat = {
 
 type RawInfo = { title?: string; formats?: RawFormat[] };
 
+function resolveFormatUrl(format: RawFormat): string | undefined {
+  const directUrl = typeof format.url === 'string' ? format.url : undefined;
+  if (directUrl) return directUrl;
+
+  const cipherSource =
+    typeof format.signatureCipher === 'string' ? format.signatureCipher :
+    typeof format.cipher === 'string' ? format.cipher :
+    undefined;
+
+  if (!cipherSource) return undefined;
+
+  try {
+    const params = new URLSearchParams(cipherSource);
+    const cipherUrl = params.get('url');
+    if (cipherUrl) return cipherUrl;
+  } catch {
+    // fall through to the regex fallback below
+  }
+
+  try {
+    const decoded = decodeURIComponent(cipherSource);
+    const match = decoded.match(/(?:^|[?&])url=([^&]+)/i);
+    if (match?.[1]) return decodeURIComponent(match[1]);
+  } catch {
+    // no-op; the format truly has no usable URL
+  }
+
+  return undefined;
+}
+
 export function normalizeFormat(format: RawFormat): DlpFormat {
-  const url = typeof format.url === 'string' ? format.url : undefined;
+  const url = resolveFormatUrl(format);
   const manifestUrl = typeof format.manifest_url === 'string' ? format.manifest_url : undefined;
   const formatId = String(format.format_id || '');
   const isStoryboard = /^sb\d+$/i.test(formatId);

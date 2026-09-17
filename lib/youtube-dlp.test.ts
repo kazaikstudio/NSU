@@ -47,3 +47,19 @@ test('normalizeFormat rejects storyboard and manifest-only placeholder entries',
   assert.equal(video.has_video, true);
   assert.equal(video.quality_label, '360p');
 });
+
+test('normalizeFormat preserves signed cipher URLs for selected format downloads', () => {
+  const format = normalizeFormat({
+    format_id: '251',
+    ext: 'webm',
+    signatureCipher: 'Sp=signature&url=https%3A%2F%2Fexample.com%2Faudio%3Ffoo%3Dbar%26sig%3Dabc%26sp%3Dsig&key=xyz',
+    acodec: 'opus',
+    vcodec: 'none',
+    abr: 160,
+  });
+
+  assert.equal(format.url, 'https://example.com/audio?foo=bar&sig=abc&sp=sig');
+  assert.equal(format.has_audio, true);
+  assert.equal(format.has_video, false);
+  assert.equal(format.is_original, true);
+});
