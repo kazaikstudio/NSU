@@ -32,6 +32,14 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: 'drive.google.com',
       },
+      {
+        protocol: "http",
+        hostname: 'localhost',
+      },
+      {
+        protocol: "http",
+        hostname: '127.0.0.1',
+      },
     ],
   },
 };

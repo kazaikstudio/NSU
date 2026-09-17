@@ -54,16 +54,33 @@ export function getDatabaseConnectionString(env: NodeJS.ProcessEnv = process.env
 const connectionString = getDatabaseConnectionString();
 const hasConfiguredDatabase = Boolean(connectionString);
 
-const pool = hasConfiguredDatabase
-  ? new Pool({
-      connectionString,
-      ssl: connectionString && /railway|rlwy/i.test(connectionString)
-        ? { rejectUnauthorized: false }
-        : process.env.NODE_ENV === 'production'
+export function buildDatabasePoolConfig({
+  connectionString,
+  isProduction = process.env.NODE_ENV === 'production',
+}: {
+  connectionString?: string;
+  isProduction?: boolean;
+}) {
+  const timeoutMs = Number(process.env.DATABASE_TIMEOUT_MS || 2000);
+
+  return {
+    connectionString,
+    ssl: connectionString && /railway|rlwy/i.test(connectionString)
+      ? { rejectUnauthorized: false }
+      : isProduction
         ? { rejectUnauthorized: false }
         : false,
-    })
+    connectionTimeoutMillis: timeoutMs,
+    idleTimeoutMillis: timeoutMs,
+    max: 2,
+  };
+}
+
+const pool = hasConfiguredDatabase
+  ? new Pool(buildDatabasePoolConfig({ connectionString }))
   : null;
+
+let databaseAvailable = Boolean(pool);
 
 const createNoopPool = (): DatabasePool => ({
   async query() {
@@ -87,15 +104,41 @@ const connectWithTimeout = async (connectFn: () => Promise<PoolClient>) => {
   ]);
 };
 
+const guardUnavailablePool = () => {
+  if (!pool) return;
+
+  const originalQuery = pool.query.bind(pool);
+  const originalConnect = pool.connect.bind(pool);
+
+  pool.query = ((...args: Parameters<typeof originalQuery>) => {
+    if (!databaseAvailable) {
+      return Promise.reject(new Error('Database is not configured or not reachable'));
+    }
+    return originalQuery(...args);
+  }) as typeof pool.query;
+
+  pool.connect = ((...args: Parameters<typeof originalConnect>) => {
+    if (!databaseAvailable) {
+      return Promise.reject(new Error('Database is not configured or not reachable'));
+    }
+    return originalConnect(...args);
+  }) as typeof pool.connect;
+};
+
+guardUnavailablePool();
+
 // Automatically create tables on initialization
 const initDatabase = async () => {
   if (!pool) {
+    databaseAvailable = false;
     return;
   }
 
   try {
     const client = await connectWithTimeout(() => pool.connect());
     try {
+      databaseAvailable = true;
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS artists (
           id SERIAL PRIMARY KEY,
@@ -166,6 +209,7 @@ const initDatabase = async () => {
       client.release();
     }
   } catch (err) {
+    databaseAvailable = false;
     console.warn('Database initialization skipped because PostgreSQL is unavailable.', err);
   }
 };

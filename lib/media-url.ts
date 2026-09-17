@@ -1,5 +1,5 @@
 import { reportTrackCounts } from '@/lib/audio-counts';
-import { getSiteBaseUrl } from '@/lib/download';
+import { getSiteBaseUrl, normalizeSameOriginUrl } from '@/lib/download';
 
 export function isBucketObjectKey(id: string | null | undefined): id is string {
   if (typeof id !== 'string' || !id.trim()) {
@@ -64,18 +64,23 @@ export function getStoredThumbnailUrl(
   thumbnailUrl?: string | null,
   size = 400,
 ) {
-  if (thumbnailUrl) return thumbnailUrl.startsWith('/') ? new URL(thumbnailUrl, getSiteBaseUrl()).toString() : thumbnailUrl;
+  if (thumbnailUrl) {
+    const resolved = thumbnailUrl.startsWith('/') ? new URL(thumbnailUrl, getSiteBaseUrl()).toString() : thumbnailUrl;
+    return normalizeSameOriginUrl(resolved);
+  }
 
   if (fileUrl && /\/api\/dashboard\/media\//i.test(fileUrl)) {
-    return new URL('/noll.jpg', getSiteBaseUrl()).toString();
+    return normalizeSameOriginUrl(new URL('/noll.jpg', getSiteBaseUrl()).toString());
   }
 
   const fileId = extractStoredFileId(fileUrl);
   if (!fileId) return new URL('/noll.jpg', getSiteBaseUrl()).toString();
 
-  return isBucketObjectKey(fileId)
+  const fallbackUrl = isBucketObjectKey(fileId)
     ? `/api/dashboard/media/${encodeURIComponent(fileId)}`
     : `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w${size}`;
+
+  return normalizeSameOriginUrl(fallbackUrl);
 }
 
 export function getStoredMediaUrl(fileUrl: string | null | undefined, options?: { download?: boolean; filename?: string; title?: string; artist?: string }) {

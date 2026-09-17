@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getDatabaseConnectionString, resolveDatabaseConnectionString } from './db';
+import { buildDatabasePoolConfig, getDatabaseConnectionString, resolveDatabaseConnectionString } from './db';
 
 test('resolveDatabaseConnectionString prefers a real configured DATABASE_URL', () => {
   const value = resolveDatabaseConnectionString({
@@ -54,5 +54,17 @@ test('getDatabaseConnectionString ignores placeholder Railway values and prefers
   });
 
   assert.equal(value, 'postgresql://postgres:secret@sakura.proxy.rlwy.net:43026/railway');
+});
+
+test('buildDatabasePoolConfig sets a fast connection timeout so blocked DB connections fail instead of hanging', () => {
+  const config = buildDatabasePoolConfig({
+    connectionString: 'postgresql://postgres:secret@localhost:5432/app',
+    isProduction: false,
+  });
+
+  assert.equal(config.connectionString, 'postgresql://postgres:secret@localhost:5432/app');
+  assert.equal(config.connectionTimeoutMillis, 2000);
+  assert.equal(config.idleTimeoutMillis, 2000);
+  assert.equal(config.max, 2);
 });
 

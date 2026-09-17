@@ -522,7 +522,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
     } finally {
       setUploading(false);
     }
-  }, [uploadTitle, uploadType]);
+  }, [generateVideoThumbnail, uploadTitle, uploadType]);
 
   const handleUpload = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();

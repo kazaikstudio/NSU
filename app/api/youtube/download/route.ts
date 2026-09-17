@@ -359,8 +359,8 @@ export async function GET(req: Request) {
 
   const id = searchParams.get("id") || searchParams.get("videoId");
   const itag = Number(searchParams.get("itag"));
-  const rawOutput = searchParams.get("output") || "mp4";
-  const output = ["wav", "m4a", "aac"].includes(rawOutput.toLowerCase()) ? "mp3" : rawOutput.toLowerCase();
+  const rawOutput = (searchParams.get("output") || "mp4").toLowerCase();
+  const output = rawOutput;
   const bitrate = Number(searchParams.get("bitrate")) || 192;
 
   if (!id) {
@@ -413,7 +413,7 @@ export async function GET(req: Request) {
 
     let selectedFormat = availableFormats.find((format) => format.itag === itag);
     const ffmpegAvailable = Boolean(getFfmpegPath());
-    const audioOutput = output === "mp3";
+    const audioOutput = ["mp3", "wav", "m4a", "aac"].includes(output);
 
     if (!selectedFormat) {
       throw new YoutubeDownloadError(404, {

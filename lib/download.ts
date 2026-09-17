@@ -18,20 +18,37 @@ export function getSiteBaseUrl() {
   return configured[0]?.replace(/\/$/, '') || 'https://nollstudios.org';
 }
 
+export function normalizeSameOriginUrl(url: string) {
+  if (typeof window === 'undefined') {
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url, window.location.origin);
+    if (parsed.origin === window.location.origin) {
+      return `${parsed.pathname}${parsed.search}${parsed.hash}` || '/';
+    }
+  } catch {
+    // ignore malformed URLs and keep the original value
+  }
+
+  return url;
+}
+
 export function resolveAssetUrl(url?: string | null) {
   if (!url || !url.trim()) return `${getSiteBaseUrl()}/noll.jpg`;
 
   const trimmed = url.trim();
   if (/^https?:\/\//i.test(trimmed) || /^data:/i.test(trimmed)) {
-    return trimmed;
+    return normalizeSameOriginUrl(trimmed);
   }
 
   if (trimmed.startsWith('//')) {
-    return `https:${trimmed}`;
+    return normalizeSameOriginUrl(`https:${trimmed}`);
   }
 
   if (trimmed.startsWith('/')) {
-    return new URL(trimmed, getSiteBaseUrl()).toString();
+    return normalizeSameOriginUrl(new URL(trimmed, getSiteBaseUrl()).toString());
   }
 
   return trimmed;
@@ -52,7 +69,7 @@ export function inferDownloadCategoryFromFilename(filename: string): DownloadCat
   return audioExtensions.includes(extension) ? 'audio' : 'video';
 }
 
-export function normalizeAudioDownloadExtension(extension?: string | null) {
+export function normalizeAudioDownloadExtension(_extension?: string | null) {
   return 'mp3';
 }
 
