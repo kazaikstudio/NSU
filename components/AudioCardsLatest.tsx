@@ -410,7 +410,7 @@ export default function AudioCardsLatest() {
 
     const params = new URLSearchParams({ download: '1', filename: buildAudioDownloadName(track.title, track.artist || track.artistName), title: track.title });
     if (track.artist) params.set('artist', track.artist);
-    return `/api/dashboard/media/${fileId}?${params.toString()}`;
+    return `/api/dashboard/media/${encodeURIComponent(fileId)}?${params.toString()}`;
   };
 
   const handleDownloadClick = async (event: React.MouseEvent<HTMLButtonElement>, track: FeaturedAudioTrack) => {

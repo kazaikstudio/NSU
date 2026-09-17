@@ -8,6 +8,7 @@ import { controlYoutubeDownload, startYoutubeDownload } from '@/lib/youtube-down
 interface DownloadNotice {
   status: 'downloading' | 'done' | 'error';
   title: string;
+  fileName?: string;
   progress?: number;
   downloadedBytes?: number;
   totalBytes?: number;
@@ -75,6 +76,7 @@ export default function DownloadsPage() {
         const updatedEntry: DownloadEntry = {
           id: previousEntries.find((entry) => entry.title === detail.title)?.id ?? `${detail.title}-${now}`,
           title: detail.title,
+          fileName: detail.fileName ?? previousEntries.find((entry) => entry.title === detail.title)?.fileName,
           status: detail.status,
           progress: detail.progress,
           downloadedBytes: detail.downloadedBytes ?? previousEntries.find((entry) => entry.title === detail.title)?.downloadedBytes,

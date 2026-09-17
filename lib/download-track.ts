@@ -55,9 +55,10 @@ export interface TrackDownloadOptions {
 // (rows, cards, full-screen player) keeps the shared counts registry in sync.
 export async function downloadTrackFile(options: TrackDownloadOptions): Promise<TrackDownloadResult | undefined> {
   const { url, title, artist, fileName, src, thumbnailUrl } = options;
+  const resolvedFileName = fileName || buildAudioDownloadName(title, artist);
 
   window.dispatchEvent(new CustomEvent('nsu-download-status', {
-    detail: { status: 'downloading', title, progress: 0, downloadedBytes: 0 },
+    detail: { status: 'downloading', title, progress: 0, downloadedBytes: 0, fileName: resolvedFileName },
   }));
   options.onStatus?.('downloading', 0);
 
@@ -144,7 +145,7 @@ export async function downloadTrackFile(options: TrackDownloadOptions): Promise<
         lastProgress = nextProgress;
         options.onStatus?.('downloading', nextProgress);
         window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-          detail: { status: 'downloading', title, progress: nextProgress, downloadedBytes: loaded, totalBytes: total },
+          detail: { status: 'downloading', title, progress: nextProgress, downloadedBytes: loaded, totalBytes: total, fileName: resolvedFileName },
         }));
       }
     }
@@ -155,7 +156,7 @@ export async function downloadTrackFile(options: TrackDownloadOptions): Promise<
       return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
     });
     const blob = new Blob(binaryData, { type: response.headers.get('content-type') || 'audio/mpeg' });
-    const filename = fileName || buildAudioDownloadName(title, artist);
+    const filename = resolvedFileName;
     const anchor = document.createElement('a');
     const objectUrl = URL.createObjectURL(blob);
     anchor.href = objectUrl;
@@ -174,7 +175,7 @@ export async function downloadTrackFile(options: TrackDownloadOptions): Promise<
 
     options.onStatus?.('done', 100);
     window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-      detail: { status: 'done', title, progress: 100, downloadedBytes: loaded, totalBytes: total || loaded },
+      detail: { status: 'done', title, progress: 100, downloadedBytes: loaded, totalBytes: total || loaded, fileName: resolvedFileName },
     }));
 
     const result: TrackDownloadResult = { trackDownloads, artistTotalDownloads };
@@ -194,7 +195,7 @@ export async function downloadTrackFile(options: TrackDownloadOptions): Promise<
     console.error('Download failed:', error);
     options.onStatus?.('error', 0);
     window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-      detail: { status: 'error', title, progress: 0 },
+      detail: { status: 'error', title, progress: 0, fileName: resolvedFileName },
     }));
     return undefined;
   } finally {
@@ -208,4 +209,5 @@ interface DownloadNoticePayload {
   progress?: number;
   downloadedBytes?: number;
   totalBytes?: number;
+  fileName?: string;
 }

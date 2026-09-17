@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, Download, Pause, Play, RotateCcw, Trash2, X 
 export interface DownloadEntry {
   id: string;
   title: string;
+  fileName?: string;
   status: 'downloading' | 'done' | 'error';
   progress?: number;
   downloadedBytes?: number;
@@ -58,7 +59,11 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
                 <Download size={14} className={`mt-0.5 shrink-0 text-amber-400 sm:h-3.75 sm:w-3.7 ${entry.paused ? '' : 'animate-pulse'}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="truncate text-xs font-semibold text-slate-100 sm:text-sm">{entry.title}</p>
+                    <div className="min-w-0 flex-1">
+                      <p title={entry.fileName} className="truncate text-xs font-semibold text-slate-100 sm:text-sm">
+                        {entry.fileName || entry.title}
+                      </p>
+                    </div>
                     <div className="ml-2 flex shrink-0 items-center gap-2 sm:gap-2.5">
                       <div className="text-right">
                         <div className="font-mono text-[10px] font-semibold text-amber-300 sm:text-[11px]">
@@ -136,7 +141,9 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
         {entry.status === 'done' ? <CheckCircle2 size={14} className="sm:h-4 sm:w-4" /> : <AlertCircle size={14} className="sm:h-4 sm:w-4" />}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-semibold text-slate-200 sm:text-sm">{entry.title}</p>
+        <p title={entry.fileName} className="truncate text-xs font-semibold text-slate-200 sm:text-sm">
+          {entry.fileName || entry.title}
+        </p>
         {(entry.downloadedBytes || entry.totalBytes) ? (
           <p className="mt-1 text-[9px] text-slate-500 sm:text-[10px]">
             {formatBytes(entry.downloadedBytes)} of {formatBytes(entry.totalBytes)}

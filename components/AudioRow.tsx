@@ -9,7 +9,7 @@ import { playNextAfter, primeNextAfter, registerPlaybackEntry, unregisterPlaybac
 import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer, requestPlaybackToggle, type PlayerTrack } from '@/lib/audio-player';
 import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying, type NowPlayingSnapshot } from '@/lib/audio-now-playing';
-import { recordTrackPlay } from '@/lib/media-url';
+import { extractStoredFileId, recordTrackPlay } from '@/lib/media-url';
 import { buildAudioDownloadName } from '@/lib/download';
 
 interface DownloadCountUpdate {
@@ -44,20 +44,19 @@ interface AudioRowProps {
   progress?: number;
 }
 
-function getDownloadUrl(fileUrl: string | undefined, fileName: string | undefined, title: string, artistName?: string) {
+function getDownloadUrl(fileUrl: string | undefined, filename?: string, title?: string, artistName?: string) {
   if (!fileUrl) return undefined;
 
-  const match = fileUrl.match(/\/api\/dashboard\/media\/([^?]+)|\/media\/([^?]+)|[?&]id=([^&]+)/i);
-  const fileId = match?.[1] || match?.[2] || match?.[3];
+  const fileId = extractStoredFileId(fileUrl);
   if (!fileId) return fileUrl;
 
   const params = new URLSearchParams({
     download: '1',
-    filename: fileName || buildAudioDownloadName(title, artistName),
-    title,
+    filename: filename || buildAudioDownloadName(title || '', artistName),
+    title: title || '',
   });
   if (artistName) params.set('artist', artistName);
-  return `/api/dashboard/media/${fileId}?${params.toString()}`;
+  return `/api/dashboard/media/${encodeURIComponent(fileId)}?${params.toString()}`;
 }
 
 interface AudioCacheEntry {
@@ -312,7 +311,8 @@ export default function AudioRow({
       ? `${artistName} ft ${featuredArtistName}`
       : artistName
     : '';
-  const downloadUrl = getDownloadUrl(fileUrl, fileName, title, artistCredit);
+  const downloadName = buildAudioDownloadName(title, artistCredit || artistName);
+  const downloadUrl = getDownloadUrl(fileUrl, downloadName, title, artistCredit);
   const hasArtistDetails = Boolean(artistCredit);
   const registryPlaying = registrySnapshot?.isPlaying ?? false;
   // A row looks "playing" if its own <audio> is playing OR the shared registry
@@ -347,7 +347,7 @@ export default function AudioRow({
       url: downloadUrl,
       title,
       artist: artistCredit || undefined,
-      fileName: fileName || buildAudioDownloadName(title, artistName),
+      fileName: downloadName,
       src,
       thumbnailUrl: thumbnailUrl || undefined,
       onStatus: (status, progress) => {
@@ -551,7 +551,7 @@ onPlay={() => {
       {showDownload && downloadUrl && (
         <a
           href={downloadUrl}
-          download={fileName || buildAudioDownloadName(title, artistName)}
+          download={downloadName}
           onClick={handleDownloadClick}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-2 text-[11px] font-semibold text-Eltext1 transition hover:border-amber-300 hover:bg-amber-400/20 sm:px-3 cursor-pointer"
           aria-label={`Download ${title}`}

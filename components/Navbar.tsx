@@ -9,6 +9,7 @@ import { usePathname, useRouter } from 'next/navigation';
 interface DownloadEntry {
   id: string;
   title: string;
+  fileName?: string;
   status: 'downloading' | 'done' | 'error';
   progress?: number;
   sourceVideoId?: string;
@@ -89,6 +90,7 @@ const Navbar = () => {
         const updatedEntry: DownloadEntry = {
           id: previousEntry?.id ?? `${detail.title}-${now}`,
           title: detail.title,
+          fileName: detail.fileName ?? previousEntry?.fileName,
           status: detail.status,
           progress: detail.progress,
           sourceVideoId: detail.sourceVideoId ?? previousEntry?.sourceVideoId,

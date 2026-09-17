@@ -131,7 +131,7 @@ export function buildAudioDownloadName(title: string, artistName?: string, exten
     .trim();
 
   const normalizedArtist = artistName ? sanitizeDownloadFilename(artistName).trim() : '';
-  const titleAndArtist = normalizedArtist ? `${normalizedTitle} By artist = ${normalizedArtist}` : normalizedTitle;
+  const titleAndArtist = normalizedArtist ? `${normalizedTitle} By ${normalizedArtist}` : normalizedTitle;
   const withSuffix = titleAndArtist ? `${titleAndArtist} (Nollstudios.org)` : 'Nollstudios.org';
   const audioExtension = normalizeAudioDownloadExtension(extension);
   return `${withSuffix}.${audioExtension}`;

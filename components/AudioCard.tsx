@@ -33,7 +33,7 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
 
     const params = new URLSearchParams({ download: '1', filename: buildAudioDownloadName(track.title, track.artistName), title: track.title });
     if (track.artistName) params.set('artist', track.artistName);
-    return `/api/dashboard/media/${fileId}?${params.toString()}`;
+    return `/api/dashboard/media/${encodeURIComponent(fileId)}?${params.toString()}`;
   }
 
   function normalizeImageUrl(url?: string | null) {

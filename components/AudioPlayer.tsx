@@ -59,7 +59,7 @@ function buildDownloadUrl(src: string, title: string, artist?: string) {
     title,
   });
   if (artist) params.set('artist', artist);
-  return `/api/dashboard/media/${fileId}?${params.toString()}`;
+  return `/api/dashboard/media/${encodeURIComponent(fileId)}?${params.toString()}`;
 }
 
 export default function AudioPlayer() {
