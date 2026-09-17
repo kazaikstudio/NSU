@@ -551,7 +551,7 @@ onPlay={() => {
       {showDownload && downloadUrl && (
         <a
           href={downloadUrl}
-          download={fileName || `${title}.mp3`}
+          download={fileName || buildAudioDownloadName(title, artistName)}
           onClick={handleDownloadClick}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-2 text-[11px] font-semibold text-Eltext1 transition hover:border-amber-300 hover:bg-amber-400/20 sm:px-3 cursor-pointer"
           aria-label={`Download ${title}`}
