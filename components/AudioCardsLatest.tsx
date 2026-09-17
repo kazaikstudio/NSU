@@ -424,6 +424,7 @@ export default function AudioCardsLatest() {
       title: track.title,
       artist: track.artist || track.artistName,
       src: getPlayableAudioUrl(track.fileUrl),
+      thumbnailUrl: track.thumbnailUrl || track.coverUrl || undefined,
     });
   };
 

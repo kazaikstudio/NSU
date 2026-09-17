@@ -348,6 +348,7 @@ export default function AudioRow({
       artist: artistCredit || undefined,
       fileName: fileName || `${title}.mp3`,
       src,
+      thumbnailUrl: thumbnailUrl || undefined,
       onStatus: (status, progress) => {
         setDownloadStatus(status);
         downloadProgressRef.current = progress;

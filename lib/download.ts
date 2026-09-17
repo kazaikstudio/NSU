@@ -44,7 +44,11 @@ export function buildDownloadFilename(filename: string, category?: DownloadCateg
   return safeFilename;
 }
 
-export function getAudioDownloadThumbnailUrl() {
+export function getAudioDownloadThumbnailUrl(thumbnailUrl?: string | null) {
+  if (thumbnailUrl && thumbnailUrl.trim()) {
+    return thumbnailUrl.trim();
+  }
+
   return NOLL_STUDIO_DOWNLOAD_THUMBNAIL;
 }
 

@@ -536,6 +536,7 @@ export default function AudioPlayer() {
                               title: track.title,
                               artist: track.artist,
                               src: track.src,
+                              thumbnailUrl: track.thumbnailUrl || undefined,
                             });
                           }}
                           aria-label="Download track"

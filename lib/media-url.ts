@@ -63,11 +63,11 @@ export function getStoredThumbnailUrl(
   thumbnailUrl?: string | null,
   size = 400,
 ) {
+  if (thumbnailUrl) return thumbnailUrl;
+
   if (fileUrl && /\/api\/dashboard\/media\//i.test(fileUrl)) {
     return '/noll.jpg';
   }
-
-  if (thumbnailUrl) return thumbnailUrl;
 
   const fileId = extractStoredFileId(fileUrl);
   if (!fileId) return '/noll.jpg';

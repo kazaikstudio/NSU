@@ -46,6 +46,7 @@ export interface TrackDownloadOptions {
   artist?: string;
   fileName?: string;
   src?: string;
+  thumbnailUrl?: string;
   onStatus?: (status: 'downloading' | 'done' | 'error', progress: number) => void;
 }
 
@@ -53,7 +54,7 @@ export interface TrackDownloadOptions {
 // client-side blob, and returns the server-recorded counts so every call site
 // (rows, cards, full-screen player) keeps the shared counts registry in sync.
 export async function downloadTrackFile(options: TrackDownloadOptions): Promise<TrackDownloadResult | undefined> {
-  const { url, title, artist, fileName, src } = options;
+  const { url, title, artist, fileName, src, thumbnailUrl } = options;
 
   window.dispatchEvent(new CustomEvent('nsu-download-status', {
     detail: { status: 'downloading', title, progress: 0, downloadedBytes: 0 },
@@ -67,6 +68,9 @@ export async function downloadTrackFile(options: TrackDownloadOptions): Promise<
     const region = await getDownloadRegion();
     const requestUrl = new URL(url, window.location.origin);
     if (region) requestUrl.searchParams.set('region', region);
+    if (thumbnailUrl && thumbnailUrl.trim()) {
+      requestUrl.searchParams.set('thumbnailUrl', thumbnailUrl.trim());
+    }
 
     const response = await fetch(requestUrl, { cache: 'no-store', signal: controller.signal });
     if (!response.ok) {
@@ -156,7 +160,7 @@ export async function downloadTrackFile(options: TrackDownloadOptions): Promise<
     const objectUrl = URL.createObjectURL(blob);
     anchor.href = objectUrl;
     anchor.download = filename;
-    anchor.dataset.thumbnailUrl = getAudioDownloadThumbnailUrl();
+    anchor.dataset.thumbnailUrl = getAudioDownloadThumbnailUrl(thumbnailUrl);
     anchor.style.display = 'none';
     document.body.appendChild(anchor);
     anchor.click();

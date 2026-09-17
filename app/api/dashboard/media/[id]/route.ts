@@ -87,6 +87,7 @@ async function handleMediaRequest(
   const range = request.headers.get('range');
   const searchParams = new URL(request.url).searchParams;
   const requestedFilename = searchParams.get('filename');
+  const requestedThumbnailUrl = searchParams.get('thumbnailUrl') || searchParams.get('thumbnail') || undefined;
   const artistName = searchParams.get('artist') || undefined;
   const title = searchParams.get('title') || undefined;
   const downloadRegion = searchParams.get('region');
@@ -168,7 +169,7 @@ async function handleMediaRequest(
     const extension = safeFilename.split('.').pop()?.toLowerCase();
     const fileName = buildAudioDownloadName(title || safeFilename, artistName, extension);
     headers.set('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-    headers.set('X-NSU-Thumbnail-Url', getAudioDownloadThumbnailUrl());
+    headers.set('X-NSU-Thumbnail-Url', getAudioDownloadThumbnailUrl(requestedThumbnailUrl));
   }
 
   return new NextResponse(method === 'HEAD' ? null : response.body, { status: response.status, headers });

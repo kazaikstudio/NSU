@@ -580,7 +580,7 @@ export async function GET(req: Request) {
         headers: {
           "Content-Type": mimeType,
           "Content-Disposition": `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodedFilename}`,
-          "X-NSU-Thumbnail-Url": getAudioDownloadThumbnailUrl(),
+          "X-NSU-Thumbnail-Url": getAudioDownloadThumbnailUrl(new URL(req.url).searchParams.get('thumbnailUrl') || new URL(req.url).searchParams.get('thumbnail')),
           "Access-Control-Expose-Headers": "Content-Disposition, X-NSU-Download-Code, X-NSU-Download-Runtime, X-NSU-Thumbnail-Url",
           "Cache-Control": 'no-store',
         },
