@@ -193,12 +193,29 @@ export async function POST(request: Request, context: Context) {
     const title = String(formData.get('title') || '');
     const album = String(formData.get('album') || '') || null;
     const featuredArtistName = String(formData.get('featuredArtistName') || '').trim() || null;
+    const thumbnail = formData.get('thumbnail');
 
     if (!(file instanceof File) || (kind !== 'banner' && kind !== 'profile' && kind !== 'track')) {
       return NextResponse.json({ error: 'A file and valid media kind are required' }, { status: 400 });
     }
     if (kind === 'track' && !title.trim()) {
       return NextResponse.json({ error: 'Track title is required' }, { status: 400 });
+    }
+
+    let thumbnailUrl: string | null = null;
+    let thumbnailDriveFileId: string | null = null;
+    if (thumbnail instanceof File && thumbnail.type.startsWith('image/')) {
+      try {
+        const thumbnailFile = await uploadToBucket({
+          name: `artist-track-cover-${Date.now()}-${thumbnail.name}`,
+          mimeType: thumbnail.type,
+          bytes: await thumbnail.arrayBuffer(),
+        });
+        thumbnailUrl = thumbnailFile.publicUrl;
+        thumbnailDriveFileId = thumbnailFile.id;
+      } catch (error) {
+        console.warn('Unable to upload extracted track cover', error);
+      }
     }
 
     let storageFile: { id: string; publicUrl: string; name: string; mimeType: string };
@@ -233,10 +250,10 @@ export async function POST(request: Request, context: Context) {
       const mediaId = `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const mediaTitle = title.trim() || (kind === 'banner' ? 'Artist Banner' : kind === 'profile' ? 'Artist Profile' : 'Track');
       const { rows } = await pool.query(
-        `INSERT INTO artist_media (id, artist_id, kind, title, album, featured_artist_name, file_name, mime_type, file_url, drive_file_id, download_count)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0)
-         RETURNING id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", download_count AS "downloadCount", created_at AS "createdAt"`,
-        [mediaId, artistId, kind, mediaTitle, album, featuredArtistName, file.name, file.type || 'application/octet-stream', storageFile.publicUrl, storageFile.id]
+        `INSERT INTO artist_media (id, artist_id, kind, title, album, featured_artist_name, file_name, mime_type, file_url, drive_file_id, thumbnail_url, thumbnail_drive_file_id, download_count)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0)
+         RETURNING id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", download_count AS "downloadCount", created_at AS "createdAt"`,
+        [mediaId, artistId, kind, mediaTitle, album, featuredArtistName, file.name, file.type || 'application/octet-stream', storageFile.publicUrl, storageFile.id, thumbnailUrl, thumbnailDriveFileId]
       );
 
       if (kind === 'banner' || kind === 'profile') {
@@ -269,6 +286,7 @@ export async function POST(request: Request, context: Context) {
           fileName: file.name,
           mimeType: file.type || 'application/octet-stream',
           fileUrl: storageFile.publicUrl,
+          thumbnailUrl,
           downloadCount: 0,
           createdAt: new Date().toISOString(),
         },

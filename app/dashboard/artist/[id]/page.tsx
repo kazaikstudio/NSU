@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { getArtistById } from '@/lib/artists';
+import { extractAudioCoverArt } from '@/lib/audio-cover';
 import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 
 interface Artist {
@@ -321,6 +322,16 @@ export default function ArtistDetailPage() {
     formData.append('title', title);
     formData.append('album', album);
     formData.append('featuredArtistName', featuredArtist);
+    if (kind === 'track') {
+      try {
+        const cover = await extractAudioCoverArt(file);
+        if (cover) {
+          formData.append('thumbnail', new File([cover.blob], cover.name, { type: cover.blob.type }));
+        }
+      } catch {
+        // tolerate cover extraction failures and upload the track without a thumbnail
+      }
+    }
     return await new Promise<Track>((resolve, reject) => {
       const request = new XMLHttpRequest();
       request.open('POST', `/api/dashboard/artists/${params.id}/media`);
@@ -368,6 +379,7 @@ export default function ArtistDetailPage() {
         featuredArtistName: media.featuredArtistName || null,
         fileName: media.fileName,
         fileUrl: media.fileUrl,
+        thumbnailUrl: media.thumbnailUrl,
         downloadCount: Number(media.downloadCount || 0),
         uploadedAt: new Date(media.createdAt || new Date().toISOString()).toISOString().split('T')[0],
       }, ...prevTracks]);

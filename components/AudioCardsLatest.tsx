@@ -425,7 +425,6 @@ export default function AudioCardsLatest() {
       title: track.title,
       artist: track.artist || track.artistName,
       src: getPlayableAudioUrl(track.fileUrl),
-      thumbnailUrl: track.thumbnailUrl || track.coverUrl || undefined,
     });
   };
 
@@ -545,23 +544,20 @@ export default function AudioCardsLatest() {
                     <div className="flex justify-between items-center gap-4 w-full">
                       {/* Left: Text & Info */}
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-white/80 backdrop-blur-md">
-                            Track
-                          </span>
-                        </div>
                         <div className="flex items-center gap-2">
                           <span className="text-white font-semibold text-base sm:text-lg tracking-tight truncate min-w-0 drop-shadow-sm">
                             {track.title || 'Untitled Track'}
-                          </span>
-                          <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-medium text-white/60">
-                            <Play size={10} className="fill-current" />
-                            {plays.toLocaleString()} plays
                           </span>
                         </div>
                         <p className="text-xs text-white/60 truncate mt-0.5">
                           {track.artist || 'Audio Track'}
                         </p>
+                        <div className="flex items-center gap-3 mt-2.5">
+                          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-white/40 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                            <Play size={10} className="fill-current text-navlink" />
+                            {plays.toLocaleString()} plays
+                            </span>
+                          </div>
                       </div>
 
                       {/* Right: Modern Floating Thumbnail Image with Soft Glow */}

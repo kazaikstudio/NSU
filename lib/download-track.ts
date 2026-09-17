@@ -1,6 +1,36 @@
+import { ID3Writer } from 'browser-id3-writer';
 import { reportTrackCounts } from '@/lib/audio-counts';
 import { buildAudioDownloadName, getAudioDownloadThumbnailUrl } from '@/lib/download';
 import { registerClientDownload } from '@/lib/download-controls';
+
+async function fetchCoverArt(url: string): Promise<ArrayBuffer | null> {
+  try {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    if (!blob.size) return null;
+    return await blob.arrayBuffer();
+  } catch {
+    return null;
+  }
+}
+
+function looksLikeMp3(head: Uint8Array) {
+  if (head.length >= 3 && head[0] === 0x49 && head[1] === 0x44 && head[2] === 0x33) return true;
+  return head.length >= 2 && head[0] === 0xff && (head[1] & 0xe0) === 0xe0;
+}
+
+async function embedCoverArt(source: Blob, cover: ArrayBuffer, title: string, artist?: string) {
+  const writer = new ID3Writer(await source.arrayBuffer());
+  writer.setFrame('TIT2', title);
+  if (artist) writer.setFrame('TPE1', [artist]);
+  writer.setFrame('APIC', {
+    type: 3,
+    data: cover,
+    description: 'Cover',
+  });
+  return writer.getBlob();
+}
 
 async function getDownloadRegion() {
   if (typeof navigator === 'undefined' || !navigator.geolocation) return undefined;
@@ -46,7 +76,6 @@ export interface TrackDownloadOptions {
   artist?: string;
   fileName?: string;
   src?: string;
-  thumbnailUrl?: string;
   onStatus?: (status: 'downloading' | 'done' | 'error', progress: number) => void;
 }
 
@@ -54,7 +83,7 @@ export interface TrackDownloadOptions {
 // client-side blob, and returns the server-recorded counts so every call site
 // (rows, cards, full-screen player) keeps the shared counts registry in sync.
 export async function downloadTrackFile(options: TrackDownloadOptions): Promise<TrackDownloadResult | undefined> {
-  const { url, title, artist, fileName, src, thumbnailUrl } = options;
+  const { url, title, artist, fileName, src } = options;
   const resolvedFileName = fileName || buildAudioDownloadName(title, artist);
 
   window.dispatchEvent(new CustomEvent('nsu-download-status', {
@@ -69,9 +98,6 @@ export async function downloadTrackFile(options: TrackDownloadOptions): Promise<
     const region = await getDownloadRegion();
     const requestUrl = new URL(url, window.location.origin);
     if (region) requestUrl.searchParams.set('region', region);
-    if (thumbnailUrl && thumbnailUrl.trim()) {
-      requestUrl.searchParams.set('thumbnailUrl', thumbnailUrl.trim());
-    }
 
     const response = await fetch(requestUrl, { cache: 'no-store', signal: controller.signal });
     if (!response.ok) {
@@ -96,6 +122,7 @@ export async function downloadTrackFile(options: TrackDownloadOptions): Promise<
     let loaded = 0;
     let lastProgress = 0;
     let checkedFirstChunk = false;
+    let headBytes = new Uint8Array(0);
 
     // Simulated pacing so the UI shows movement even when the backend doesn't
     // report a content-length for the stream.
@@ -121,6 +148,7 @@ export async function downloadTrackFile(options: TrackDownloadOptions): Promise<
 
       if (!checkedFirstChunk) {
         checkedFirstChunk = true;
+        headBytes = new Uint8Array(value.subarray(0, 8));
         const head = Array.from(value.subarray(0, Math.min(value.length, 64)))
           .map((byte) => String.fromCharCode(byte))
           .join('');
@@ -155,13 +183,28 @@ export async function downloadTrackFile(options: TrackDownloadOptions): Promise<
       array.set(chunk);
       return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
     });
-    const blob = new Blob(binaryData, { type: response.headers.get('content-type') || 'audio/mpeg' });
+    const contentType = response.headers.get('content-type') || 'audio/mpeg';
+    const baseBlob = new Blob(binaryData, { type: contentType });
+    let downloadBlob = baseBlob;
+
+    if (looksLikeMp3(headBytes)) {
+      const coverUrl = getAudioDownloadThumbnailUrl();
+      const cover = await fetchCoverArt(coverUrl);
+      if (cover) {
+        try {
+          downloadBlob = await embedCoverArt(baseBlob, cover, title, artist);
+        } catch (error) {
+          console.warn('Unable to embed cover art, downloading raw audio instead', error);
+          downloadBlob = baseBlob;
+        }
+      }
+    }
+
     const filename = resolvedFileName;
     const anchor = document.createElement('a');
-    const objectUrl = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(downloadBlob);
     anchor.href = objectUrl;
     anchor.download = filename;
-    anchor.dataset.thumbnailUrl = getAudioDownloadThumbnailUrl(thumbnailUrl);
     anchor.style.display = 'none';
     document.body.appendChild(anchor);
     anchor.click();

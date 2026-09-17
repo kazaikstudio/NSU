@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { LayoutDashboard, Users, History, HardDrive, LogOut, Video } from 'lucide-react';
 import { clampUploadProgress, formatUploadStatusMessage } from '@/lib/talk-show-upload';
 import { getStoredThumbnailUrl } from '@/lib/media-url';
+import { extractAudioCoverArt } from '@/lib/audio-cover';
 import type { DashboardUser } from '@/lib/dashboard-auth';
 import DashboardCharts from '@/components/DashboardCharts';
 
@@ -475,7 +476,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
       formData.append('source', 'talk-show');
       const generatedThumbnail = fileToUpload.type.startsWith('video/') || typeToUse === 'video'
         ? await generateVideoThumbnail(fileToUpload)
-        : null;
+        : await extractAudioCoverArt(fileToUpload).then((cover) => cover ? new File([cover.blob], cover.name, { type: cover.blob.type }) : null);
       if (generatedThumbnail) {
         formData.append('thumbnail', generatedThumbnail);
       }
