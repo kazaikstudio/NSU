@@ -63,13 +63,7 @@ type DownloadRetryDetail = {
 
 function DownloadForm() {
   const searchParams = useSearchParams()
-  const [source, setSource] = useState(() => {
-    const querySource = searchParams.get('video')
-    if (querySource) return querySource
-
-    if (typeof window === 'undefined') return ''
-    return window.localStorage.getItem(SAVED_DOWNLOAD_LINK_KEY) || ''
-  })
+  const [source, setSource] = useState(() => searchParams.get('video') || '')
   const [error, setError] = useState('')
   const [title, setTitle] = useState('')
   const [formats, setFormats] = useState<DownloadFormat[]>([])
@@ -109,6 +103,16 @@ function DownloadForm() {
       setLoadingFormats(false)
     }
   }
+
+  useEffect(() => {
+    const querySource = searchParams.get('video')
+    const savedSource = typeof window !== 'undefined' ? window.localStorage.getItem(SAVED_DOWNLOAD_LINK_KEY) || '' : ''
+    const initialSource = querySource || savedSource
+
+    if (initialSource && !source) {
+      setSource(initialSource)
+    }
+  }, [searchParams, source])
 
   useEffect(() => {
     const videoId = getVideoId(source)

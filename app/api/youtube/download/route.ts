@@ -272,10 +272,16 @@ async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBas
   if (selectedFormat.url) {
     const url = buildStreamUrl(selectedFormat.url, pot);
     const headers = getStreamRequestHeaders(videoId);
+    console.log('[youtube-download] openYouTubeStream-start', { itag: selectedFormat.itag, urlPrefix: url.slice(0, 120), pot: Boolean(pot) });
     try {
       const open = await openYouTubeStream(url, headers);
-      if (open) return open;
-    } catch {
+      console.log('[youtube-download] openYouTubeStream-result', { itag: selectedFormat.itag, ok: Boolean(open), type: open ? typeof open : 'none' });
+      if (open) {
+        console.log('[youtube-download] returning open stream', { itag: selectedFormat.itag });
+        return open;
+      }
+    } catch (error) {
+      console.error('[youtube-download] openYouTubeStream-error', { itag: selectedFormat.itag, error: error instanceof Error ? error.message : String(error) });
       // Fall through to the client-native downloader below.
     }
   }
@@ -532,6 +538,30 @@ export async function GET(req: Request) {
           },
         },
       });
+    }
+
+    const isDirectPlayableAudio = audioOutput && selectedFormat.has_audio && !selectedFormat.has_video;
+    if (audioOutput && (isDirectPlayableAudio || !ffmpegAvailable)) {
+      const outputStream = teeStreamToFile(Readable.fromWeb(stream as never), downloadPath);
+      outputStream.once('error', (error) => {
+        console.error('direct audio stream failed', {
+          videoId: id,
+          itag,
+          output,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+      });
+      const response = createReadableStreamResponse(outputStream, {
+        status: 200,
+        headers: {
+          "Content-Type": mimeType,
+          "Content-Disposition": `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodedFilename}`,
+          "X-NSU-Thumbnail-Url": getAudioDownloadThumbnailUrl(new URL(req.url).searchParams.get('thumbnailUrl') || new URL(req.url).searchParams.get('thumbnail')),
+          "Access-Control-Expose-Headers": "Content-Disposition, X-NSU-Download-Code, X-NSU-Download-Runtime, X-NSU-Thumbnail-Url",
+          "Cache-Control": 'no-store',
+        },
+      }, 'audio-direct');
+      return withCors(response, req);
     }
 
     if (audioOutput) {
