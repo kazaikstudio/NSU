@@ -9,6 +9,7 @@ import { getStoredThumbnailUrl } from '@/lib/media-url';
 import { extractAudioCoverArt } from '@/lib/audio-cover';
 import type { DashboardUser } from '@/lib/dashboard-auth';
 import DashboardCharts from '@/components/DashboardCharts';
+import EditMemberModal, { type MemberFormValues } from '@/components/EditMemberModal';
 
 type NavPage = 'dashboard' | 'artists' | 'videos' | 'histories' | 'storage' | 'members';
 
@@ -254,12 +255,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
 
   const handleOpenEditMember = useCallback((member: Member) => {
     setEditingMember(member);
-    setNewMemberName(member.name);
-    setNewMemberEmail(member.email);
-    setNewMemberContact(member.contact || '');
-    setNewMemberProfilePic(member.profilePic || '');
-    setNewMemberCategory(member.category);
-    setNewMemberStatus(member.status);
     setIsMemberModalOpen(true);
   }, []);
 
@@ -328,8 +323,8 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
     setMemberMessage('');
     setSavingMember(true);
     try {
-      const response = await fetch(editingMember ? `/api/members/${editingMember.id}` : '/api/members', {
-        method: editingMember ? 'PUT' : 'POST',
+      const response = await fetch('/api/members', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: newMemberName,
@@ -343,22 +338,41 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to save member');
 
-      setMembers((prev) => editingMember
-        ? prev.map((member) => member.id === editingMember.id ? data.member : member)
-        : [data.member, ...prev]);
-      setEditingMember(null);
+      setMembers((prev) => [data.member, ...prev]);
       setNewMemberName('');
       setNewMemberEmail('');
       setNewMemberContact('');
       setNewMemberProfilePic('');
       setIsMemberModalOpen(false);
-      setMemberMessage(editingMember ? 'Member updated successfully.' : 'Member added successfully.');
+      setMemberMessage('Member added successfully.');
     } catch (error) {
       setMemberMessage(error instanceof Error ? error.message : 'Unable to save member');
     } finally {
       setSavingMember(false);
     }
-  }, [newMemberName, newMemberEmail, newMemberContact, newMemberProfilePic, newMemberCategory, newMemberStatus, editingMember, savingMember]);
+  }, [newMemberName, newMemberEmail, newMemberContact, newMemberProfilePic, newMemberCategory, newMemberStatus, savingMember]);
+
+  const handleUpdateMember = useCallback(async (values: MemberFormValues) => {
+    if (!editingMember) return;
+
+    setMemberMessage('');
+    try {
+      const response = await fetch(`/api/members/${editingMember.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to save member');
+
+      setMembers((prev) => prev.map((member) => member.id === editingMember.id ? data.member : member));
+      setEditingMember(null);
+      setIsMemberModalOpen(false);
+      setMemberMessage('Member updated successfully.');
+    } catch (error) {
+      setMemberMessage(error instanceof Error ? error.message : 'Unable to save member');
+    }
+  }, [editingMember]);
 
   const handleDeleteMember = useCallback(async (id: string) => {
     const response = await fetch(`/api/members/${id}`, { method: 'DELETE' });
@@ -1933,8 +1947,8 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
         </div>
       )}
 
-      {/* Member Modal */}
-      {isMemberModalOpen && (
+      {/* Add New Member Modal */}
+      {isMemberModalOpen && !editingMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-fadeIn">
           <div className={`w-full max-w-lg rounded-3xl border p-7 shadow-2xl transition-all duration-300 ${
             isDarkMode
@@ -2096,12 +2110,25 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                     disabled={savingMember}
                   className="rounded-xl bg-linear-to-r from-indigo-600 to-indigo-700 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30 hover:from-indigo-500 hover:to-indigo-600 transition-all"
                 >
-                  {savingMember ? 'Saving...' : editingMember ? 'Save Changes' : 'Add Member'}
+                  {savingMember ? 'Saving...' : 'Add Member'}
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {/* Edit Team Member Modal */}
+      {isMemberModalOpen && editingMember && (
+        <EditMemberModal
+          member={editingMember}
+          isDarkMode={isDarkMode}
+          onClose={() => {
+            setIsMemberModalOpen(false);
+            setEditingMember(null);
+          }}
+          onUpdate={handleUpdateMember}
+        />
       )}
 
     </div>
