@@ -4,6 +4,7 @@ import type { MouseEvent } from 'react';
 import { Download, Flame } from 'lucide-react';
 import { registerClientDownload } from '@/lib/download-controls';
 import { extractStoredFileId } from '@/lib/media-url';
+import { sanitizeDownloadFilename } from '@/lib/download';
 
 export type ComedyDirectoryItem = {
   id: string;
@@ -33,13 +34,13 @@ export default function ComedyDirectoryList({
     event.stopPropagation();
 
     const safeTitle = (item.title || 'download').trim() || 'download';
-    const fallbackFileName = (item.fileUrl || '').split('/').pop()?.split('?')[0]?.trim() || `${safeTitle}.mp4`;
+    const fallbackFileName = `${sanitizeDownloadFilename(safeTitle) || 'download'}.mp4`;
 
     const getDownloadUrl = (fileUrl: string) => {
       const fileId = extractStoredFileId(fileUrl);
       if (!fileId) return fileUrl;
 
-      return `/api/dashboard/media/${fileId}?download=1`;
+      return `/api/dashboard/media/${encodeURIComponent(fileId)}?download=1`;
     };
 
     const downloadUrl = getDownloadUrl(item.fileUrl);

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Download } from 'lucide-react';
 import { registerClientDownload } from '@/lib/download-controls';
 import { extractStoredFileId } from '@/lib/media-url';
+import { sanitizeDownloadFilename } from '@/lib/download';
 
 type HotComedyItem = {
   id: string;
@@ -27,8 +28,8 @@ export default function HotComediesRowList({ items, onOpenAction }: HotComediesR
     const safeTitle = (item.title || 'download').trim() || 'download';
     const fileUrl = item.fileUrl || '';
     const fileId = extractStoredFileId(fileUrl);
-    const originalFileName = fileUrl.split('/').pop()?.split('?')[0]?.trim() || `${safeTitle}.mp4`;
-    const downloadUrl = fileId ? `/api/dashboard/media/${fileId}?download=1` : fileUrl;
+    const originalFileName = `${sanitizeDownloadFilename(safeTitle) || 'download'}.mp4`;
+    const downloadUrl = fileId ? `/api/dashboard/media/${encodeURIComponent(fileId)}?download=1` : fileUrl;
 
     const dispatchStatus = (status: 'downloading' | 'done' | 'error', progress?: number, downloadedBytes?: number, totalBytes?: number) => {
       window.dispatchEvent(new CustomEvent('nsu-download-status', {

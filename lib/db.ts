@@ -61,7 +61,7 @@ export function buildDatabasePoolConfig({
   connectionString?: string;
   isProduction?: boolean;
 }) {
-  const timeoutMs = Number(process.env.DATABASE_TIMEOUT_MS || 2000);
+  const timeoutMs = Number(process.env.DATABASE_TIMEOUT_MS || 10000);
 
   return {
     connectionString,
@@ -95,7 +95,7 @@ const createNoopPool = (): DatabasePool => ({
 const noopPool = createNoopPool();
 
 const connectWithTimeout = async (connectFn: () => Promise<PoolClient>) => {
-  const timeoutMs = 2000;
+  const timeoutMs = Number(process.env.DATABASE_TIMEOUT_MS || 10000);
   return Promise.race([
     connectFn(),
     new Promise<never>((_, reject) => {
