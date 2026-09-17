@@ -1,4 +1,5 @@
 import { reportTrackCounts } from '@/lib/audio-counts';
+import { getSiteBaseUrl } from '@/lib/download';
 
 export function isBucketObjectKey(id: string | null | undefined): id is string {
   if (typeof id !== 'string' || !id.trim()) {
@@ -63,14 +64,14 @@ export function getStoredThumbnailUrl(
   thumbnailUrl?: string | null,
   size = 400,
 ) {
-  if (thumbnailUrl) return thumbnailUrl;
+  if (thumbnailUrl) return thumbnailUrl.startsWith('/') ? new URL(thumbnailUrl, getSiteBaseUrl()).toString() : thumbnailUrl;
 
   if (fileUrl && /\/api\/dashboard\/media\//i.test(fileUrl)) {
-    return '/noll.jpg';
+    return new URL('/noll.jpg', getSiteBaseUrl()).toString();
   }
 
   const fileId = extractStoredFileId(fileUrl);
-  if (!fileId) return '/noll.jpg';
+  if (!fileId) return new URL('/noll.jpg', getSiteBaseUrl()).toString();
 
   return isBucketObjectKey(fileId)
     ? `/api/dashboard/media/${encodeURIComponent(fileId)}`
