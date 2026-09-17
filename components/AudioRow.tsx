@@ -2,22 +2,14 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
-import { buildAudioDownloadName, getAudioDownloadThumbnailUrl } from '@/lib/download';
-import { registerClientDownload } from '@/lib/download-controls';
+import { getTrackCounts, subscribeTrackCounts, type TrackCountsSnapshot } from '@/lib/audio-counts';
+import { downloadTrackFile } from '@/lib/download-track';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
 import { playNextAfter, primeNextAfter, registerPlaybackEntry, unregisterPlaybackEntry, type PlaybackEntry } from '@/lib/audio-playback';
 import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer, requestPlaybackToggle, type PlayerTrack } from '@/lib/audio-player';
 import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying, type NowPlayingSnapshot } from '@/lib/audio-now-playing';
 import { recordTrackPlay } from '@/lib/media-url';
-
-interface DownloadNoticePayload {
-  status: 'downloading' | 'done' | 'error';
-  title: string;
-  progress?: number;
-  downloadedBytes?: number;
-  totalBytes?: number;
-}
 
 interface DownloadCountUpdate {
   trackDownloads?: number;
@@ -65,39 +57,6 @@ function getDownloadUrl(fileUrl: string | undefined, fileName: string | undefine
   });
   if (artistName) params.set('artist', artistName);
   return `/api/dashboard/media/${fileId}?${params.toString()}`;
-}
-
-async function getDownloadRegion() {
-  if (typeof navigator === 'undefined' || !navigator.geolocation) return undefined;
-
-  const position = await new Promise<GeolocationPosition | undefined>((resolve) => {
-    navigator.geolocation.getCurrentPosition(resolve, () => resolve(undefined), {
-      enableHighAccuracy: false,
-      timeout: 4000,
-      maximumAge: 300000,
-    });
-  });
-  if (!position) return undefined;
-
-  try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${position.coords.latitude}&lon=${position.coords.longitude}`,
-      { headers: { Accept: 'application/json' } },
-    );
-    if (!response.ok) return undefined;
-
-    const data = await response.json() as { address?: Record<string, string | undefined> };
-    const addressText = Object.values(data.address || {}).filter(Boolean).join(' ').toLowerCase();
-    if (addressText.includes('kampala')) return 'Kampala';
-    if (/(northern|gulu|lira|kitgum|west nile|arua|karamoja|moroto)/.test(addressText)) return 'Northern';
-    if (/(eastern|jinja|mbale|tororo|soroti|busia)/.test(addressText)) return 'Eastern';
-    if (/(western|mbarara|kasese|fort portal|kabale|hoima)/.test(addressText)) return 'Western';
-    if (/(central|wakiso|mukono|mpigi|masaka|masindi)/.test(addressText)) return 'Central';
-  } catch {
-    return undefined;
-  }
-
-  return undefined;
 }
 
 interface AudioCacheEntry {
@@ -155,6 +114,7 @@ export default function AudioRow({
     return cached?.wasPlaying ?? false;
   });
   const [registrySnapshot, setRegistrySnapshot] = useState<NowPlayingSnapshot | undefined>(() => getNowPlaying(src));
+  const [liveCounts, setLiveCounts] = useState<TrackCountsSnapshot | undefined>(() => getTrackCounts(src));
   const [isExpanded, setIsExpanded] = useState(false);
   const [playProgress, setPlayProgress] = useState(0);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'done' | 'error'>('idle');
@@ -168,6 +128,7 @@ export default function AudioRow({
     setPlayProgress(0);
     setIsPlaying(getAudioCacheEntry(src)?.wasPlaying ?? false);
     setRegistrySnapshot(getNowPlaying(src));
+    setLiveCounts(getTrackCounts(src));
     setIsExpanded(false);
   }
 
@@ -219,6 +180,14 @@ export default function AudioRow({
   useEffect(() => {
     return subscribeNowPlaying(src, (snapshot) => {
       setRegistrySnapshot(snapshot);
+    });
+  }, [src]);
+
+  // Mirror the shared counts registry so this row always shows the latest live
+  // play/download numbers, no matter where playback or a download happened.
+  useEffect(() => {
+    return subscribeTrackCounts(src, (snapshot) => {
+      setLiveCounts(snapshot);
     });
   }, [src]);
 
@@ -350,6 +319,16 @@ export default function AudioRow({
   // keeps the clicked row highlighted even after the player closes.
   const isEffectivelyPlaying = isPlaying || registryPlaying;
 
+  // Live counts from the shared registry override the (possibly stale) props so
+  // the number on screen matches the global source of truth the moment a play
+  // or download happens anywhere in the app.
+  const effectivePlayCount = liveCounts?.playCount != null
+    ? liveCounts.playCount
+    : Number.isFinite(playCount) ? Number(playCount) : 0;
+  const effectiveDownloadCount = liveCounts?.downloadCount != null
+    ? liveCounts.downloadCount
+    : Number.isFinite(downloadCount) ? Number(downloadCount) : 0;
+
   const handleDownloadClick = async (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -362,128 +341,32 @@ export default function AudioRow({
 
     setDownloadStatus('downloading');
     downloadProgressRef.current = 8;
-    window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-      detail: { status: 'downloading', title, progress: 0, downloadedBytes: 0 },
-    }));
 
-    const progressSteps = [12, 24, 38, 52, 68, 82, 92];
-    let progressIndex = 0;
-    const progressTimer = window.setInterval(() => {
-      const nextProgress = progressSteps[progressIndex] ?? 94;
-      progressIndex += 1;
-      downloadProgressRef.current = nextProgress;
-      window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-        detail: { status: 'downloading', title, progress: nextProgress },
-      }));
-    }, 180);
-
-    const controller = new AbortController();
-    const downloadControl = registerClientDownload(title, () => controller.abort());
-
-    try {
-      const region = await getDownloadRegion();
-      const requestUrl = new URL(downloadUrl, window.location.origin);
-      if (region) requestUrl.searchParams.set('region', region);
-      const response = await fetch(requestUrl, { cache: 'no-store', signal: controller.signal });
-      if (!response.ok) {
-        throw new Error(`Download failed with status ${response.status}`);
-      }
-      const responseContentType = response.headers.get('content-type') || '';
-      if (/text\/html|text\/plain|application\/json/.test(responseContentType)) {
-        throw new Error('Download failed: the server returned a text page instead of audio.');
-      }
-      const serverDownloadCount = Number(response.headers.get('X-NSU-Download-Count'));
-      const serverArtistTotalDownloadCount = Number(response.headers.get('X-NSU-Artist-Download-Count'));
-
-      const total = Number(response.headers.get('content-length')) || 0;
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Download body is unavailable.');
-      }
-
-      const chunks: Uint8Array[] = [];
-      let loaded = 0;
-      let lastProgress = 0;
-      let checkedFirstChunk = false;
-
-      while (true) {
-        await downloadControl.waitUntilResumed();
-        if (downloadControl.isCancelled()) return;
-
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!value) continue;
-
-        if (!checkedFirstChunk) {
-          checkedFirstChunk = true;
-          const head = Array.from(value.subarray(0, Math.min(value.length, 64)))
-            .map((byte) => String.fromCharCode(byte))
-            .join('');
-          if (/^\s*(<|<!DOCTYPE|\{)/.test(head)) {
-            controller.abort();
-            throw new Error('Download failed: the response is not an audio file.');
+    const result = await downloadTrackFile({
+      url: downloadUrl,
+      title,
+      artist: artistCredit || undefined,
+      fileName: fileName || `${title}.mp3`,
+      src,
+      onStatus: (status, progress) => {
+        setDownloadStatus(status);
+        downloadProgressRef.current = progress;
+        if (status === 'done' || status === 'error') {
+          if (downloadTimerRef.current) {
+            window.clearTimeout(downloadTimerRef.current);
           }
+          downloadTimerRef.current = window.setTimeout(() => {
+            setDownloadStatus('idle');
+          }, status === 'done' ? 1800 : 2200);
         }
+      },
+    });
 
-        chunks.push(value);
-        loaded += value.length;
-        if (total > 0) {
-          const nextProgress = Math.min(100, Math.round((loaded / total) * 100));
-          if (nextProgress !== lastProgress) {
-            lastProgress = nextProgress;
-            downloadProgressRef.current = nextProgress;
-            setDownloadStatus('downloading');
-            window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-              detail: { status: 'downloading', title, progress: nextProgress, downloadedBytes: loaded, totalBytes: total },
-            }));
-          }
-        }
-      }
-
-      const binaryData = chunks.map((chunk) => {
-        const array = new Uint8Array(chunk.length);
-        array.set(chunk);
-        return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
-      });
-      const blob = new Blob(binaryData, { type: response.headers.get('content-type') || 'audio/mpeg' });
-      const filename = buildAudioDownloadName(title, artistCredit);
-      const anchor = document.createElement('a');
-      const objectUrl = URL.createObjectURL(blob);
-      anchor.href = objectUrl;
-      anchor.download = filename;
-      anchor.dataset.thumbnailUrl = getAudioDownloadThumbnailUrl();
-      anchor.style.display = 'none';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
+    if (result) {
       onDownload?.({
-        trackDownloads: Number.isFinite(serverDownloadCount) ? serverDownloadCount : undefined,
-        artistTotalDownloads: Number.isFinite(serverArtistTotalDownloadCount) ? serverArtistTotalDownloadCount : undefined,
+        trackDownloads: result.trackDownloads,
+        artistTotalDownloads: result.artistTotalDownloads,
       });
-
-      window.clearInterval(progressTimer);
-      downloadProgressRef.current = 100;
-      setDownloadStatus('done');
-      window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-        detail: { status: 'done', title, progress: 100, downloadedBytes: loaded, totalBytes: total || loaded },
-      }));
-      downloadTimerRef.current = window.setTimeout(() => {
-        setDownloadStatus('idle');
-      }, 1800);
-    } catch (error) {
-      if (downloadControl.isCancelled() || (error instanceof Error && error.name === 'AbortError')) return;
-      console.error('Download failed:', error);
-      window.clearInterval(progressTimer);
-      setDownloadStatus('error');
-      window.dispatchEvent(new CustomEvent<DownloadNoticePayload>('nsu-download-status', {
-        detail: { status: 'error', title, progress: downloadProgressRef.current },
-      }));
-      downloadTimerRef.current = window.setTimeout(() => {
-        setDownloadStatus('idle');
-      }, 2200);
-    } finally {
-      downloadControl.unregister();
     }
   };
 
@@ -626,8 +509,8 @@ onPlay={() => {
                   artist: artistCredit || undefined,
                   src,
                   thumbnailUrl,
-                  playCount: Number.isFinite(playCount) ? playCount : 0,
-                  downloadCount: Number.isFinite(downloadCount) ? downloadCount : 0,
+                  playCount: effectivePlayCount,
+                  downloadCount: effectiveDownloadCount,
                 },
                 queue: playerQueue && playerQueue.length > 0 ? playerQueue : undefined,
                 queueIndex: playerQueueIndex >= 0 ? playerQueueIndex : 0,
@@ -644,11 +527,6 @@ onPlay={() => {
               className="h-full w-full object-cover transition-transform duration-300 group-hover/thumb:scale-110"
             />
           </div>
-          {showDownload && downloadUrl && (
-            <div className="mt-1 text-center text-[9px] font-semibold text-secondry/70">
-              {Number.isFinite(downloadCount) ? Number(downloadCount).toLocaleString() : '0'}
-            </div>
-          )}
         </div>
 
         {/* Title + artist + plays */}
@@ -656,9 +534,6 @@ onPlay={() => {
           <div className="flex min-w-0 items-center gap-2">
             <span className="block min-w-0 truncate text-xs font-semibold text-Eltext1 sm:text-sm">
               {title}
-            </span>
-            <span className="shrink-0 text-[10px] font-medium text-amber-400">
-              {Number.isFinite(playCount) ? Number(playCount).toLocaleString() : '0'} plays
             </span>
           </div>
           <span className="mt-0.5 block truncate text-[10px] text-secondry/60 sm:text-xs">

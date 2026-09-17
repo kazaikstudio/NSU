@@ -1,3 +1,5 @@
+import { reportTrackCounts } from '@/lib/audio-counts';
+
 export function isBucketObjectKey(id: string | null | undefined): id is string {
   if (typeof id !== 'string' || !id.trim()) {
     return false;
@@ -24,6 +26,7 @@ export function extractStoredFileId(url: string | null | undefined) {
 const recentTrackPlayRequests = new Map<string, number>();
 
 export function recordTrackPlay(fileUrl: string | null | undefined) {
+  if (!fileUrl) return;
   const fileId = extractStoredFileId(fileUrl);
   if (!fileId) return;
 
@@ -37,7 +40,22 @@ export function recordTrackPlay(fileUrl: string | null | undefined) {
   void fetch(`/api/dashboard/media/${encodeURIComponent(fileId)}?play=1`, {
     method: 'GET',
     cache: 'no-store',
-  }).catch(() => {});
+  })
+    .then(async (response) => {
+      if (!response.ok) return;
+      const data = await response.json().catch(() => null);
+      if (!data) return;
+      // The ?play=1 endpoint increments the counters server-side and returns the
+      // resulting values, so every playback anywhere can broadcast the live
+      // numbers into the shared counts registry and keep all surfaces in sync.
+      reportTrackCounts({
+        src: fileUrl,
+        ...(typeof data.trackPlays === 'number' ? { playCount: Number(data.trackPlays) } : {}),
+        ...(typeof data.trackDownloads === 'number' ? { downloadCount: Number(data.trackDownloads) } : {}),
+        ...(typeof data.artistTotalPlays === 'number' ? { artistTotalPlays: Number(data.artistTotalPlays) } : {}),
+      });
+    })
+    .catch(() => {});
 }
 
 export function getStoredThumbnailUrl(

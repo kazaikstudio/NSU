@@ -48,15 +48,29 @@ export default function AudioPageClient() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  const [topArtists, setTopArtists] = useState<TrendingArtist[]>(
-    () => rankTopArtists(readCachedData<TrendingArtist[]>('audio-page:trending-artists') || []),
-  );
-  const [musicCount, setMusicCount] = useState<number | null>(
-    () => readCachedData<number>('audio-page:music-count'),
-  );
-  const [artistCount, setArtistCount] = useState<number | null>(
-    () => readCachedData<number>('audio-page:artist-count'),
-  );
+  const [topArtists, setTopArtists] = useState<TrendingArtist[]>([]);
+  const [musicCount, setMusicCount] = useState<number | null>(null);
+  const [artistCount, setArtistCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      try {
+        const artists = readCachedData<TrendingArtist[]>('audio-page:trending-artists');
+        if (artists && artists.length > 0) setTopArtists(rankTopArtists(artists));
+      } catch {}
+
+      try {
+        const mc = readCachedData<number>('audio-page:music-count');
+        if (mc != null) setMusicCount(mc);
+      } catch {}
+
+      try {
+        const ac = readCachedData<number>('audio-page:artist-count');
+        if (ac != null) setArtistCount(ac);
+      } catch {}
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   useEffect(() => {
     try {

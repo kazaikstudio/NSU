@@ -21,6 +21,7 @@ interface SearchTrack {
   artistProfileUrl?: string | null;
   thumbnailUrl?: string | null;
   downloadCount?: number;
+  playCount?: number;
 }
 
 interface SearchVideo {
@@ -64,6 +65,7 @@ async function searchAudioTracks(term: string, limit: number): Promise<SearchTra
         media.file_url AS "fileUrl",
         media.drive_file_id AS "driveFileId",
         media.download_count AS "downloadCount",
+        media.play_count AS "playCount",
         media.thumbnail_url AS "thumbnailUrl",
         media.thumbnail_drive_file_id AS "thumbnailDriveFileId",
         media.featured_artist_name AS "featuredArtistName",
@@ -101,6 +103,7 @@ async function searchAudioTracks(term: string, limit: number): Promise<SearchTra
     artistProfileUrl: track.artistProfileUrl ?? null,
     thumbnailUrl: track.thumbnailUrl ?? null,
     downloadCount: Number(track.downloadCount || 0),
+    playCount: Number(track.playCount || 0),
   }));
 }
 
@@ -131,6 +134,7 @@ async function searchStorageMusic(term: string, limit: number): Promise<SearchTr
     artistProfileUrl: null,
     thumbnailUrl: item.thumbnailUrl ?? null,
     downloadCount: 0,
+    playCount: 0,
   }));
 }
 

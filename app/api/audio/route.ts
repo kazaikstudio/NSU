@@ -45,6 +45,10 @@ async function ensureMediaTable() {
   `);
   await pool.query(`
     ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS play_count INTEGER NOT NULL DEFAULT 0;
+  `);
+  await pool.query(`
+    ALTER TABLE artist_media
     ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
     ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
     ADD COLUMN IF NOT EXISTS featured_artist_name TEXT;
@@ -77,6 +81,7 @@ export async function GET() {
         media.file_url AS "fileUrl",
         media.drive_file_id AS "driveFileId",
         media.download_count AS "downloadCount",
+        media.play_count AS "playCount",
         media.thumbnail_url AS "thumbnailUrl",
         media.thumbnail_drive_file_id AS "thumbnailDriveFileId",
           media.featured_artist_name AS "featuredArtistName",

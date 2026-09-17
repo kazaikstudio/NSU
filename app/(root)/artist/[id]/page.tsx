@@ -9,6 +9,7 @@ import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 import { getArtistById } from '@/lib/artists';
 import { getClientCachedData, hasClientCachedData } from '@/lib/client-cache';
 import { playerTrackFor } from '@/lib/audio-player';
+import { reportTrackCounts } from '@/lib/audio-counts';
 
 interface Artist {
   id: string;
@@ -245,6 +246,14 @@ export default function PublicArtistDetailPage() {
       const updatedDownloadCount = Number(result.trackDownloads || 0);
       setActiveTrackPlays(updatedPlayCount);
       setActiveTrackDownloads(updatedDownloadCount);
+      // Keep the shared registry in sync so rows/cards elsewhere reflect the
+      // artist page's fresh server numbers too.
+      reportTrackCounts({
+        src: getPlayableAudioUrl(fileUrl),
+        playCount: updatedPlayCount,
+        downloadCount: updatedDownloadCount,
+        ...(Number.isFinite(Number(result.artistTotalPlays)) ? { artistTotalPlays: Number(result.artistTotalPlays) } : {}),
+      });
       setTracks((currentTracks) => currentTracks.map((track) => track.id === trackId
         ? {
             ...track,
@@ -448,7 +457,7 @@ export default function PublicArtistDetailPage() {
 
           <div className="min-w-0 rounded-xl border border-cyan-400/20 bg-cyan-500/8 px-2.5 py-3 shadow-sm shadow-cyan-400/5 backdrop-blur-sm sm:px-4 sm:py-3.5">
             <span className="block truncate text-lg font-black leading-none text-cyan-400 xs:text-xl sm:text-2xl">
-              {activeTrackId ? formatNumber(activeTrackDownloads) : '0'}
+              {activeTrackId ? formatNumber(activeTrackDownloads) : formatNumber(Number(artist.totalDownloads || 0))}
             </span>
             <span className="mt-1.5 block truncate text-[10px] font-medium text-secondry sm:text-xs">Downloads</span>
           </div>

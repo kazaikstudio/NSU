@@ -7,12 +7,12 @@ import {
   Play,
   Pause,
 } from 'lucide-react';
-import { registerClientDownload } from '@/lib/download-controls';
-import { buildAudioDownloadName } from '@/lib/download';
 import { writeCachedData } from '@/lib/client-cache';
 import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer } from '@/lib/audio-player';
+import { subscribeTrackCounts, type TrackCountsSnapshot } from '@/lib/audio-counts';
 import { extractStoredFileId, getStoredThumbnailUrl, recordTrackPlay } from '@/lib/media-url';
+import { downloadTrackFile } from '@/lib/download-track';
 
 const FEATURED_TRACKS_CACHE = 'audio-page:featured-tracks';
 
@@ -27,6 +27,8 @@ export interface FeaturedAudioTrack {
   thumbnailUrl?: string;
   thumbnailDriveFileId?: string;
   duration?: string;
+  playCount?: number;
+  downloadCount?: number;
 }
 
 function getPlayableAudioUrl(url: string) {
@@ -115,6 +117,7 @@ const exampleTracks: FeaturedAudioTrack[] = [
 
 export default function AudioCardsLatest() {
   const [tracks, setTracks] = useState<FeaturedAudioTrack[]>([]);
+  const [liveCounts, setLiveCounts] = useState<Record<string, TrackCountsSnapshot>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -139,6 +142,23 @@ export default function AudioCardsLatest() {
     tracksRef.current = tracks;
   }, [tracks]);
 
+  // Mirror live play/download counts from the shared registry so the cards stay
+  // in sync with every other surface when playback or a download happens.
+  useEffect(() => {
+    let active = true;
+    const unsubscribers = tracks.map((track) =>
+      subscribeTrackCounts(track.fileUrl, (snapshot) => {
+        if (!active) return;
+        setLiveCounts((prev) => ({ ...prev, [track.id]: snapshot }));
+      }),
+    );
+
+    return () => {
+      active = false;
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [tracks]);
+
   // Pause this carousel when another audio element starts playing.
   useEffect(() => {
     const handleGlobalPlay = (e: Event) => {
@@ -151,6 +171,19 @@ export default function AudioCardsLatest() {
     window.addEventListener('play', handleGlobalPlay, true);
     return () => window.removeEventListener('play', handleGlobalPlay, true);
   }, []);
+
+  // When playback is paused on a selected track, flip the card back after 5 seconds.
+  useEffect(() => {
+    if (activeTrackId === null || isPlaying) return;
+
+    const timer = setTimeout(() => {
+      setActiveTrackId(null);
+      setCurrentTime(0);
+      setDuration(0);
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [activeTrackId, isPlaying]);
 
   const scrollTrackIntoView = (trackId: string) => {
     if (!window.matchMedia('(max-width: 639px)').matches) return;
@@ -386,79 +419,12 @@ export default function AudioCardsLatest() {
     const downloadUrl = getDownloadUrl(track);
     if (!downloadUrl) return;
 
-    window.dispatchEvent(new CustomEvent('nsu-download-status', {
-      detail: { status: 'downloading', title: track.title, progress: 0, downloadedBytes: 0 },
-    }));
-
-    const controller = new AbortController();
-    const downloadControl = registerClientDownload(track.title, () => controller.abort());
-
-    try {
-      const response = await fetch(downloadUrl, { cache: 'no-store', signal: controller.signal });
-      if (!response.ok) {
-        throw new Error(`Download failed with status ${response.status}`);
-      }
-
-      const total = Number(response.headers.get('content-length')) || 0;
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Download body is unavailable.');
-      }
-
-      const chunks: Uint8Array[] = [];
-      let loaded = 0;
-      let lastProgress = 0;
-
-      while (true) {
-        await downloadControl.waitUntilResumed();
-        if (downloadControl.isCancelled()) return;
-
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!value) continue;
-
-        chunks.push(value);
-        loaded += value.length;
-
-        if (total > 0) {
-          const nextProgress = Math.min(100, Math.round((loaded / total) * 100));
-          if (nextProgress !== lastProgress) {
-            lastProgress = nextProgress;
-            window.dispatchEvent(new CustomEvent('nsu-download-status', {
-              detail: { status: 'downloading', title: track.title, progress: nextProgress, downloadedBytes: loaded, totalBytes: total },
-            }));
-          }
-        }
-      }
-
-      const blob = new Blob(chunks.map((chunk) => {
-        const array = new Uint8Array(chunk.length);
-        array.set(chunk);
-        return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
-      }), { type: 'audio/mpeg' });
-
-      const anchor = document.createElement('a');
-      const objectUrl = URL.createObjectURL(blob);
-      anchor.href = objectUrl;
-      anchor.download = buildAudioDownloadName(track.title, track.artist);
-      anchor.style.display = 'none';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
-
-      window.dispatchEvent(new CustomEvent('nsu-download-status', {
-        detail: { status: 'done', title: track.title, progress: 100, downloadedBytes: loaded, totalBytes: total || loaded },
-      }));
-    } catch (error) {
-      if (downloadControl.isCancelled() || (error instanceof Error && error.name === 'AbortError')) return;
-      console.error('Download failed:', error);
-      window.dispatchEvent(new CustomEvent('nsu-download-status', {
-        detail: { status: 'error', title: track.title, progress: 0 },
-      }));
-    } finally {
-      downloadControl.unregister();
-    }
+    await downloadTrackFile({
+      url: downloadUrl,
+      title: track.title,
+      artist: track.artist || track.artistName,
+      src: getPlayableAudioUrl(track.fileUrl),
+    });
   };
 
   if (loading) {
@@ -521,6 +487,9 @@ export default function AudioCardsLatest() {
           const trackCurrentTime = isSelected ? currentTime : 0;
           const trackDuration = isSelected ? duration : 0;
           const progressPercent = trackDuration > 0 ? (trackCurrentTime / trackDuration) * 100 : 0;
+          const live = liveCounts[track.id];
+          const plays = Number(live?.playCount != null ? live.playCount : (track.playCount || 0));
+          const downloads = Number(live?.downloadCount != null ? live.downloadCount : (track.downloadCount || 0));
 
           return (
             <div
@@ -553,134 +522,168 @@ export default function AudioCardsLatest() {
                 <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${cardColor}20 0%, transparent 65%)` }} />
               </div>
 
-              {/* Card 1 or Card 2 Upper Content based on selection visibility */}
-              {!isSelected ? (
-                <div className="flex justify-between items-center gap-4 relative z-10 w-full">
-                  {/* Left: Text & Info */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-white/80 backdrop-blur-md">
-                        Track
-                      </span>
-                    </div>
-                    <span className="text-white font-semibold text-base sm:text-lg tracking-tight truncate w-full drop-shadow-sm">
-                      {track.title || 'Untitled Track'}
-                    </span>
-                    <p className="text-xs text-white/60 truncate mt-0.5">
-                      {track.artist || 'Audio Track'}
-                    </p>
-                  </div>
-
-                  {/* Right: Modern Floating Thumbnail Image with Soft Glow */}
+              {/* Flip container — holds both card faces and animates between them */}
+              <div className="relative z-10" style={{ perspective: '1200px' }}>
+                <div
+                  className="grid transition-transform duration-700 ease-in-out"
+                  style={{
+                    transformStyle: 'preserve-3d',
+                    transform: isSelected ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                  }}
+                >
+                  {/* Front face — first view (idle) */}
                   <div
-                    className="relative group/btn w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shrink-0 shadow-lg bg-neutral-900 border border-white/10 cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openPlayer(track, index);
+                    className={`col-start-1 row-start-1 flex flex-col justify-between gap-4 w-full ${isSelected ? 'pointer-events-none' : ''}`}
+                    style={{
+                      WebkitBackfaceVisibility: 'hidden',
+                      backfaceVisibility: 'hidden',
+                      transform: 'rotateY(0deg)',
                     }}
-                    title="Open full screen player"
                   >
-                    <Image
-                      fill
-                      unoptimized
-                      src={normalizeImageUrl(getTrackThumbnailUrl(track)) || '/noll.jpg'}
-                      alt={track.title}
-                      sizes="(max-width: 640px) 80px, 96px"
-                      className="object-cover transition-transform duration-700 group-hover/btn:scale-110"
-                    />
-                    <div className="absolute inset-0 bg-black/10 group-hover/btn:bg-transparent transition-colors" />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col justify-start relative z-10 w-full">
-                  <div className="flex items-center justify-between mb-3">
-                    <span
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium backdrop-blur-md"
-                      style={{ backgroundColor: `${cardColor}22`, color: cardColor, border: `1px solid ${cardColor}40` }}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full animate-ping" style={{ backgroundColor: cardColor }} />
-                      Now Playing
-                    </span>
-                    <span className="text-[11px] font-mono text-white/50 tracking-wider">
-                      HD AUDIO
-                    </span>
-                  </div>
+                    <div className="flex justify-between items-center gap-4 w-full">
+                      {/* Left: Text & Info */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/10 text-white/80 backdrop-blur-md">
+                            Track
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-semibold text-base sm:text-lg tracking-tight truncate min-w-0 drop-shadow-sm">
+                            {track.title || 'Untitled Track'}
+                          </span>
+                          <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-medium text-white/60">
+                            <Play size={10} className="fill-current" />
+                            {plays.toLocaleString()} plays
+                          </span>
+                        </div>
+                        <p className="text-xs text-white/60 truncate mt-0.5">
+                          {track.artist || 'Audio Track'}
+                        </p>
+                      </div>
 
-                  {/* Waveform using natural bar heights */}
-                  <div className="flex items-end gap-[2.5px] h-8 px-0.5">
-                    {BAR_HEIGHTS.map((h, i) => {
-                      const barPositionPercent = (i / BAR_HEIGHTS.length) * 100;
-                      const isPast = barPositionPercent <= progressPercent;
-                      return (
-                        <div
-                          key={i}
-                          className="flex-1 rounded-full transition-colors duration-200"
-                          style={{
-                            height: `${h}%`,
-                            backgroundColor: isPast ? cardColor : 'rgba(255,255,255,0.18)',
-                            boxShadow: isPast && isCurrentlyPlaying ? `0 0 6px ${cardColor}` : 'none',
-                          }}
+                      {/* Right: Modern Floating Thumbnail Image with Soft Glow */}
+                      <div
+                        className="relative group/btn w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shrink-0 shadow-lg bg-neutral-900 border border-white/10 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPlayer(track, index);
+                        }}
+                        title="Open full screen player"
+                      >
+                        <Image
+                          fill
+                          unoptimized
+                          src={normalizeImageUrl(getTrackThumbnailUrl(track)) || '/noll.jpg'}
+                          alt={track.title}
+                          sizes="(max-width: 640px) 80px, 96px"
+                          className="object-cover transition-transform duration-700 group-hover/btn:scale-110"
                         />
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Bottom Content Area: Contextually assigned to Card 1 or Card 2 */}
-              {!isSelected ? (
-                <div className="flex items-center gap-20 text-xs text-white/50 relative z-10 group-hover:text-white/70 transition-colors">
-                  <span className="italic font-light">Click me Listen .....</span>
-                  <svg className="w-3.5 h-3.5 transform translate-x-0 group-hover:translate-x-1 transition-transform" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                </div>
-              ) : (
-                <div className="mt-4 flex items-center justify-between relative z-10 transition-all duration-300 animate-fadeIn">
-                  <div className="flex items-center gap-3">
-                    {/* Modern Circular Play/Pause Button with Glow */}
-                    <div
-                      className="w-12 h-12 rounded-full text-white flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-105 active:scale-95"
-                      style={{ backgroundColor: cardColor, boxShadow: `0 4px 20px ${cardColor}55` }}
-                    >
-                      {isCurrentlyPlaying ? (
-                        <Pause className="w-5 h-5 fill-current" />
-                      ) : (
-                        <Play className="w-5 h-5 fill-current ml-0.5" />
-                      )}
+                        <div className="absolute inset-0 bg-black/10 group-hover/btn:bg-transparent transition-colors" />
+                      </div>
                     </div>
 
-                    {/* Modern Frosted Download Button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleDownloadClick(e, track);
-                      }}
-                      className="inline-flex items-center justify-center text-white/90 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-xl transition-all p-2.5 sm:py-2 sm:px-3.5 rounded-2xl border border-white/10 shadow-sm hover:border-white/20 active:scale-95"
-                      title="Download"
-                    >
-                      <Download className="w-4 h-4 shrink-0 text-white/80" />
-                      <span className="hidden sm:inline ml-2 text-xs font-medium tracking-wide">Download</span>
-                    </button>
+                    <div className="flex items-center justify-between gap-3 text-xs text-white/50 group-hover:text-white/70 transition-colors">
+                      <span className="italic font-light">Click me Listen .....</span>
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 flex items-center gap-1 text-[10px] font-medium me-3">
+                          <Download size={10} className="shrink-0" />
+                          {downloads.toLocaleString()} <span className="sm:hidden">Dls</span><span className="hidden sm:inline">downloads</span>
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Timer & Sleek Indicator */}
-                  <div className="flex items-center gap-2.5 bg-black/20 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-md">
-                    <span className="text-xs font-mono font-medium tracking-wider text-white/80">
-                      {formatTime(trackCurrentTime)} <span className="text-white/40">/</span> {formatTime(trackDuration)}
-                    </span>
-
-                    {isCurrentlyPlaying && (
-                      <div className="flex items-end gap-0.5 h-3 pl-1 border-l border-white/10">
-                        <span className="w-0.5 animate-pulse h-full rounded-full" style={{ backgroundColor: cardColor }} />
-                        <span className="w-0.5 animate-bounce h-2 rounded-full" style={{ backgroundColor: cardColor }} />
-                        <span className="w-0.5 animate-pulse h-2.5 rounded-full" style={{ backgroundColor: cardColor }} />
+                  {/* Back face — selected (now playing) */}
+                  <div
+                    className={`col-start-1 row-start-1 flex flex-col justify-between gap-4 w-full ${isSelected ? '' : 'pointer-events-none'}`}
+                    style={{
+                      WebkitBackfaceVisibility: 'hidden',
+                      backfaceVisibility: 'hidden',
+                      transform: 'rotateY(180deg)',
+                    }}
+                  >
+                    <div className="flex flex-col justify-start w-full">
+                      <div className="flex items-center justify-between mb-3">
+                        <span
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium backdrop-blur-md"
+                          style={{ backgroundColor: `${cardColor}22`, color: cardColor, border: `1px solid ${cardColor}40` }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full animate-ping" style={{ backgroundColor: cardColor }} />
+                          Now Playing
+                        </span>
+                        <span className="text-[11px] font-mono text-white/50 tracking-wider">
+                          HD AUDIO
+                        </span>
                       </div>
-                    )}
+
+                      {/* Waveform using natural bar heights */}
+                      <div className="flex items-end gap-[2.5px] h-8 px-0.5">
+                        {BAR_HEIGHTS.map((h, i) => {
+                          const barPositionPercent = (i / BAR_HEIGHTS.length) * 100;
+                          const isPast = barPositionPercent <= progressPercent;
+                          return (
+                            <div
+                              key={i}
+                              className="flex-1 rounded-full transition-colors duration-200"
+                              style={{
+                                height: `${h}%`,
+                                backgroundColor: isPast ? cardColor : 'rgba(255,255,255,0.18)',
+                                boxShadow: isPast && isCurrentlyPlaying ? `0 0 6px ${cardColor}` : 'none',
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between w-full transition-all duration-300 animate-fadeIn">
+                      <div className="flex items-center gap-3">
+                        {/* Modern Circular Play/Pause Button with Glow */}
+                        <div
+                          className="w-12 h-12 rounded-full text-white flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-105 active:scale-95"
+                          style={{ backgroundColor: cardColor, boxShadow: `0 4px 20px ${cardColor}55` }}
+                        >
+                          {isCurrentlyPlaying ? (
+                            <Pause className="w-5 h-5 fill-current" />
+                          ) : (
+                            <Play className="w-5 h-5 fill-current ml-0.5" />
+                          )}
+                        </div>
+
+                        {/* Modern Frosted Download Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDownloadClick(e, track);
+                          }}
+                          className="inline-flex items-center justify-center text-white/90 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-xl transition-all p-2.5 sm:py-2 sm:px-3.5 rounded-2xl border border-white/10 shadow-sm hover:border-white/20 active:scale-95"
+                          title="Download"
+                        >
+                          <Download className="w-4 h-4 shrink-0 text-white/80" />
+                          <span className="hidden sm:inline ml-2 text-xs font-medium tracking-wide">Download</span>
+                        </button>
+                      </div>
+
+                      {/* Timer & Sleek Indicator */}
+                      <div className="flex items-center gap-2.5 bg-black/20 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-md">
+                        <span className="text-xs font-mono font-medium tracking-wider text-white/80">
+                          {formatTime(trackCurrentTime)} <span className="text-white/40">/</span> {formatTime(trackDuration)}
+                        </span>
+
+                        {isCurrentlyPlaying && (
+                          <div className="flex items-end gap-0.5 h-3 pl-1 border-l border-white/10">
+                            <span className="w-0.5 animate-pulse h-full rounded-full" style={{ backgroundColor: cardColor }} />
+                            <span className="w-0.5 animate-bounce h-2 rounded-full" style={{ backgroundColor: cardColor }} />
+                            <span className="w-0.5 animate-pulse h-2.5 rounded-full" style={{ backgroundColor: cardColor }} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           );
         })}

@@ -35,6 +35,7 @@ interface AudioTrack {
   artistProfileUrl?: string | null
   thumbnailUrl?: string | null
   downloadCount?: number
+  playCount?: number
 }
 
 interface YouTubeVideo {
@@ -375,6 +376,7 @@ function SearchClient() {
                       artistGenre={track.artistGenre}
                       thumbnailUrl={track.thumbnailUrl ?? undefined}
                       downloadCount={track.downloadCount}
+                      playCount={track.playCount}
                       playerQueue={playerQueue}
                       playerQueueIndex={playerQueue.findIndex((q) => q.id === track.id)}
                     />

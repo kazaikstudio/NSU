@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { ChevronLeft, Download, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from 'lucide-react';
 import { closeAudioPlayer, requestPlaybackToggle, subscribeAudioPlayer, subscribePlaybackToggle, type PlayerOpenPayload, type PlayerTrack } from '@/lib/audio-player';
 import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying } from '@/lib/audio-now-playing';
+import { reportTrackCounts, subscribeTrackCounts } from '@/lib/audio-counts';
+import { downloadTrackFile } from '@/lib/download-track';
 import { buildAudioDownloadName } from '@/lib/download';
 import { extractStoredFileId, recordTrackPlay } from '@/lib/media-url';
 
@@ -113,13 +115,32 @@ export default function AudioPlayer() {
       }
 
       const data = await res.json();
-      setPlayCount(typeof data.trackPlays === 'number' ? Number(data.trackPlays) : fallbackPlayCount);
-      setDownloadCount(typeof data.trackDownloads === 'number' ? Number(data.trackDownloads) : fallbackDownloadCount);
+      const nextPlay = typeof data.trackPlays === 'number' ? Number(data.trackPlays) : fallbackPlayCount;
+      const nextDownload = typeof data.trackDownloads === 'number' ? Number(data.trackDownloads) : fallbackDownloadCount;
+      setPlayCount(nextPlay);
+      setDownloadCount(nextDownload);
+      // Refresh the shared registry too, so rows/cards showing this file jump
+      // to the server's latest numbers the moment the player is opened.
+      reportTrackCounts({
+        src: target.src,
+        ...(nextPlay != null ? { playCount: nextPlay } : {}),
+        ...(nextDownload != null ? { downloadCount: nextDownload } : {}),
+      });
     } catch {
       setPlayCount(fallbackPlayCount);
       setDownloadCount(fallbackDownloadCount);
     }
   }, []);
+
+  // Mirror live counts from the shared registry so the player always matches
+  // the numbers every other surface is showing for the same file.
+  useEffect(() => {
+    if (!track) return;
+    return subscribeTrackCounts(track.src, (snapshot) => {
+      if (typeof snapshot.playCount === 'number') setPlayCount(snapshot.playCount);
+      if (typeof snapshot.downloadCount === 'number') setDownloadCount(snapshot.downloadCount);
+    });
+  }, [track]);
 
   const playTrack = useCallback((target: PlayerTrack, resumeTime = 0) => {
     const audio = audioRef.current;
@@ -508,6 +529,15 @@ export default function AudioPlayer() {
                         <a
                           href={downloadUrl}
                           download={buildAudioDownloadName(track.title, track.artist)}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            void downloadTrackFile({
+                              url: downloadUrl,
+                              title: track.title,
+                              artist: track.artist,
+                              src: track.src,
+                            });
+                          }}
                           aria-label="Download track"
                           className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-500/10 text-cyan-300 transition-all hover:scale-[1.02] hover:bg-cyan-500/15 active:scale-95"
                         >

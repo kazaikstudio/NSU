@@ -22,6 +22,7 @@ interface AudioTrack {
   artistProfileUrl?: string | null;
   thumbnailUrl?: string | null;
   downloadCount?: number;
+  playCount?: number;
 }
 
 function normalizeImageUrl(url?: string | null) {
@@ -138,6 +139,7 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
             featuredArtistName={track.featuredArtistName}
             artistGenre={track.artistGenre}
             downloadCount={track.downloadCount}
+            playCount={track.playCount}
             thumbnailUrl={normalizeImageUrl(track.thumbnailUrl)}
             playerQueue={playerQueue}
             playerQueueIndex={playerQueue.findIndex((q) => q.id === track.id)}
