@@ -130,6 +130,7 @@ export async function POST(request: Request) {
   let type = 'music';
   let fileUrl = '';
   let uploadedFile: File | null = null;
+  let uploadedThumbnail: File | null = null;
   let source = 'talk-show';
 
   if (isMultipart) {
@@ -147,6 +148,8 @@ export async function POST(request: Request) {
     }
     const fileCandidate = formData.get('file');
     uploadedFile = fileCandidate instanceof File ? fileCandidate : null;
+    const thumbnailCandidate = formData.get('thumbnail');
+    uploadedThumbnail = thumbnailCandidate instanceof File ? thumbnailCandidate : null;
   } else {
     const body = await request.json().catch(() => ({}));
     title = typeof body?.title === 'string' ? body.title.trim() : '';
@@ -164,6 +167,8 @@ export async function POST(request: Request) {
 
   let publicUrl = fileUrl;
   let uploadedDriveFileId: string | null = null;
+  let thumbnailUrl: string | null = null;
+  let thumbnailDriveFileId: string | null = null;
   let uploadError: string | null = null;
 
   if (uploadedFile) {
@@ -185,6 +190,23 @@ export async function POST(request: Request) {
         bytes: await uploadedFile.arrayBuffer(),
       });
       publicUrl = localFile.publicUrl;
+    }
+  }
+
+  if (uploadedThumbnail) {
+    try {
+      if (!uploadedThumbnail.type.startsWith('image/')) {
+        throw new Error('Generated thumbnail is not a valid image.');
+      }
+      const storageFile = await uploadToBucket({
+        name: `video-thumbnail-${Date.now()}-${uploadedThumbnail.name}`,
+        mimeType: uploadedThumbnail.type,
+        bytes: await uploadedThumbnail.arrayBuffer(),
+      });
+      thumbnailUrl = storageFile.publicUrl;
+      thumbnailDriveFileId = storageFile.id;
+    } catch (error) {
+      console.warn('Unable to upload generated video thumbnail', error);
     }
   }
 
@@ -219,11 +241,11 @@ export async function POST(request: Request) {
     const id = `storage-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const result = await pool.query(
       `
-        INSERT INTO storage_items (id, title, type, file_url, drive_file_id, source)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO storage_items (id, title, type, file_url, drive_file_id, source, thumbnail_url, thumbnail_drive_file_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id, title, type, file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", source, created_at AS "createdAt"
       `,
-      [id, title, type, publicUrl, uploadedDriveFileId, source]
+      [id, title, type, publicUrl, uploadedDriveFileId, source, thumbnailUrl, thumbnailDriveFileId]
     );
 
     const row = result.rows[0];

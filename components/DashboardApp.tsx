@@ -379,6 +379,84 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
     return members.filter((m) => m.category === memberCategoryFilter);
   }, [members, memberCategoryFilter]);
 
+  const generateVideoThumbnail = useCallback(async (file: File) => {
+    if (!file.type.startsWith('video/')) return null;
+
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      video.src = objectUrl;
+
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          video.onloadedmetadata = null;
+          video.onloadeddata = null;
+          video.onerror = null;
+        };
+
+        video.onloadedmetadata = () => {
+          cleanup();
+          resolve();
+        };
+        video.onloadeddata = () => {
+          cleanup();
+          resolve();
+        };
+        video.onerror = () => {
+          cleanup();
+          reject(new Error('Unable to read the uploaded video preview.'));
+        };
+      });
+
+      const safeDuration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1;
+      video.currentTime = Math.min(Math.max(safeDuration * 0.15, 0.5), safeDuration);
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          video.onseeked = null;
+          video.onerror = null;
+        };
+
+        video.onseeked = () => {
+          cleanup();
+          resolve();
+        };
+        video.onerror = () => {
+          cleanup();
+          reject(new Error('Unable to generate a thumbnail from the uploaded video.'));
+        };
+      });
+
+      const canvas = document.createElement('canvas');
+      const width = video.videoWidth || 1280;
+      const height = video.videoHeight || 720;
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        throw new Error('Unable to create a canvas for the video thumbnail.');
+      }
+      context.drawImage(video, 0, 0, width, height);
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', 0.9);
+      });
+
+      if (!blob) {
+        throw new Error('Unable to generate the uploaded video thumbnail.');
+      }
+
+      const thumbnailFile = new File([blob], `${file.name.replace(/\.[^/.]+$/, '')}-thumb.jpg`, {
+        type: 'image/jpeg',
+      });
+      return thumbnailFile;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }, []);
+
   const submitUpload = useCallback(async (fileToUpload: File | null, titleToUse = uploadTitle, typeToUse = uploadType) => {
     if (!titleToUse.trim() || !fileToUpload) {
       setUploadMessage('Please provide a title and select a file.');
@@ -387,7 +465,7 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
 
     setUploading(true);
     setUploadProgress(0);
-    setUploadMessage('Uploading file…');
+    setUploadMessage(fileToUpload.type.startsWith('video/') ? 'Generating video thumbnail…' : 'Uploading file…');
 
     try {
       const formData = new FormData();
@@ -395,6 +473,12 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
       formData.append('type', typeToUse);
       formData.append('file', fileToUpload as File);
       formData.append('source', 'talk-show');
+      const generatedThumbnail = fileToUpload.type.startsWith('video/') || typeToUse === 'video'
+        ? await generateVideoThumbnail(fileToUpload)
+        : null;
+      if (generatedThumbnail) {
+        formData.append('thumbnail', generatedThumbnail);
+      }
 
       const uploadUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/dashboard/storage` : '/api/dashboard/storage';
 
