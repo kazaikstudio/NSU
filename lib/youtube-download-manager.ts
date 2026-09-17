@@ -152,7 +152,7 @@ async function runDownload(job: YoutubeDownloadJob) {
       throw new Error(payload.error || response.statusText || 'Unable to download this video.');
     }
 
-    const totalBytes = Number(response.headers.get('content-length')) || job.totalBytes;
+    const totalBytes = Number(response.headers.get('content-length')) || job.totalBytes || undefined;
     currentTotalBytes = totalBytes;
     const reader = response.body?.getReader();
     if (!reader) throw new Error('Unable to start download.');
@@ -190,14 +190,16 @@ async function runDownload(job: YoutubeDownloadJob) {
         continue;
       }
 
-      const progress = totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : undefined;
+      const progress = typeof totalBytes === 'number' && totalBytes > 0
+        ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
+        : undefined;
       if (typeof progress === 'number') currentProgress = progress;
-      if (progress !== lastProgress || progress === undefined) {
-        lastProgress = progress || lastProgress;
+      if (typeof progress === 'number' || downloadedBytes > 0) {
+        lastProgress = typeof progress === 'number' ? progress : lastProgress;
         emit({
           status: 'downloading',
           title: job.title,
-          progress,
+          progress: typeof progress === 'number' ? progress : Math.max(0, lastProgress),
           paused: false,
           downloadedBytes,
           totalBytes,

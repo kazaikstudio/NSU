@@ -161,7 +161,16 @@ export async function GET(request: Request) {
       : [];
     const formats = [
       ...(ffmpegAvailable && audioSource ? [
-        { itag: audioSource.itag, label: 'MP3 192 kbps', kind: 'audio', mimeType: 'audio/mpeg', extension: 'mp3', outputBitrate: 192, size: null, bitrate: 192000 },
+        {
+          itag: audioSource.itag,
+          label: 'MP3 192 kbps',
+          kind: 'audio',
+          mimeType: 'audio/mpeg',
+          extension: 'mp3',
+          outputBitrate: 192,
+          size: audioSource.content_length || null,
+          bitrate: 192000,
+        },
       ] : []),
       ...directVideoSources.map((video) => ({
         itag: video.itag,
