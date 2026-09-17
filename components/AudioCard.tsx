@@ -31,7 +31,7 @@ export default function AudioCard({ track, index = 0, isPlaying, onToggle, onEnd
     const fileId = extractStoredFileId(fileUrl);
     if (!fileId) return fileUrl;
 
-    const params = new URLSearchParams({ download: '1', filename: `${track.title}.mp3`, title: track.title });
+    const params = new URLSearchParams({ download: '1', filename: buildAudioDownloadName(track.title, track.artistName), title: track.title });
     if (track.artistName) params.set('artist', track.artistName);
     return `/api/dashboard/media/${fileId}?${params.toString()}`;
   }

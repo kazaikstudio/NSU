@@ -13,6 +13,7 @@ import { openAudioPlayer } from '@/lib/audio-player';
 import { subscribeTrackCounts, type TrackCountsSnapshot } from '@/lib/audio-counts';
 import { extractStoredFileId, getStoredThumbnailUrl, recordTrackPlay } from '@/lib/media-url';
 import { downloadTrackFile } from '@/lib/download-track';
+import { buildAudioDownloadName } from '@/lib/download';
 
 const FEATURED_TRACKS_CACHE = 'audio-page:featured-tracks';
 
@@ -407,7 +408,7 @@ export default function AudioCardsLatest() {
     const fileId = extractStoredFileId(track.fileUrl);
     if (!fileId) return track.fileUrl;
 
-    const params = new URLSearchParams({ download: '1', filename: `${track.title}.mp3`, title: track.title });
+    const params = new URLSearchParams({ download: '1', filename: buildAudioDownloadName(track.title, track.artist || track.artistName), title: track.title });
     if (track.artist) params.set('artist', track.artist);
     return `/api/dashboard/media/${fileId}?${params.toString()}`;
   };

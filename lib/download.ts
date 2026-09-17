@@ -37,7 +37,7 @@ export function buildDownloadFilename(filename: string, category?: DownloadCateg
 
     const normalizedArtist = artistName ? sanitizeDownloadFilename(artistName).trim() : '';
     const titleAndArtist = normalizedArtist ? `${normalizedBase}, By ${normalizedArtist}` : normalizedBase;
-    const withSuffix = titleAndArtist ? `${titleAndArtist} (Nollstudios.org)` : 'Nollstudios.org';
+    const withSuffix = titleAndArtist ? `${titleAndArtist}, (Nollstudios.org)` : 'Nollstudios.org';
     return `${withSuffix}${extension}`;
   }
 
@@ -73,6 +73,6 @@ export function buildAudioDownloadName(title: string, artistName?: string, exten
 
   const normalizedArtist = artistName ? sanitizeDownloadFilename(artistName).trim() : '';
   const titleAndArtist = normalizedArtist ? `${normalizedTitle}, By ${normalizedArtist}` : normalizedTitle;
-  const withSuffix = titleAndArtist ? `${titleAndArtist} (Nollstudios.org)` : 'Nollstudios.org';
+  const withSuffix = titleAndArtist ? `${titleAndArtist}, (Nollstudios.org)` : 'Nollstudios.org';
   return `${withSuffix}.${extension.replace(/^\./, '') || 'mp3'}`;
 }

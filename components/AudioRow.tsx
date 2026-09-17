@@ -10,6 +10,7 @@ import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer, requestPlaybackToggle, type PlayerTrack } from '@/lib/audio-player';
 import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying, type NowPlayingSnapshot } from '@/lib/audio-now-playing';
 import { recordTrackPlay } from '@/lib/media-url';
+import { buildAudioDownloadName } from '@/lib/download';
 
 interface DownloadCountUpdate {
   trackDownloads?: number;
@@ -52,7 +53,7 @@ function getDownloadUrl(fileUrl: string | undefined, fileName: string | undefine
 
   const params = new URLSearchParams({
     download: '1',
-    filename: fileName || `${title}.mp3`,
+    filename: fileName || buildAudioDownloadName(title, artistName),
     title,
   });
   if (artistName) params.set('artist', artistName);
@@ -346,7 +347,7 @@ export default function AudioRow({
       url: downloadUrl,
       title,
       artist: artistCredit || undefined,
-      fileName: fileName || `${title}.mp3`,
+      fileName: fileName || buildAudioDownloadName(title, artistName),
       src,
       thumbnailUrl: thumbnailUrl || undefined,
       onStatus: (status, progress) => {
