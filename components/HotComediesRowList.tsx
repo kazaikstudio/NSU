@@ -81,14 +81,17 @@ export default function HotComediesRowList({ items, onOpenAction }: HotComediesR
       const blob = new Blob(chunks.map((chunk) => {
         const array = new Uint8Array(chunk.length);
         array.set(chunk);
-        return array.buffer;
+        return array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
       }), { type: response.headers.get('content-type') || 'video/mp4' });
       const anchor = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       anchor.href = objectUrl;
       anchor.download = originalFileName;
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
       anchor.click();
-      URL.revokeObjectURL(objectUrl);
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 
       dispatchStatus('done', 100, loaded, total || loaded);
     } catch (error) {
