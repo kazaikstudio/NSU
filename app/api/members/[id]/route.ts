@@ -9,7 +9,24 @@ export async function PUT(request: Request, context: RouteContext) {
 
   try {
     await ensureDatabaseReady();
-    const { name, email, contact, profilePic, category, status = 'Active' } = await request.json();
+    const {
+      name,
+      email,
+      contact,
+      contact2,
+      profilePic,
+      age,
+      dateJoined,
+      village,
+      district,
+      guardianName,
+      guardianContact,
+      subCounty,
+      suspendedAt,
+      suspensionDays,
+      category,
+      status = 'Active',
+    } = await request.json();
 
     if (!name || !email || !category) {
       return NextResponse.json({ error: 'Name, email, and category are required' }, { status: 400 });
@@ -18,11 +35,36 @@ export async function PUT(request: Request, context: RouteContext) {
     const { rows } = await pool.query(
       `
         UPDATE members
-        SET name = $1, email = $2, contact = $3, profile_pic = $4, category = $5, status = $6
-        WHERE id = $7
-        RETURNING id, name, email, contact, profile_pic AS "profilePic", category, status
+        SET name = $1, email = $2, contact = $3, contact2 = $4, profile_pic = $5,
+            age = $6, date_joined = $7, village = $8, district = $9,
+            guardian_name = $10, guardian_contact = $11, sub_county = $12,
+            suspended_at = $13, suspension_days = $14, category = $15, status = $16
+        WHERE id = $17
+        RETURNING id, name, email, contact, contact2, profile_pic AS "profilePic", age,
+                  date_joined AS "dateJoined", village, district,
+                  guardian_name AS "guardianName", guardian_contact AS "guardianContact",
+                  sub_county AS "subCounty", suspended_at AS "suspendedAt",
+                  suspension_days AS "suspensionDays", category, status
       `,
-      [name, email, contact || null, profilePic || null, category, status, id]
+      [
+        name,
+        email,
+        contact || null,
+        contact2 || null,
+        profilePic || null,
+        Number(age) || null,
+        dateJoined || null,
+        village || null,
+        district || null,
+        guardianName || null,
+        guardianContact || null,
+        subCounty || null,
+        status === 'Suspended' ? suspendedAt || null : null,
+        status === 'Suspended' ? Number(suspensionDays) || 0 : 0,
+        category,
+        status,
+        id,
+      ]
     );
 
     if (rows.length === 0) {
