@@ -27,9 +27,8 @@ export default function HotComediesRowList({ items, onOpenAction }: HotComediesR
     const safeTitle = (item.title || 'download').trim() || 'download';
     const fileUrl = item.fileUrl || '';
     const fileId = extractStoredFileId(fileUrl);
-    const downloadUrl = fileId
-      ? `/api/dashboard/media/${fileId}?download=1&filename=${encodeURIComponent(`${safeTitle}.mp4`)}`
-      : fileUrl;
+    const originalFileName = fileUrl.split('/').pop()?.split('?')[0]?.trim() || `${safeTitle}.mp4`;
+    const downloadUrl = fileId ? `/api/dashboard/media/${fileId}?download=1` : fileUrl;
 
     const dispatchStatus = (status: 'downloading' | 'done' | 'error', progress?: number, downloadedBytes?: number, totalBytes?: number) => {
       window.dispatchEvent(new CustomEvent('nsu-download-status', {
@@ -87,7 +86,7 @@ export default function HotComediesRowList({ items, onOpenAction }: HotComediesR
       const anchor = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       anchor.href = objectUrl;
-      anchor.download = `${safeTitle}.mp4`;
+      anchor.download = originalFileName;
       anchor.click();
       URL.revokeObjectURL(objectUrl);
 

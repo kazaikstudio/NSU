@@ -33,12 +33,13 @@ export default function ComedyDirectoryList({
     event.stopPropagation();
 
     const safeTitle = (item.title || 'download').trim() || 'download';
+    const fallbackFileName = (item.fileUrl || '').split('/').pop()?.split('?')[0]?.trim() || `${safeTitle}.mp4`;
 
     const getDownloadUrl = (fileUrl: string) => {
       const fileId = extractStoredFileId(fileUrl);
       if (!fileId) return fileUrl;
 
-      return `/api/dashboard/media/${fileId}?download=1&filename=${encodeURIComponent(`${safeTitle}.mp4`)}`;
+      return `/api/dashboard/media/${fileId}?download=1`;
     };
 
     const downloadUrl = getDownloadUrl(item.fileUrl);
@@ -94,7 +95,7 @@ export default function ComedyDirectoryList({
       const anchor = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       anchor.href = objectUrl;
-      anchor.download = `${safeTitle}.mp4`;
+      anchor.download = fallbackFileName;
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();

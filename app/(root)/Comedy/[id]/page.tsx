@@ -124,13 +124,14 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
   const handleDownloadItem = async (item: PlaylistItem) => {
     const safeTitle = (item.title || 'download').trim() || 'download';
     const targetUrl = item.fileUrl || '';
+    const fallbackFileName = targetUrl.split('/').pop()?.split('?')[0]?.trim() || `${safeTitle}.mp4`;
 
     const getDownloadUrl = (fileUrl: string) => {
       const match = fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
       const fileId = match ? (match[1] || match[2]) : null;
       if (!fileId) return fileUrl;
 
-      return `/api/dashboard/media/${fileId}?download=1&filename=${encodeURIComponent(`${safeTitle}.mp4`)}`;
+      return `/api/dashboard/media/${fileId}?download=1`;
     };
 
     const downloadUrl = getDownloadUrl(targetUrl);
@@ -197,7 +198,7 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
       const anchor = document.createElement('a');
       const objectUrl = URL.createObjectURL(blob);
       anchor.href = objectUrl;
-      anchor.download = `${safeTitle}.mp4`;
+      anchor.download = fallbackFileName;
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();
