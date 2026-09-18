@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { getArtistById } from '@/lib/artists';
 import { extractAudioCoverArt } from '@/lib/audio-cover';
 import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 import ShareDot from '@/components/ShareDot';
-import { getPinnedTrackFileUrls, setPinnedTrackFileUrls, subscribePinnedTracks, togglePinnedTrackFileUrl } from '@/lib/pinned-tracks';
+import { setPinnedTrackFileUrls, togglePinnedTrackFileUrl, usePinnedTrackFileUrls } from '@/lib/pinned-tracks';
 
 interface Artist {
   id: string;
@@ -150,7 +150,7 @@ export default function ArtistDetailPage() {
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
 
   // Pinned track state (checkbox = pin track to the featured audio carousel)
-  const pinnedFileUrls = useSyncExternalStore(subscribePinnedTracks, getPinnedTrackFileUrls, getPinnedTrackFileUrls);
+  const pinnedFileUrls = usePinnedTrackFileUrls();
 
   const toggleTrackSelection = (track: Track) => {
     if (!track.fileUrl) return;

@@ -1,80 +1,82 @@
-const PINNED_TRACKS_KEY = 'audio-page:pinned-tracks';
+'use client';
+
+import { useEffect, useSyncExternalStore } from 'react';
+
 const EMPTY_PINNED_TRACKS: string[] = [];
 
-let cachedRaw: string | null = null;
-let cachedValue: string[] = EMPTY_PINNED_TRACKS;
+let pinnedFileUrls: string[] = EMPTY_PINNED_TRACKS;
 const listeners = new Set<() => void>();
 
-function parsePinnedTracks(raw: string | null): string[] {
-  if (!raw) return EMPTY_PINNED_TRACKS;
+function getPinnedSnapshot(): string[] {
+  return pinnedFileUrls;
+}
 
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed)
-      ? parsed.filter((value): value is string => typeof value === 'string')
-      : EMPTY_PINNED_TRACKS;
-  } catch {
-    return EMPTY_PINNED_TRACKS;
-  }
+function emitPinnedTracksChange(): void {
+  listeners.forEach((listener) => listener());
+}
+
+export function subscribePinnedTracks(callback: () => void): () => void {
+  listeners.add(callback);
+  return () => {
+    listeners.delete(callback);
+  };
 }
 
 export function getPinnedTrackFileUrls(): string[] {
   if (typeof window === 'undefined') return EMPTY_PINNED_TRACKS;
-
-  let raw: string | null = null;
-  try {
-    raw = window.localStorage.getItem(PINNED_TRACKS_KEY);
-  } catch {
-    raw = null;
-  }
-
-  if (raw === cachedRaw) return cachedValue;
-
-  cachedRaw = raw;
-  cachedValue = parsePinnedTracks(raw);
-  return cachedValue;
+  return getPinnedSnapshot();
 }
 
-export function subscribePinnedTracks(callback: () => void): () => void {
-  if (typeof window === 'undefined') return () => {};
-
-  const invalidate = () => {
-    cachedRaw = null;
-    callback();
-  };
-
-  listeners.add(invalidate);
-
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key === null || event.key === PINNED_TRACKS_KEY) invalidate();
-  };
-  window.addEventListener('storage', handleStorage);
-
-  return () => {
-    listeners.delete(invalidate);
-    window.removeEventListener('storage', handleStorage);
-  };
-}
-
-function emitPinnedTracksChange(): void {
-  cachedRaw = null;
-  listeners.forEach((listener) => listener());
-}
-
-export function setPinnedTrackFileUrls(fileUrls: string[]): void {
-  if (typeof window === 'undefined') return;
-
-  try {
-    window.localStorage.setItem(PINNED_TRACKS_KEY, JSON.stringify(Array.from(new Set(fileUrls))));
-  } catch {
-    // storage unavailable or full — ignore
-  }
-
+function applyPinnedTrackFileUrls(fileUrls: string[]): void {
+  pinnedFileUrls = Array.from(new Set(fileUrls.filter((url) => typeof url === 'string')));
   emitPinnedTracksChange();
 }
 
+let pinnedLoadPromise: Promise<void> | null = null;
+
+export async function loadPinnedTracks(): Promise<void> {
+  if (pinnedLoadPromise) return pinnedLoadPromise;
+
+  pinnedLoadPromise = (async () => {
+    try {
+      const response = await fetch('/api/pinned-tracks', { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = (await response.json()) as { fileUrls?: unknown };
+      if (Array.isArray(data.fileUrls)) {
+        applyPinnedTrackFileUrls(data.fileUrls as string[]);
+      }
+    } catch {
+      // Keep whatever is in memory when the network is unavailable.
+    } finally {
+      pinnedLoadPromise = null;
+    }
+  })();
+
+  return pinnedLoadPromise;
+}
+
+async function persistPinnedTrackFileUrls(fileUrls: string[]): Promise<void> {
+  try {
+    await fetch('/api/pinned-tracks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileUrls }),
+      cache: 'no-store',
+    });
+    await loadPinnedTracks();
+  } catch {
+    // Local state stays authoritative even if persisting fails.
+  }
+}
+
+export function setPinnedTrackFileUrls(fileUrls: string[]): void {
+  const next = Array.from(new Set(fileUrls.filter((url) => typeof url === 'string')));
+  applyPinnedTrackFileUrls(next);
+  void persistPinnedTrackFileUrls(next);
+}
+
 export function togglePinnedTrackFileUrl(fileUrl: string): string[] {
-  const next = new Set(getPinnedTrackFileUrls());
+  const next = new Set(pinnedFileUrls);
   if (next.has(fileUrl)) {
     next.delete(fileUrl);
   } else {
@@ -87,5 +89,15 @@ export function togglePinnedTrackFileUrl(fileUrl: string): string[] {
 
 export function isPinnedTrackFileUrl(fileUrl: string | null | undefined): boolean {
   if (!fileUrl) return false;
-  return getPinnedTrackFileUrls().includes(fileUrl);
+  return pinnedFileUrls.includes(fileUrl);
+}
+
+export function usePinnedTrackFileUrls(): string[] {
+  const fileUrls = useSyncExternalStore(subscribePinnedTracks, getPinnedSnapshot, getPinnedSnapshot);
+
+  useEffect(() => {
+    void loadPinnedTracks();
+  }, []);
+
+  return fileUrls;
 }

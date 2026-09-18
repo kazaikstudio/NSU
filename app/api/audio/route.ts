@@ -70,6 +70,10 @@ async function ensureMediaTable() {
     ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
   `);
   await pool.query(`
+    ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;
+  `);
+  await pool.query(`
       CREATE TABLE IF NOT EXISTS storage_items (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
@@ -115,7 +119,8 @@ export async function GET() {
         artist.name AS "artistName",
         artist.genre AS "artistGenre",
         artist.profile_url AS "artistProfileUrl",
-        media.featured_artist_id AS "featuredArtistId"
+        media.featured_artist_id AS "featuredArtistId",
+        media.pinned AS "pinned"
       FROM artist_media AS media
       INNER JOIN artists AS artist ON artist.id::text = media.artist_id
       WHERE media.kind = 'track'

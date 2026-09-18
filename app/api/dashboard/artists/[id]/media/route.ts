@@ -40,7 +40,8 @@ async function ensureMediaTable() {
     ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
     ADD COLUMN IF NOT EXISTS featured_artist_name TEXT,
     ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS featured_artist_id TEXT
+    ADD COLUMN IF NOT EXISTS featured_artist_id TEXT,
+    ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false
   `);
 
   mediaTableReady = true;

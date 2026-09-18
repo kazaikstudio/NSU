@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useState, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Image from 'next/image';
 import {
   Download,
   Play,
   Pause,
-  Flame,
 } from 'lucide-react';
-import { getPinnedTrackFileUrls, subscribePinnedTracks } from '@/lib/pinned-tracks';
+import Pined from './Pined';
+import { usePinnedTrackFileUrls } from '@/lib/pinned-tracks';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
 import { fetchAudioData, type AudioPageResponse } from '@/lib/audio-data';
 import { primeAudioStart } from '@/lib/audio-preload';
@@ -143,7 +143,7 @@ const exampleTracks: FeaturedAudioTrack[] = [
 
 export default function AudioCardsLatest() {
   const [tracks, setTracks] = useState<FeaturedAudioTrack[]>([]);
-  const pinnedFileUrls = useSyncExternalStore(subscribePinnedTracks, getPinnedTrackFileUrls, getPinnedTrackFileUrls);
+  const pinnedFileUrls = usePinnedTrackFileUrls();
   const [liveCounts, setLiveCounts] = useState<Record<string, TrackCountsSnapshot>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
@@ -646,11 +646,7 @@ export default function AudioCardsLatest() {
                             {track.title || 'Untitled Track'}
                           </span>
                           {track.pinned && (
-                            <Flame
-                              size={16}
-                              className="shrink-0 text-orange-400 drop-shadow-[0_0_4px_rgba(255,110,0,0.9)] fill-orange-400/30"
-                              aria-label="Pinned to the featured audio carousel"
-                            />
+                            <Pined size="md" title="Pinned to the featured audio carousel" />
                           )}
                         </div>
                         <p className="text-xs text-white/60 truncate mt-0.5">

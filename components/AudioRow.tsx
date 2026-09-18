@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
 import { getTrackCounts, subscribeTrackCounts, type TrackCountsSnapshot } from '@/lib/audio-counts';
 import { downloadTrackFile } from '@/lib/download-track';
@@ -13,7 +13,7 @@ import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying, 
 import { extractStoredFileId, recordTrackPlay } from '@/lib/media-url';
 import { buildArtistCredit, buildAudioDownloadName } from '@/lib/download';
 import Pined from './Pined';
-import { getPinnedTrackFileUrls, subscribePinnedTracks } from '@/lib/pinned-tracks';
+import { usePinnedTrackFileUrls } from '@/lib/pinned-tracks';
 
 interface DownloadCountUpdate {
   trackDownloads?: number;
@@ -112,7 +112,7 @@ export default function AudioRow({
 }: AudioRowProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const sourceKey = useId();
-  const pinnedFileUrls = useSyncExternalStore(subscribePinnedTracks, getPinnedTrackFileUrls, getPinnedTrackFileUrls);
+  const pinnedFileUrls = usePinnedTrackFileUrls();
   const [currentSrc, setCurrentSrc] = useState(src);
   const [isPlaying, setIsPlaying] = useState(() => {
     const cached = getAudioCacheEntry(src);
