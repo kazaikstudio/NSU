@@ -46,10 +46,10 @@ export interface MemberFormValues {
 }
 
 interface EditMemberModalProps {
-  member: Member;
+  member?: Member | null;
   isDarkMode: boolean;
   onClose: () => void;
-  onUpdate: (values: MemberFormValues) => Promise<void>;
+  onSave: (values: MemberFormValues) => Promise<void>;
 }
 
 const CATEGORIES: MemberCategory[] = ['Regular Members', 'Board Members', 'Artists', 'Dancers'];
@@ -84,25 +84,26 @@ function formatRemaining(ms: number) {
   return `${days}d ${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
 }
 
-export default function EditMemberModal({ member, isDarkMode, onClose, onUpdate }: EditMemberModalProps) {
-  const [name, setName] = useState(member.name);
-  const [email, setEmail] = useState(member.email);
-  const [contact, setContact] = useState(member.contact ?? '');
-  const [contact2, setContact2] = useState(member.contact2 ?? '');
-  const [profilePic, setProfilePic] = useState(member.profilePic ?? '');
-  const [age, setAge] = useState(member.age ? String(member.age) : '');
-  const [dateJoined, setDateJoined] = useState(member.dateJoined ?? '');
-  const [village, setVillage] = useState(member.village ?? '');
-  const [district, setDistrict] = useState(member.district ?? '');
-  const [guardianName, setGuardianName] = useState(member.guardianName ?? '');
-  const [guardianContact, setGuardianContact] = useState(member.guardianContact ?? '');
-  const [subCounty, setSubCounty] = useState(member.subCounty ?? '');
-  const [category, setCategory] = useState<MemberCategory>(member.category);
-  const [status, setStatus] = useState<MemberStatus>(member.status);
+export default function EditMemberModal({ member, isDarkMode, onClose, onSave }: EditMemberModalProps) {
+  const isEditing = Boolean(member);
+  const [name, setName] = useState(member?.name ?? '');
+  const [email, setEmail] = useState(member?.email ?? '');
+  const [contact, setContact] = useState(member?.contact ?? '');
+  const [contact2, setContact2] = useState(member?.contact2 ?? '');
+  const [profilePic, setProfilePic] = useState(member?.profilePic ?? '');
+  const [age, setAge] = useState(member?.age ? String(member.age) : '');
+  const [dateJoined, setDateJoined] = useState(member?.dateJoined ?? '');
+  const [village, setVillage] = useState(member?.village ?? '');
+  const [district, setDistrict] = useState(member?.district ?? '');
+  const [guardianName, setGuardianName] = useState(member?.guardianName ?? '');
+  const [guardianContact, setGuardianContact] = useState(member?.guardianContact ?? '');
+  const [subCounty, setSubCounty] = useState(member?.subCounty ?? '');
+  const [category, setCategory] = useState<MemberCategory>(member?.category ?? 'Regular Members');
+  const [status, setStatus] = useState<MemberStatus>(member?.status ?? 'Active');
   const [durationUnit, setDurationUnit] = useState<'days' | 'weeks' | 'months'>('days');
-  const [durationValue, setDurationValue] = useState(member.suspensionDays ? String(member.suspensionDays) : '');
+  const [durationValue, setDurationValue] = useState(member?.suspensionDays ? String(member.suspensionDays) : '');
   const [suspendedAt, setSuspendedAt] = useState<string | null>(
-    member.suspendedAt ?? (member.status === 'Suspended' ? new Date().toISOString() : null)
+    member?.suspendedAt ?? (member?.status === 'Suspended' ? new Date().toISOString() : null)
   );
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState(0);
@@ -137,7 +138,7 @@ export default function EditMemberModal({ member, isDarkMode, onClose, onUpdate 
 
     setSaving(true);
     try {
-      await onUpdate({
+      await onSave({
         name,
         email,
         contact,
@@ -180,9 +181,11 @@ export default function EditMemberModal({ member, isDarkMode, onClose, onUpdate 
                 ⚡
               </div>
               <div>
-                <h3 className="text-xl font-bold tracking-tight">Edit Team Member</h3>
+                <h3 className="text-xl font-bold tracking-tight">{isEditing ? 'Edit Team Member' : 'Add New Member'}</h3>
                 <p className={`text-xs mt-0.5 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Update member credentials, location, and operational statuses
+                  {isEditing
+                    ? 'Update member credentials, location, and operational statuses'
+                    : 'Register a new member with credentials, location, and status'}
                 </p>
               </div>
             </div>
@@ -536,7 +539,7 @@ export default function EditMemberModal({ member, isDarkMode, onClose, onUpdate 
                 disabled={saving}
                 className="rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 cursor-pointer"
               >
-                {saving ? 'Saving...' : 'Save Changes'}
+                {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Member'}
               </button>
             </div>
           </form>

@@ -38,7 +38,8 @@ async function ensureMediaTable() {
     ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
     ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
-    ADD COLUMN IF NOT EXISTS featured_artist_name TEXT
+    ADD COLUMN IF NOT EXISTS featured_artist_name TEXT,
+    ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0
   `);
 
   mediaTableReady = true;
@@ -50,7 +51,7 @@ export async function GET(_request: Request, context: Context) {
     await ensureMediaTable();
     const { rows } = await pool.query(
       `SELECT id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", drive_file_id AS "driveFileId", thumbnail_url AS "thumbnailUrl", play_count AS "playCount", download_count AS "downloadCount", created_at AS "createdAt"
-       FROM artist_media WHERE artist_id = $1 ORDER BY created_at DESC`,
+       FROM artist_media WHERE artist_id = $1 ORDER BY sort_order ASC, created_at DESC`,
       [id]
     );
     return NextResponse.json({ media: rows });
@@ -136,6 +137,55 @@ export async function PUT(request: Request, context: Context) {
     });
 
     return NextResponse.json({ media: rows[0] });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request, context: Context) {
+  const { id: artistId } = await context.params;
+  try {
+    const body = await request.json().catch(() => ({})) as { trackIds?: unknown };
+    const rawTrackIds = Array.isArray(body.trackIds) ? body.trackIds : [];
+    const trackIds = rawTrackIds.filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+    if (trackIds.length === 0) {
+      return NextResponse.json({ error: 'An ordered list of track ids is required' }, { status: 400 });
+    }
+
+    await ensureMediaTable();
+
+    const { rows } = await pool.query<{ id: string }>(
+      `SELECT id FROM artist_media WHERE artist_id = $1 AND kind = 'track'`,
+      [artistId]
+    );
+    const ownedIds = new Set(rows.map((row) => row.id));
+    if (trackIds.some((id) => !ownedIds.has(id))) {
+      return NextResponse.json({ error: 'One or more track ids do not belong to this artist' }, { status: 400 });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let index = 0; index < trackIds.length; index += 1) {
+        await client.query(`UPDATE artist_media SET sort_order = $1 WHERE id = $2 AND artist_id = $3`, [index + 1, trackIds[index], artistId]);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    await recordActivity({
+      action: 'updated',
+      entityType: 'track',
+      entityId: artistId,
+      description: `Reordered ${trackIds.length} tracks for artist ${artistId}`,
+    });
+
+    return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
@@ -249,11 +299,17 @@ export async function POST(request: Request, context: Context) {
 
       const mediaId = `media-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const mediaTitle = title.trim() || (kind === 'banner' ? 'Artist Banner' : kind === 'profile' ? 'Artist Profile' : 'Track');
+      const sortOrder = kind === 'track'
+        ? (await pool.query<{ sortOrder: number }>(
+          `SELECT COALESCE(MIN(sort_order) - 1, 0) AS "sortOrder" FROM artist_media WHERE artist_id = $1 AND kind = 'track'`,
+          [artistId]
+        )).rows[0].sortOrder
+        : 0;
       const { rows } = await pool.query(
-        `INSERT INTO artist_media (id, artist_id, kind, title, album, featured_artist_name, file_name, mime_type, file_url, drive_file_id, thumbnail_url, thumbnail_drive_file_id, download_count)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0)
+        `INSERT INTO artist_media (id, artist_id, kind, title, album, featured_artist_name, file_name, mime_type, file_url, drive_file_id, thumbnail_url, thumbnail_drive_file_id, download_count, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13)
          RETURNING id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", download_count AS "downloadCount", created_at AS "createdAt"`,
-        [mediaId, artistId, kind, mediaTitle, album, featuredArtistName, file.name, file.type || 'application/octet-stream', storageFile.publicUrl, storageFile.id, thumbnailUrl, thumbnailDriveFileId]
+        [mediaId, artistId, kind, mediaTitle, album, featuredArtistName, file.name, file.type || 'application/octet-stream', storageFile.publicUrl, storageFile.id, thumbnailUrl, thumbnailDriveFileId, sortOrder]
       );
 
       if (kind === 'banner' || kind === 'profile') {

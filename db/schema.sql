@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS artist_media (
   thumbnail_url TEXT,
   thumbnail_drive_file_id TEXT,
   featured_artist_name TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

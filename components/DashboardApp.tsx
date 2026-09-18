@@ -129,15 +129,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
   const [members, setMembers] = useState<Member[]>(() => dashboardDataCache?.members ?? []);
   const [memberCategoryFilter, setMemberCategoryFilter] = useState<string>('All');
 
-  // Member Form States
-  const [newMemberName, setNewMemberName] = useState('');
-  const [newMemberEmail, setNewMemberEmail] = useState('');
-  const [newMemberContact, setNewMemberContact] = useState('');
-  const [newMemberProfilePic, setNewMemberProfilePic] = useState('');
-  const [newMemberCategory, setNewMemberCategory] = useState<'Board Members' | 'Artists' | 'Dancers' | 'Regular Members'>('Regular Members');
-  const [newMemberStatus, setNewMemberStatus] = useState<Member['status']>('Active');
-  const [savingMember, setSavingMember] = useState(false);
-
   const [newArtistName, setNewArtistName] = useState('');
   const [newArtistGenre, setNewArtistGenre] = useState('');
   const [savingArtist, setSavingArtist] = useState(false);
@@ -314,61 +305,36 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
     if (response.ok) setArtists((prev) => prev.filter((artist) => artist.id !== id));
   }, []);
 
-  const handleAddMember = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (savingMember || !newMemberName.trim() || !newMemberEmail.trim()) {
-      return;
-    }
-
+  const handleSaveMember = useCallback(async (values: MemberFormValues) => {
     setMemberMessage('');
-    setSavingMember(true);
+
     try {
-      const response = await fetch('/api/members', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newMemberName,
-          email: newMemberEmail,
-          contact: newMemberContact,
-          profilePic: newMemberProfilePic,
-          category: newMemberCategory,
-          status: newMemberStatus,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Unable to save member');
+      if (editingMember) {
+        const response = await fetch(`/api/members/${editingMember.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Unable to save member');
 
-      setMembers((prev) => [data.member, ...prev]);
-      setNewMemberName('');
-      setNewMemberEmail('');
-      setNewMemberContact('');
-      setNewMemberProfilePic('');
-      setIsMemberModalOpen(false);
-      setMemberMessage('Member added successfully.');
-    } catch (error) {
-      setMemberMessage(error instanceof Error ? error.message : 'Unable to save member');
-    } finally {
-      setSavingMember(false);
-    }
-  }, [newMemberName, newMemberEmail, newMemberContact, newMemberProfilePic, newMemberCategory, newMemberStatus, savingMember]);
+        setMembers((prev) => prev.map((member) => member.id === editingMember.id ? data.member : member));
+        setMemberMessage('Member updated successfully.');
+      } else {
+        const response = await fetch('/api/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Unable to save member');
 
-  const handleUpdateMember = useCallback(async (values: MemberFormValues) => {
-    if (!editingMember) return;
+        setMembers((prev) => [data.member, ...prev]);
+        setMemberMessage('Member added successfully.');
+      }
 
-    setMemberMessage('');
-    try {
-      const response = await fetch(`/api/members/${editingMember.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Unable to save member');
-
-      setMembers((prev) => prev.map((member) => member.id === editingMember.id ? data.member : member));
       setEditingMember(null);
       setIsMemberModalOpen(false);
-      setMemberMessage('Member updated successfully.');
     } catch (error) {
       setMemberMessage(error instanceof Error ? error.message : 'Unable to save member');
     }
@@ -866,12 +832,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                     type="button"
                     onClick={() => {
                       setEditingMember(null);
-                      setNewMemberName('');
-                      setNewMemberEmail('');
-                      setNewMemberContact('');
-                      setNewMemberCategory('Regular Members');
-                      setNewMemberStatus('Active');
-                      setNewMemberProfilePic('');
                       setIsMemberModalOpen(true);
                     }}
                     className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4.5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 active:scale-95"
@@ -987,184 +947,6 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                 </div>
               </div>
 
-              {/* Modern Add / Edit Member Modal Panel */}
-              {false && isMemberModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                  <div className={`relative w-full max-w-lg rounded-3xl border p-6 sm:p-8 shadow-2xl transition-all ${isDarkMode ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
-
-                    <div className="flex items-center justify-between pb-4 border-b border-slate-700/50">
-                      <div>
-                        <h3 className="text-xl font-bold tracking-tight">
-                          {editingMember ? 'Edit Team Member' : 'Add New Member'}
-                        </h3>
-                        <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                          {editingMember ? 'Update member details and privileges' : 'Register a new member to the platform roster'}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsMemberModalOpen(false)}
-                        className={`flex h-8 w-8 items-center justify-center rounded-full border transition hover:scale-105 ${isDarkMode ? 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white' : 'border-slate-200 bg-slate-100 text-slate-600 hover:text-slate-900'}`}
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    <div className="mt-6 space-y-4">
-
-                      {/* Profile Picture Upload Section */}
-                      <div>
-                        <label className={`block text-xs font-bold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Profile Picture
-                        </label>
-                        <div className="flex items-center gap-4">
-                          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-indigo-500/30 bg-indigo-600/10 flex items-center justify-center shadow-inner">
-                            {newMemberProfilePic ? (
-                              <Image src={newMemberProfilePic} alt="Preview" fill unoptimized className="object-cover" />
-                            ) : (
-                              <span className="text-lg font-bold text-indigo-400">
-                                {newMemberName ? newMemberName.charAt(0).toUpperCase() : 'N'}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-xs font-semibold shadow-sm transition hover:scale-[1.02] active:scale-95 ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
-                              <svg className="h-4 w-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                              </svg>
-                              <span>Upload Image File</span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => setNewMemberProfilePic(reader.result as string);
-                                    reader.readAsDataURL(file);
-                                  }
-                                }}
-                              />
-                            </label>
-                            <p className={`mt-1 text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                              PNG, JPG, or WEBP up to 5MB.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Full Name */}
-                      <div>
-                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Full Name
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. John Doe"
-                          value={newMemberName}
-                          onChange={(e) => setNewMemberName(e.target.value)}
-                          className={`w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/60 text-white placeholder-slate-600' : 'border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400'}`}
-                        />
-                      </div>
-
-                      {/* Email Address */}
-                      <div>
-                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Email Address
-                        </label>
-                        <input
-                          type="email"
-                          placeholder="e.g. john@domain.com"
-                          value={newMemberEmail}
-                          onChange={(e) => setNewMemberEmail(e.target.value)}
-                          className={`w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/60 text-white placeholder-slate-600' : 'border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400'}`}
-                        />
-                      </div>
-
-                      {/* Contact Number */}
-                      <div>
-                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Contact Number
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. +1 234 567 890"
-                          value={newMemberContact}
-                          onChange={(e) => setNewMemberContact(e.target.value)}
-                          className={`w-full rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/60 text-white placeholder-slate-600' : 'border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400'}`}
-                        />
-                      </div>
-
-                      {/* Category Dropdown */}
-                      <div>
-                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Member Category
-                        </label>
-                        <div className="relative">
-                          <select
-                            value={newMemberCategory || 'Regular Members'}
-                            onChange={(e) => setNewMemberCategory(e.target.value as Member['category'])}
-                            className={`w-full appearance-none rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/80 text-white' : 'border-slate-200 bg-slate-50 text-slate-900'}`}
-                          >
-                            <option value="Board Members">Board Members</option>
-                            <option value="Artists">Artists</option>
-                            <option value="Dancers">Dancers</option>
-                            <option value="Regular Members">Regular Members</option>
-                          </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Status Dropdown */}
-                      <div>
-                        <label className={`block text-xs font-bold uppercase tracking-wider mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Account Status
-                        </label>
-                        <div className="relative">
-                          <select
-                            value={newMemberStatus}
-                            onChange={(e) => setNewMemberStatus(e.target.value as Member['status'])}
-                            className={`w-full appearance-none rounded-xl border px-4 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${isDarkMode ? 'border-slate-700 bg-slate-950/80 text-white' : 'border-slate-200 bg-slate-50 text-slate-900'}`}
-                          >
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                            <option value="Pending">Pending</option>
-                          </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    <div className="mt-8 flex items-center justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setIsMemberModalOpen(false)}
-                        className={`rounded-xl border px-5 py-2.5 text-xs font-semibold transition ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={savingMember}
-                        className="rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-semibold text-white shadow-lg shadow-indigo-600/30 transition hover:bg-indigo-500 active:scale-95"
-                      >
-                        {savingMember ? 'Saving...' : editingMember ? 'Save Changes' : 'Create Member'}
-                      </button>
-                    </div>
-
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -1947,187 +1729,18 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
         </div>
       )}
 
-      {/* Add New Member Modal */}
-      {isMemberModalOpen && !editingMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-fadeIn">
-          <div className={`w-full max-w-lg rounded-3xl border p-7 shadow-2xl transition-all duration-300 ${
-            isDarkMode
-              ? 'border-slate-800/90 bg-slate-900/95 text-white shadow-black/50'
-              : 'border-slate-200/90 bg-white/95 text-slate-900 shadow-slate-200/50'
-          }`}>
-            {/* Header */}
-            <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-700/30">
-              <div>
-                <h3 className="text-xl font-bold tracking-tight">
-                  {editingMember ? 'Edit Team Member' : 'Add New Member'}
-                </h3>
-                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  {editingMember ? 'Update member details and privileges' : 'Fill in the information to add a new member to the platform'}
-                </p>
-              </div>
-              <button
-                onClick={() => setIsMemberModalOpen(false)}
-                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
-                  isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                ✕
-              </button>
-            </div>
 
-            <form onSubmit={handleAddMember} className="space-y-4">
-              {/* Profile Picture Upload Section */}
-              <div className="flex items-center gap-4 p-4 rounded-2xl border border-dashed border-indigo-500/30 bg-indigo-500/5">
-                <div className="relative shrink-0">
-                  <div className={`h-16 w-16 overflow-hidden rounded-2xl border-2 shadow-inner flex items-center justify-center font-bold text-xl uppercase ${
-                    isDarkMode ? 'border-slate-700 bg-slate-800 text-indigo-400' : 'border-slate-200 bg-slate-100 text-indigo-600'
-                  }`}>
-                    {newMemberProfilePic ? (
-                      <Image src={newMemberProfilePic} alt="Preview" fill unoptimized className="object-cover" />
-                    ) : (
-                      <span>{newMemberName ? newMemberName.charAt(0) : 'N'}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex-1 space-y-1.5">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-indigo-400">Profile Picture</label>
-                  <div className="flex items-center gap-2">
-                    <label className={`cursor-pointer inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold shadow-sm transition border ${
-                      isDarkMode
-                        ? 'border-slate-700 bg-slate-800 text-white hover:bg-slate-700'
-                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                    }`}>
-                      <span>📁 Upload Image</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => setNewMemberProfilePic(reader.result as string);
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                      />
-                    </label>
-                    {newMemberProfilePic && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewMemberProfilePic('');
-                        }}
-                        className="text-xs font-medium text-red-400 hover:text-red-300 px-2 py-1"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Form Inputs Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Full Name</label>
-                  <input
-                    type="text"
-                    value={newMemberName}
-                    onChange={(e) => setNewMemberName(e.target.value)}
-                    placeholder="e.g. John Doe"
-                    className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
-                      isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
-                    }`}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Email Address</label>
-                  <input
-                    type="email"
-                    value={newMemberEmail}
-                    onChange={(e) => setNewMemberEmail(e.target.value)}
-                    placeholder="e.g. john@example.com"
-                    className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
-                      isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
-                    }`}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Contact Number</label>
-                <input
-                  type="text"
-                  value={newMemberContact}
-                  onChange={(e) => setNewMemberContact(e.target.value)}
-                  placeholder="e.g. +256 700 000000"
-                  className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
-                    isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Member Category</label>
-                <div className="relative">
-                  <select
-                    value={newMemberCategory}
-                    onChange={(e) => setNewMemberCategory(e.target.value as Member['category'])}
-                    className={`w-full appearance-none rounded-xl border px-4 py-2.5 pr-10 text-sm outline-none transition cursor-pointer focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
-                      isDarkMode ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-300 bg-white text-slate-900'
-                    }`}
-                  >
-                    <option value="Regular Members" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Regular Members</option>
-                    <option value="Board Members" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Board Members</option>
-                    <option value="Artists" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Artists</option>
-                    <option value="Dancers" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Dancers</option>
-                  </select>
-                  {/* Custom Modern Dropdown Arrow Indicator */}
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-indigo-400">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer Actions */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-700/30">
-                <button
-                  type="button"
-                  onClick={() => setIsMemberModalOpen(false)}
-                  className={`rounded-xl px-5 py-2.5 text-sm font-semibold transition-colors ${
-                    isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
-                >
-                  Cancel
-                </button>
-                  <button
-                    type="submit"
-                    disabled={savingMember}
-                  className="rounded-xl bg-linear-to-r from-indigo-600 to-indigo-700 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/30 hover:from-indigo-500 hover:to-indigo-600 transition-all"
-                >
-                  {savingMember ? 'Saving...' : 'Add Member'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Team Member Modal */}
-      {isMemberModalOpen && editingMember && (
+      {/* Add / Edit Member Modal */}
+      {isMemberModalOpen && (
         <EditMemberModal
+          key={editingMember?.id ?? 'new-member'}
           member={editingMember}
           isDarkMode={isDarkMode}
           onClose={() => {
             setIsMemberModalOpen(false);
             setEditingMember(null);
           }}
-          onUpdate={handleUpdateMember}
+          onSave={handleSaveMember}
         />
       )}
 

@@ -527,6 +527,36 @@ export default function ArtistDetailPage() {
     setPlayingTrackId((current) => (current === track.id ? null : track.id));
   };
 
+  const persistTrackOrder = async (orderedTracks: Track[]) => {
+    const trackIds = orderedTracks.map((track) => track.id);
+    try {
+      const response = await fetch(`/api/dashboard/artists/${params.id}/media`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackIds }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Unable to save track order');
+      setProcessMessage('Track order saved.');
+      setTimeout(() => setProcessMessage(''), 2000);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Unable to save track order');
+    }
+  };
+
+  const moveTrack = (index: number, direction: -1 | 1) => {
+    setTracks((prevTracks) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= prevTracks.length) return prevTracks;
+
+      const reordered = [...prevTracks];
+      const [movedTrack] = reordered.splice(index, 1);
+      reordered.splice(targetIndex, 0, movedTrack);
+      void persistTrackOrder(reordered);
+      return reordered;
+    });
+  };
+
   const handleDeleteTrack = async (id: string) => {
     try {
       const response = await fetch(`/api/dashboard/artists/${params.id}/media?mediaId=${encodeURIComponent(id)}`, {
@@ -811,7 +841,7 @@ export default function ArtistDetailPage() {
           </div>
 
           {/* STATS GRID */}
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <div className="mt-8 grid gap-4 md:grid-cols-2">
             <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-5">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs text-slate-400">Genre</p>
@@ -843,10 +873,6 @@ export default function ArtistDetailPage() {
             <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-5">
               <p className="text-xs text-slate-400">Total Tracks</p>
               <p className="mt-1 text-lg font-medium">{tracks.length}</p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-5">
-              <p className="text-xs text-slate-400">Monthly Listeners</p>
-              <p className="mt-1 text-lg font-medium">{artist.monthlyListeners?.toLocaleString() ?? 0}</p>
             </div>
           </div>
 
@@ -1047,7 +1073,7 @@ export default function ArtistDetailPage() {
                         </td>
                       </tr>
                     ) : (
-                      tracks.map((track) => (
+                      tracks.map((track, index) => (
                         <tr key={track.id} className="transition hover:bg-slate-900/40">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
@@ -1119,7 +1145,31 @@ export default function ArtistDetailPage() {
                           <td className="px-6 py-4 text-slate-400">{track.album}</td>
                           <td className="px-6 py-4 text-slate-400">{track.uploadedAt}</td>
                           <td className="px-6 py-4 text-right">
-                            <div className="flex justify-end gap-2">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => moveTrack(index, -1)}
+                                disabled={index === 0}
+                                title="Move up"
+                                aria-label={`Move ${track.title} up`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 transition hover:border-indigo-500 hover:bg-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                              >
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveTrack(index, 1)}
+                                disabled={index === tracks.length - 1}
+                                title="Move down"
+                                aria-label={`Move ${track.title} down`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 transition hover:border-indigo-500 hover:bg-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                              >
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
                               <button
                                 onClick={() => startEditingTrack(track)}
                                 className="text-xs font-medium text-indigo-400 transition hover:text-indigo-300"
