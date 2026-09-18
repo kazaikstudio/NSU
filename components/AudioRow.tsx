@@ -32,6 +32,7 @@ interface AudioRowProps {
   playCount?: number;
   showDownload?: boolean;
   thumbnailUrl?: string;
+  isShared?: boolean;
   onPlay?: () => void;
   onDownload?: (countUpdate?: DownloadCountUpdate) => void;
   onNext?: () => void;
@@ -95,6 +96,7 @@ export default function AudioRow({
   artistName,
   featuredArtistName,
   thumbnailUrl,
+  isShared,
   downloadCount,
   playCount,
   showDownload = true,
@@ -493,7 +495,7 @@ onPlay={() => {
       <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-3">
         <div className="shrink-0">
           <div
-            className="h-10 w-10 sm:h-11 sm:w-11 rounded-md overflow-hidden bg-mrow/60 flex items-center justify-center cursor-pointer group/thumb"
+            className="relative h-10 w-10 sm:h-11 sm:w-11 rounded-md overflow-hidden bg-mrow/60 flex items-center justify-center cursor-pointer group/thumb"
             onClick={(e) => {
               e.stopPropagation();
               // Inside the full-screen player, treat the thumbnail like the play
@@ -526,6 +528,15 @@ onPlay={() => {
               onFocus={primeAudio}
               className="h-full w-full object-cover transition-transform duration-300 group-hover/thumb:scale-110"
             />
+            {isShared && (
+              <span
+                title="Also available on another artist's page"
+                aria-label="Also available on another artist's page"
+                className="absolute right-0.5 top-0.5 flex h-3 w-3 items-center justify-center rounded-full border-[1.5px] border-cardcl bg-emerald-500"
+              >
+                <span className="h-1 w-1 rounded-full bg-white" />
+              </span>
+            )}
           </div>
         </div>
 

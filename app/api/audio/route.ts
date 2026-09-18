@@ -55,6 +55,10 @@ async function ensureMediaTable() {
   `);
   await pool.query(`
     ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS featured_artist_id TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE artist_media
     ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
   `);
   await pool.query(`
@@ -93,7 +97,8 @@ export async function GET() {
         artist.id::text AS "artistId",
         artist.name AS "artistName",
         artist.genre AS "artistGenre",
-        artist.profile_url AS "artistProfileUrl"
+        artist.profile_url AS "artistProfileUrl",
+        media.featured_artist_id AS "featuredArtistId"
       FROM artist_media AS media
       INNER JOIN artists AS artist ON artist.id::text = media.artist_id
       WHERE media.kind = 'track'

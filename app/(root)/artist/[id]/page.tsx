@@ -32,7 +32,11 @@ interface Track {
   album?: string | null;
   fileName: string;
   fileUrl?: string;
+  thumbnailUrl?: string;
   featuredArtistName?: string | null;
+  featuredArtistId?: string | null;
+  ownerArtistId?: string | null;
+  ownerArtistName?: string | null;
   downloadCount?: number;
   playCount?: number;
   createdAt?: string;
@@ -325,6 +329,11 @@ export default function PublicArtistDetailPage() {
     );
   }
 
+  const trackArtistName = (track: Track) =>
+    track.ownerArtistId && track.ownerArtistId !== artist.id
+      ? track.ownerArtistName || artist.name
+      : artist.name;
+
   const playerQueue = tracks
     .filter((track) => track.fileUrl)
     .map((track) => playerTrackFor(
@@ -333,8 +342,8 @@ export default function PublicArtistDetailPage() {
       getPlayableAudioUrl(track.fileUrl || ''),
       {
         artist: track.featuredArtistName
-          ? `${artist.name} ft ${track.featuredArtistName}`
-          : artist.name,
+          ? `${trackArtistName(track)} ft ${track.featuredArtistName}`
+          : trackArtistName(track),
         fileUrl: track.fileUrl ?? undefined,
         fileName: track.fileName ?? undefined,
         playCount: Number(track.playCount || 0),
@@ -504,9 +513,11 @@ export default function PublicArtistDetailPage() {
                     album={track.album}
                     fileName={track.fileName}
                     createdAt={track.createdAt}
-                    artistName={artist.name}
+                    artistName={trackArtistName(track)}
                     featuredArtistName={track.featuredArtistName}
                     artistGenre={artist.genre}
+                    thumbnailUrl={track.thumbnailUrl}
+                    isShared={Boolean(track.featuredArtistId)}
                     downloadCount={track.downloadCount}
                     playCount={track.playCount}
                     onPlay={() => void syncPlayCount(track.id, track.fileUrl || '')}

@@ -18,6 +18,7 @@ interface AudioTrack {
   artistId: string;
   artistName: string;
   featuredArtistName?: string | null;
+  featuredArtistId?: string | null;
   artistGenre?: string | null;
   artistProfileUrl?: string | null;
   thumbnailUrl?: string | null;
@@ -69,11 +70,7 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
         writeCachedData(CACHE_KEY, loadedTracks);
         setError('');
         setTracks((prev: AudioTrack[]) => {
-          const currentIds = new Set(prev.map((track) => track.id));
-          const hasChanges =
-            prev.length !== loadedTracks.length ||
-            loadedTracks.some((track) => !currentIds.has(track.id)) ||
-            loadedTracks.some((track, i) => prev[i]?.id !== track.id);
+          const hasChanges = JSON.stringify(prev) !== JSON.stringify(loadedTracks);
           return hasChanges ? loadedTracks : prev;
         });
       } catch (loadError) {
@@ -144,6 +141,7 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
             downloadCount={track.downloadCount}
             playCount={track.playCount}
             thumbnailUrl={normalizeImageUrl(track.thumbnailUrl)}
+            isShared={Boolean(track.featuredArtistId)}
             playerQueue={playerQueue}
             playerQueueIndex={playerQueue.findIndex((q) => q.id === track.id)}
           />
