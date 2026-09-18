@@ -175,7 +175,7 @@ export default function AudioPageClient() {
   }, []);
 
   return (
-    <main className="px-4 mb-10 py-5 max-w-9xl mx-auto text-primary">
+    <main className="px-4 mb-10 py-5 mx-auto text-primary">
       <DockBar searchHref="/search" />
 
       <AudioCardsLatest />

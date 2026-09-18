@@ -492,7 +492,7 @@ export default function AudioCardsLatest() {
 
   if (loading) {
     return (
-      <div className="w-full overflow-x-auto scrollbar-none pb-8 pt-3 px-4 sm:pb-10 sm:pt-8 sm:px-8">
+      <div className="w-[calc(100%+2rem)] overflow-x-auto scrollbar-none pb-8 pt-3 -mx-4 sm:w-full sm:mx-0 sm:pb-10 sm:pt-8 sm:px-8">
         <div className="flex gap-4 sm:gap-5">
           {Array.from({ length: 3 }, (_, index) => (
             <div
@@ -547,7 +547,7 @@ export default function AudioCardsLatest() {
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={() => setIsHovered(true)}
       onTouchEnd={() => setIsHovered(true)}
-      className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-8 pt-3 px-4 sm:pb-10 sm:pt-8 sm:px-8"
+      className="w-[calc(100%+2rem)] overflow-x-auto snap-x snap-mandatory scrollbar-none pb-8 pt-3 -mx-4 sm:w-full sm:mx-0 sm:pb-10 sm:pt-8 sm:px-8"
       onWheel={(event) => {
         if (window.matchMedia('(min-width: 640px)').matches && event.deltaY !== 0) {
           event.preventDefault();
@@ -592,7 +592,7 @@ export default function AudioCardsLatest() {
                     ? 'rgba(255, 110, 0, 0.75)'
                     : 'rgba(255,255,255,0.10)',
                 boxShadow: isSelected
-                  ? `0 0 0 2px ${cardColor}50, 0 0 30px ${cardColor}30, 0 8px 30px rgba(0,0,0,0.36)`
+                  ? `inset 0 0 0 2px ${cardColor}55, 0 0 30px ${cardColor}30, 0 8px 30px rgba(0,0,0,0.36)`
                   : '0 8px 30px rgba(0,0,0,0.36)',
               }}
             >

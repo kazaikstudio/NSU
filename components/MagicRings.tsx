@@ -5,6 +5,203 @@ import * as THREE from 'three';
 
 import './MagicRings.css';
 
+function hexToRgb(hex: string): [number, number, number] {
+  let cleaned = hex.replace('#', '');
+  if (cleaned.length === 3) {
+    cleaned = cleaned.split('').map((c) => c + c).join('');
+  }
+  const num = parseInt(cleaned, 16);
+  if (Number.isNaN(num) || cleaned.length < 6) return [168, 85, 247];
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+function mix(a: number, b: number, t: number) {
+  return a + (b - a) * t;
+}
+
+const DEFAULT_PROPS: Required<MagicRingsProps> = {
+  color: '#fc42ff',
+  colorTwo: '#42fcff',
+  speed: 1,
+  ringCount: 6,
+  attenuation: 10,
+  lineThickness: 2,
+  baseRadius: 0.35,
+  radiusStep: 0.1,
+  scaleRate: 0.1,
+  opacity: 1,
+  blur: 0,
+  noiseAmount: 0.1,
+  rotation: 0,
+  ringGap: 1.5,
+  fadeIn: 0.7,
+  fadeOut: 0.5,
+  followMouse: false,
+  mouseInfluence: 0.2,
+  hoverScale: 1.2,
+  parallax: 0.05,
+  clickBurst: false,
+  alphaMode: 'luminance',
+};
+
+// Canvas-2D fallback used on devices without WebGL2. Draws the same expanding,
+// fading rings so pinned tracks keep their animated glow on every phone.
+function startCanvasFallback(
+  mount: HTMLDivElement,
+  propsRef: React.MutableRefObject<Required<MagicRingsProps> | null>,
+) {
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'display:block;width:100%;height:100%;';
+  mount.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    mount.removeChild(canvas);
+    return () => {};
+  }
+
+  const size = { w: 0, h: 0 };
+  let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  const resize = () => {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    size.w = Math.max(1, Math.round(mount.clientWidth));
+    size.h = Math.max(1, Math.round(mount.clientHeight));
+    canvas.width = Math.round(size.w * dpr);
+    canvas.height = Math.round(size.h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+  resize();
+  window.addEventListener('resize', resize);
+  const ro = new ResizeObserver(resize);
+  ro.observe(mount);
+
+  let frameId = 0;
+  let isVisible = false;
+  let isPageVisible = !document.hidden;
+  let elapsed = 0;
+  let lastT = 0;
+
+  const CYCLE = 3.45;
+
+  const drawRing = (
+    cx: number,
+    cy: number,
+    radius: number,
+    width: number,
+    t0: number,
+    color: string,
+    alpha: number,
+    px: number,
+  ) => {
+    const t = (elapsed + t0) % CYCLE;
+    const lifeProgress = t / CYCLE;
+    const p = propsRef.current || DEFAULT_PROPS;
+    const r = radius + lifeProgress * p.scaleRate;
+    const fadeIn = 0.7;
+    const fadeOut = 0.5;
+    const fade = lifeProgress < fadeIn ? lifeProgress / fadeIn : 1 - Math.max(0, (lifeProgress - fadeOut) / (CYCLE - fadeOut - 0.2));
+    if (fade <= 0.01) return;
+
+    const gapEnd = 1 - (width * 1.5) / Math.max(cx + cy, 1);
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(0.1, r * Math.min(cx, cy)), 0, Math.PI * 2 * gapEnd);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = Math.max(0, Math.min(1, fade * alpha * p.opacity));
+    ctx.lineWidth = Math.max(1, width * px * p.lineThickness);
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  };
+
+  const animate = (t: number) => {
+    frameId = requestAnimationFrame(animate);
+    const p = propsRef.current || DEFAULT_PROPS;
+
+    const dt = lastT === 0 ? 0 : Math.min(t - lastT, 100);
+    lastT = t;
+    elapsed += dt * 0.001 * p.speed;
+
+    ctx.clearRect(0, 0, size.w, size.h);
+    ctx.globalAlpha = 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const cx = size.w / 2;
+    const cy = size.h / 2;
+    const px = 1 / Math.min(size.w, size.h);
+    const baseRadius = p.baseRadius;
+    const radiusStep = p.radiusStep;
+    const ringGap = p.ringGap;
+    const rcf = Math.max(p.ringCount - 1, 1);
+    const [r1, g1, b1] = hexToRgb(p.color);
+    const [r2, g2, b2] = hexToRgb(p.colorTwo);
+    const noiseAmount = p.noiseAmount;
+
+    for (let i = 0; i < p.ringCount; i++) {
+      const fi = i;
+      const mr = mix(r1, r2, fi / rcf);
+      const mg = mix(g1, g2, fi / rcf);
+      const mb = mix(b1, b2, fi / rcf);
+      const cutoff = Math.pow(ringGap, fi);
+      const radius = baseRadius + fi * radiusStep;
+      const ringAlpha = Math.pow(cutoff, 2) * 1.5;
+      drawRing(cx, cy, radius * 0.9, cutoff * 0.12 + 0.35, i === 0 ? 0 : 2.95 * fi, `rgb(${mr | 0},${mg | 0},${mb | 0})`, Math.min(1, ringAlpha), px);
+    }
+
+    if (noiseAmount > 0.01) {
+      ctx.globalAlpha = Math.min(1, noiseAmount);
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillRect(0, 0, size.w, size.h);
+    }
+    ctx.globalAlpha = 1;
+  };
+
+  const tryStart = () => {
+    if (isVisible && isPageVisible && frameId === 0) {
+      lastT = 0;
+      frameId = requestAnimationFrame(animate);
+    }
+  };
+  const tryStop = () => {
+    if (frameId !== 0) {
+      cancelAnimationFrame(frameId);
+      frameId = 0;
+    }
+  };
+
+  const io = new IntersectionObserver(
+    ([entry]) => {
+      isVisible = entry.isIntersecting;
+      if (isVisible) {
+        tryStart();
+      } else {
+        tryStop();
+      }
+    },
+    { threshold: 0 },
+  );
+  io.observe(mount);
+
+  const onVisibility = () => {
+    isPageVisible = !document.hidden;
+    if (isPageVisible) {
+      tryStart();
+    } else {
+      tryStop();
+    }
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+
+  tryStart();
+
+  return () => {
+    tryStop();
+    io.disconnect();
+    document.removeEventListener('visibilitychange', onVisibility);
+    window.removeEventListener('resize', resize);
+    ro.disconnect();
+    mount.removeChild(canvas);
+  };
+}
+
 const vertexShader = `
 void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -147,12 +344,21 @@ export default function MagicRings({
     try {
       renderer = new THREE.WebGLRenderer({ alpha: true });
     } catch {
-      return;
+      return startCanvasFallback(mount, propsRef);
     }
 
-    if (!renderer.capabilities.isWebGL2) {
+    // WebGL2 is required by the shader's GLSL (uniform int loops). Phones that
+    // only support WebGL1 fall back to the 2D canvas renderer instead. Note:
+    // renderer.capabilities.isWebGL2 is hardcoded to true in three >= r163, so
+    // probe the actual context object.
+    const gl = renderer.getContext();
+    const isWebGL2 =
+      typeof WebGL2RenderingContext !== 'undefined' &&
+      gl instanceof WebGL2RenderingContext;
+
+    if (!isWebGL2) {
       renderer.dispose();
-      return;
+      return startCanvasFallback(mount, propsRef);
     }
 
     renderer.setClearColor(0x000000, 0);
@@ -229,6 +435,27 @@ export default function MagicRings({
     let isPageVisible = !document.hidden;
     let elapsed = 0;
     let lastT = 0;
+    let fallbackActive = false;
+    let fallbackCleanup: () => void = () => {};
+
+    const switchToFallback = () => {
+      if (fallbackActive) return;
+      fallbackActive = true;
+      tryStop();
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('resize', resize);
+      ro.disconnect();
+      mount.removeEventListener('mousemove', onMouseMove);
+      mount.removeEventListener('mouseenter', onMouseEnter);
+      mount.removeEventListener('mouseleave', onMouseLeave);
+      mount.removeEventListener('click', onClick);
+      if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+      renderer.dispose();
+      material.dispose();
+      fallbackCleanup = startCanvasFallback(mount, propsRef);
+    };
+
     const animate = (t: number) => {
       frameId = requestAnimationFrame(animate);
       const p = propsRef.current!;
@@ -266,7 +493,15 @@ export default function MagicRings({
       uniforms.uBurst.value = p.clickBurst ? burstRef.current : 0;
       uniforms.uCoverageAlpha.value = p.alphaMode === 'coverage' ? 1 : 0;
 
-      renderer.render(scene, camera);
+      try {
+        renderer.render(scene, camera);
+      } catch (error) {
+        // A shader compile error (common on some local browsers/drivers) throws
+        // on the first render. Fall back to the plain canvas renderer instead
+        // of silently showing nothing.
+        console.error('MagicRings WebGL render failed, falling back to canvas:', error);
+        switchToFallback();
+      }
     };
     frameId = 0;
 
@@ -287,7 +522,12 @@ export default function MagicRings({
       ([entry]) => {
         isVisible = entry.isIntersecting;
         if (isVisible) {
-          tryStart();
+renderer.debug.onShaderError = () => {
+      console.error('MagicRings WebGL shader failed to compile, falling back to canvas');
+      switchToFallback();
+    };
+
+    tryStart();
         } else {
           tryStop();
         }
@@ -318,7 +558,11 @@ export default function MagicRings({
       mount.removeEventListener('mouseenter', onMouseEnter);
       mount.removeEventListener('mouseleave', onMouseLeave);
       mount.removeEventListener('click', onClick);
-      mount.removeChild(renderer.domElement);
+      if (fallbackActive) {
+        fallbackCleanup();
+        return;
+      }
+      if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       renderer.dispose();
       material.dispose();
     };
