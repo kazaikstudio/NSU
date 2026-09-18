@@ -68,7 +68,13 @@ async function ensureMediaTable() {
         drive_file_id TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
-    `).then(() => undefined).catch((error) => {
+    `).then(() => pool.query(`
+      ALTER TABLE artist_media
+      ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
+      ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
+      ADD COLUMN IF NOT EXISTS featured_artist_name TEXT,
+      ADD COLUMN IF NOT EXISTS featured_artist_id TEXT
+    `)).then(() => undefined).catch((error) => {
       mediaTablesReady = null;
       throw error;
     });

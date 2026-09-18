@@ -30,6 +30,10 @@ interface Track {
   fileUrl?: string;
   thumbnailUrl?: string;
   featuredArtistName?: string | null;
+  featuredArtistId?: string | null;
+  ownerArtistId?: string | null;
+  ownerArtistName?: string | null;
+  isShared?: boolean;
   downloadCount?: number;
   createdAt?: string;
   uploadedAt: string;
@@ -101,6 +105,9 @@ export default function ArtistDetailPage() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const profileInputRef = useRef<HTMLInputElement>(null);
 
+  // All Artists List for Featured Artist Dropdown
+  const [allArtists, setAllArtists] = useState<{ id: string; name: string }[]>([]);
+
   // Music Tracks State Management (Initialized empty)
   const [tracks, setTracks] = useState<Track[]>([]);
 
@@ -109,6 +116,9 @@ export default function ArtistDetailPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [trackTitle, setTrackTitle] = useState('');
   const [featuredArtistName, setFeaturedArtistName] = useState('');
+  const [featuredDropdownOpen, setFeaturedDropdownOpen] = useState(false);
+  const [featuredSearchText, setFeaturedSearchText] = useState('');
+  const featuredDropdownRef = useRef<HTMLDivElement>(null);
   const [albumName, setAlbumName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -187,6 +197,10 @@ export default function ArtistDetailPage() {
                   title: item.title,
                   album: item.album || 'Single',
                   featuredArtistName: item.featuredArtistName || null,
+                  featuredArtistId: item.featuredArtistId || null,
+                  ownerArtistId: item.ownerArtistId || null,
+                  ownerArtistName: item.ownerArtistName || null,
+                  isShared: Boolean(item.featuredArtistId),
                   fileName: item.fileName,
                   fileUrl: item.fileUrl,
                   thumbnailUrl: item.thumbnailUrl,
@@ -235,6 +249,43 @@ export default function ArtistDetailPage() {
       ignore = true;
     };
   }, [params.id]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadAllArtists = async () => {
+      try {
+        const response = await fetch('/api/dashboard/artists', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        const artists = Array.isArray(data.artists) ? data.artists : [];
+        if (!ignore) {
+          setAllArtists(artists.map((item: { id: string; name: string }) => ({
+            id: item.id,
+            name: item.name,
+          })).filter((item: { name: string }) => Boolean(item.name)));
+        }
+      } catch {
+        // Keep the featured artist field usable as a plain text input if the list cannot be loaded.
+      }
+    };
+
+    void loadAllArtists();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (featuredDropdownRef.current && !featuredDropdownRef.current.contains(event.target as Node)) {
+        setFeaturedDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   if (loadingArtist) {
     const loadingName = artist?.name || getArtistById(params.id)?.name || 'Artist';
@@ -315,13 +366,14 @@ export default function ArtistDetailPage() {
     setTrackTitle(cleanedName);
   };
 
-  const uploadMedia = async (file: File, kind: 'banner' | 'profile' | 'track', title = '', album = '', featuredArtist = '', onProgress?: (progress: number) => void) => {
+  const uploadMedia = async (file: File, kind: 'banner' | 'profile' | 'track', title = '', album = '', featuredArtist = '', featuredArtistId = '', onProgress?: (progress: number) => void) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('kind', kind);
     formData.append('title', title);
     formData.append('album', album);
     formData.append('featuredArtistName', featuredArtist);
+    if (featuredArtistId) formData.append('featuredArtistId', featuredArtistId);
     if (kind === 'track') {
       try {
         const cover = await extractAudioCoverArt(file);
@@ -371,12 +423,18 @@ export default function ArtistDetailPage() {
     setUploadProgress(0);
     setProcessMessage('Uploading track to storage...');
     try {
-      const media = await uploadMedia(selectedFile, 'track', trackTitle, albumName || 'Single', featuredArtistName, setUploadProgress);
+      const trimmedFeaturedArtist = featuredArtistName.trim();
+      const matchedArtist = allArtists.find((artist) => artist.name.trim().toLowerCase() === trimmedFeaturedArtist.toLowerCase());
+      const media = await uploadMedia(selectedFile, 'track', trackTitle, albumName || 'Single', trimmedFeaturedArtist, matchedArtist?.id || '', setUploadProgress);
       setTracks((prevTracks) => [{
         id: media.id,
         title: media.title,
         album: media.album || 'Single',
         featuredArtistName: media.featuredArtistName || null,
+        featuredArtistId: media.featuredArtistId || null,
+        ownerArtistId: media.ownerArtistId || artist.id,
+        ownerArtistName: media.ownerArtistName || artist.name,
+        isShared: Boolean(media.featuredArtistId),
         fileName: media.fileName,
         fileUrl: media.fileUrl,
         thumbnailUrl: media.thumbnailUrl,
@@ -589,14 +647,14 @@ export default function ArtistDetailPage() {
       let completedUploads = 0;
       if (selectedBanner) {
         setProcessMessage('Uploading banner to storage...');
-        const media = await uploadMedia(selectedBanner, 'banner', '', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
+        const media = await uploadMedia(selectedBanner, 'banner', '', '', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
         setBannerUrl(media.fileUrl || null);
         setSelectedBanner(null);
         completedUploads += 1;
       }
       if (selectedProfile) {
         setProcessMessage('Uploading profile picture to storage...');
-        const media = await uploadMedia(selectedProfile, 'profile', '', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
+        const media = await uploadMedia(selectedProfile, 'profile', '', '', '', '', (progress) => setSaveProgress(Math.round((completedUploads + progress / 100) / imageUploads * 100)));
         setProfileUrl(media.fileUrl || null);
         setSelectedProfile(null);
         completedUploads += 1;
@@ -950,6 +1008,7 @@ export default function ArtistDetailPage() {
 
               {/* Text Inputs */}
               <div className="grid gap-4 md:grid-cols-2">
+                {/* Row 1 Col 1: Track Title */}
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-slate-300">Track Title</label>
                   <input
@@ -957,22 +1016,83 @@ export default function ArtistDetailPage() {
                     required
                     value={trackTitle}
                     onChange={(e) => setTrackTitle(e.target.value)}
-                    placeholder="e.g. Sitya Loss (Remix)"
+                    placeholder="e.g. Atiak Noll Music"
                     className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3.5 py-2 text-sm text-white outline-none focus:border-indigo-500"
                   />
                 </div>
 
+                {/* Row 1 Col 2: Featured Artist dropdown */}
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-300">Additional Artist (Optional)</label>
+                  <label className="mb-1.5 block text-xs font-medium text-slate-300">Featured Artist from Database</label>
+                  <div className="relative" ref={featuredDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFeaturedDropdownOpen((open) => !open);
+                        setFeaturedSearchText('');
+                      }}
+                      className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900 px-3.5 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                    >
+                      <span className={allArtists.some((artist) => artist.name === featuredArtistName) ? 'text-white' : 'text-slate-500'}>
+                        {allArtists.some((artist) => artist.name === featuredArtistName) ? featuredArtistName : '— Select an artist —'}
+                      </span>
+                      <svg className={`h-4 w-4 shrink-0 text-slate-400 transition ${featuredDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {featuredDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl">
+                        <div className="border-b border-slate-800 p-2">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={featuredSearchText}
+                            onChange={(e) => setFeaturedSearchText(e.target.value)}
+                            placeholder="Search artists..."
+                            className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-white outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <ul className="max-h-48 overflow-y-auto py-1">
+                          {allArtists.filter((artist) => artist.name.toLowerCase().includes(featuredSearchText.toLowerCase())).length === 0 ? (
+                            <li className="px-3 py-2 text-xs text-slate-500">
+                              {allArtists.length === 0 ? 'No artists available' : `No artists match "${featuredSearchText}"`}
+                            </li>
+                          ) : allArtists
+                            .filter((artist) => artist.name.toLowerCase().includes(featuredSearchText.toLowerCase()))
+                            .map((artist) => (
+                              <li key={artist.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFeaturedArtistName(artist.name);
+                                    setFeaturedDropdownOpen(false);
+                                  }}
+                                  className={`w-full px-3 py-2 text-left text-sm transition hover:bg-slate-800 ${featuredArtistName === artist.name ? 'text-indigo-400' : 'text-white'}`}
+                                >
+                                  {artist.name}
+                                </button>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Row 2 Col 1: Custom artist name input */}
+                <div>
+                  <p className="mb-1.5 block text-[11px] leading-snug text-slate-500">Choosing an artist fills the field above; you can also type a custom name.</p>
                   <input
                     type="text"
                     value={featuredArtistName}
                     onChange={(e) => setFeaturedArtistName(e.target.value)}
-                    placeholder="e.g. Featured Artist"
+                    placeholder="Type a custom artist name (optional)"
                     className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3.5 py-2 text-sm text-white outline-none focus:border-indigo-500"
                   />
                 </div>
 
+                {/* Row 2 Col 2: Album / Project */}
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-slate-300">Album / Project (Optional)</label>
                   <input
@@ -1073,7 +1193,9 @@ export default function ArtistDetailPage() {
                         </td>
                       </tr>
                     ) : (
-                      tracks.map((track, index) => (
+                      tracks.map((track, index) => {
+                        const isOwnedTrack = !track.ownerArtistId || track.ownerArtistId === artist.id;
+                        return (
                         <tr key={track.id} className="transition hover:bg-slate-900/40">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
@@ -1084,7 +1206,17 @@ export default function ArtistDetailPage() {
                                   alt={track.title}
                                   className="h-full w-full object-cover"
                                 />
+                                {track.isShared ? (
+                                  <span
+                                    title="Shared with another artist account"
+                                    aria-label="Shared with another artist account"
+                                    className="absolute right-0 top-0 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-slate-900 bg-emerald-500"
+                                  >
+                                    <span className="h-1 w-1 rounded-full bg-white" />
+                                  </span>
+                                ) : null}
                                 {/* Thumbnail Edit Overlay */}
+                                {isOwnedTrack && (
                                 <label className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/70 opacity-0 transition group-hover:opacity-100 cursor-pointer text-[10px] font-medium text-white text-center px-1">
                                   <svg className="h-4 w-4 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -1106,6 +1238,7 @@ export default function ArtistDetailPage() {
                                     disabled={changingThumbnailId !== null}
                                   />
                                 </label>
+                                )}
                               </div>
                               <span className="whitespace-nowrap text-xs text-slate-400">
                                 {Number(track.downloadCount || 0).toLocaleString()} {Number(track.downloadCount || 0) === 1 ? 'download' : 'downloads'}
@@ -1116,7 +1249,7 @@ export default function ArtistDetailPage() {
                             <span className="font-medium text-white">{track.title}</span>
                           </td>
                           <td className="px-6 py-4 text-slate-400">
-                            {artist.name}
+                            {!isOwnedTrack && track.ownerArtistName ? track.ownerArtistName : artist.name}
                             {track.featuredArtistName ? ` ft ${track.featuredArtistName}` : ''}
                           </td>
                           <td className="px-6 py-4">
@@ -1145,6 +1278,7 @@ export default function ArtistDetailPage() {
                           <td className="px-6 py-4 text-slate-400">{track.album}</td>
                           <td className="px-6 py-4 text-slate-400">{track.uploadedAt}</td>
                           <td className="px-6 py-4 text-right">
+                            {isOwnedTrack ? (
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 type="button"
@@ -1183,9 +1317,15 @@ export default function ArtistDetailPage() {
                                 Remove
                               </button>
                             </div>
+                            ) : (
+                              <span className="text-xs text-slate-500" title="Shared from another artist account">
+                                Shared track
+                              </span>
+                            )}
                           </td>
                         </tr>
-                      ))
+                        );
+                      })
                     )}
                   </tbody>
                 </table>

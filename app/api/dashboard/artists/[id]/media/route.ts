@@ -39,7 +39,8 @@ async function ensureMediaTable() {
     ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
     ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
     ADD COLUMN IF NOT EXISTS featured_artist_name TEXT,
-    ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0
+    ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS featured_artist_id TEXT
   `);
 
   mediaTableReady = true;
@@ -50,8 +51,11 @@ export async function GET(_request: Request, context: Context) {
   try {
     await ensureMediaTable();
     const { rows } = await pool.query(
-      `SELECT id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", drive_file_id AS "driveFileId", thumbnail_url AS "thumbnailUrl", play_count AS "playCount", download_count AS "downloadCount", created_at AS "createdAt"
-       FROM artist_media WHERE artist_id = $1 ORDER BY sort_order ASC, created_at DESC`,
+      `SELECT m.id, m.kind, m.title, m.album, m.featured_artist_name AS "featuredArtistName", m.file_name AS "fileName", m.mime_type AS "mimeType", m.file_url AS "fileUrl", m.drive_file_id AS "driveFileId", m.thumbnail_url AS "thumbnailUrl", m.play_count AS "playCount", m.download_count AS "downloadCount", m.created_at AS "createdAt", m.featured_artist_id AS "featuredArtistId", m.artist_id AS "ownerArtistId",
+              (SELECT a.name FROM artists a WHERE a.id::text = m.artist_id) AS "ownerArtistName"
+       FROM artist_media m
+       WHERE m.artist_id = $1 OR m.featured_artist_id = $1
+       ORDER BY m.sort_order ASC, m.created_at DESC`,
       [id]
     );
     return NextResponse.json({ media: rows });
@@ -243,6 +247,7 @@ export async function POST(request: Request, context: Context) {
     const title = String(formData.get('title') || '');
     const album = String(formData.get('album') || '') || null;
     const featuredArtistName = String(formData.get('featuredArtistName') || '').trim() || null;
+    const featuredArtistIdInput = String(formData.get('featuredArtistId') || '').trim() || null;
     const thumbnail = formData.get('thumbnail');
 
     if (!(file instanceof File) || (kind !== 'banner' && kind !== 'profile' && kind !== 'track')) {
@@ -305,11 +310,23 @@ export async function POST(request: Request, context: Context) {
           [artistId]
         )).rows[0].sortOrder
         : 0;
+
+      let resolvedFeaturedArtistId: string | null = null;
+      if (featuredArtistIdInput && kind === 'track') {
+        const featuredArtistResult = await pool.query<{ id: string }>(
+          'SELECT id::text AS id FROM artists WHERE id = $1',
+          [featuredArtistIdInput]
+        );
+        if (featuredArtistResult.rows.length > 0) {
+          resolvedFeaturedArtistId = featuredArtistResult.rows[0].id;
+        }
+      }
+
       const { rows } = await pool.query(
-        `INSERT INTO artist_media (id, artist_id, kind, title, album, featured_artist_name, file_name, mime_type, file_url, drive_file_id, thumbnail_url, thumbnail_drive_file_id, download_count, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13)
-         RETURNING id, kind, title, album, featured_artist_name AS "featuredArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", download_count AS "downloadCount", created_at AS "createdAt"`,
-        [mediaId, artistId, kind, mediaTitle, album, featuredArtistName, file.name, file.type || 'application/octet-stream', storageFile.publicUrl, storageFile.id, thumbnailUrl, thumbnailDriveFileId, sortOrder]
+        `INSERT INTO artist_media (id, artist_id, kind, title, album, featured_artist_name, featured_artist_id, file_name, mime_type, file_url, drive_file_id, thumbnail_url, thumbnail_drive_file_id, download_count, sort_order)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,0,$14)
+         RETURNING id, kind, title, album, featured_artist_name AS "featuredArtistName", featured_artist_id AS "featuredArtistId", artist_id AS "ownerArtistId", (SELECT a.name FROM artists a WHERE a.id::text = artist_media.artist_id) AS "ownerArtistName", file_name AS "fileName", mime_type AS "mimeType", file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl", download_count AS "downloadCount", created_at AS "createdAt"`,
+        [mediaId, artistId, kind, mediaTitle, album, featuredArtistName, resolvedFeaturedArtistId, file.name, file.type || 'application/octet-stream', storageFile.publicUrl, storageFile.id, thumbnailUrl, thumbnailDriveFileId, sortOrder]
       );
 
       if (kind === 'banner' || kind === 'profile') {
@@ -327,7 +344,7 @@ export async function POST(request: Request, context: Context) {
         action: kind === 'track' ? 'uploaded' : 'replaced',
         entityType: kind === 'track' ? 'track' : 'artist_media',
         entityId: mediaId,
-        description: `${kind === 'track' ? 'Uploaded' : 'Replaced'} ${kind} file ${file.name} for artist ${artistId}`,
+        description: `${kind === 'track' ? 'Uploaded' : 'Replaced'} ${kind} file ${file.name} for artist ${artistId}${resolvedFeaturedArtistId ? ` and shared with artist ${resolvedFeaturedArtistId}` : ''}`,
       });
 
       return NextResponse.json({ media: rows[0], uploadError }, { status: 201 });
