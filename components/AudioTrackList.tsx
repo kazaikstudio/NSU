@@ -72,7 +72,8 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
           const currentIds = new Set(prev.map((track) => track.id));
           const hasChanges =
             prev.length !== loadedTracks.length ||
-            loadedTracks.some((track) => !currentIds.has(track.id));
+            loadedTracks.some((track) => !currentIds.has(track.id)) ||
+            loadedTracks.some((track, i) => prev[i]?.id !== track.id);
           return hasChanges ? loadedTracks : prev;
         });
       } catch (loadError) {
@@ -95,11 +96,13 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
   }, []);
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const filteredTracks = tracks.filter((track) =>
-    [track.title, track.artistName, track.featuredArtistName || '', track.album || ''].some((value) =>
-      value.toLowerCase().includes(normalizedSearch)
+  const filteredTracks = tracks
+    .filter((track) =>
+      [track.title, track.artistName, track.featuredArtistName || '', track.album || ''].some((value) =>
+        value.toLowerCase().includes(normalizedSearch)
+      )
     )
-  );
+    .sort((left, right) => left.title.localeCompare(right.title, undefined, { sensitivity: 'base' }));
 
   const playerQueue = filteredTracks
     .filter((track) => track.fileUrl)

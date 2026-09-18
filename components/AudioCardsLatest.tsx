@@ -239,7 +239,8 @@ export default function AudioCardsLatest() {
           const currentIds = new Set(prev.map((track) => track.id));
           const hasChanges =
             prev.length !== nextTracks.length ||
-            nextTracks.some((track) => !currentIds.has(track.id));
+            nextTracks.some((track) => !currentIds.has(track.id)) ||
+            nextTracks.some((track, i) => prev[i]?.id !== track.id);
           return hasChanges ? nextTracks : prev;
         });
 

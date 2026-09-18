@@ -54,6 +54,10 @@ async function ensureMediaTable() {
     ADD COLUMN IF NOT EXISTS featured_artist_name TEXT;
   `);
   await pool.query(`
+    ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS storage_items (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -93,7 +97,7 @@ export async function GET() {
       FROM artist_media AS media
       INNER JOIN artists AS artist ON artist.id::text = media.artist_id
       WHERE media.kind = 'track'
-      ORDER BY media.created_at DESC
+      ORDER BY media.sort_order ASC, media.created_at DESC
     `);
     const { rows: storageRows } = await pool.query(`
       SELECT title, file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl"
