@@ -7,7 +7,6 @@ import {
   Play,
   Pause,
 } from 'lucide-react';
-import { writeCachedData, readCachedData } from '@/lib/client-cache';
 import { getPinnedTrackFileUrls, subscribePinnedTracks } from '@/lib/pinned-tracks';
 import MagicRings from '@/components/MagicRings';
 import { primeAudioStart } from '@/lib/audio-preload';
@@ -16,8 +15,6 @@ import { subscribeTrackCounts, type TrackCountsSnapshot } from '@/lib/audio-coun
 import { extractStoredFileId, getStoredThumbnailUrl, recordTrackPlay } from '@/lib/media-url';
 import { downloadTrackFile } from '@/lib/download-track';
 import { buildArtistCredit, buildAudioDownloadName } from '@/lib/download';
-
-const FEATURED_TRACKS_CACHE = 'audio-page:featured-tracks';
 
 export interface FeaturedAudioTrack {
   id: string;
@@ -35,6 +32,8 @@ export interface FeaturedAudioTrack {
   downloadCount?: number;
   pinned?: boolean;
 }
+
+let featuredCache: FeaturedAudioTrack[] | null = null;
 
 function getPlayableAudioUrl(url: string) {
   const match = url.match(/[?&]id=([^&]+)/);
@@ -258,7 +257,7 @@ export default function AudioCardsLatest() {
         const nextTracks = normalizeFeaturedTracks(data, pinned);
         if (nextTracks.length === 0) return;
 
-        writeCachedData(FEATURED_TRACKS_CACHE, nextTracks);
+        featuredCache = nextTracks;
         setTracks((prev) => {
           const currentIds = new Set(prev.map((track) => track.id));
           const hasChanges =
@@ -291,7 +290,7 @@ export default function AudioCardsLatest() {
     const loadInitial = async () => {
       await Promise.resolve();
 
-      const cached = readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE);
+      const cached = featuredCache;
       const isHardRefresh =
         typeof performance.getEntriesByType === 'function' &&
         ((performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload');
@@ -307,7 +306,7 @@ export default function AudioCardsLatest() {
     void loadInitial();
 
     const handleFocus = () => {
-      if (!readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE)) {
+      if (!featuredCache) {
         void syncTracks();
       }
     };
@@ -481,9 +480,30 @@ export default function AudioCardsLatest() {
 
   if (loading) {
     return (
-      <p className="py-12 text-center text-sm text-slate-400">
-        Loading featured audio...
-      </p>
+      <div className="w-full overflow-x-auto scrollbar-none pb-8 pt-3 px-4 sm:pb-10 sm:pt-8 sm:px-8">
+        <div className="flex gap-4 sm:gap-5">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div
+              key={index}
+              className="w-full shrink-0 snap-center sm:w-96 rounded-3xl p-5 bg-Audicard/60 backdrop-blur-xl border border-white/10 flex flex-col justify-between gap-4 overflow-hidden relative animate-pulse"
+            >
+              <div className="absolute inset-0 bg-neutral-900/40" />
+              <div className="relative flex justify-between items-center gap-4 w-full">
+                <div className="flex-1 min-w-0 flex flex-col gap-3">
+                  <div className="h-4 w-3/4 rounded-md bg-white/10" />
+                  <div className="h-3 w-1/2 rounded-md bg-white/10" />
+                  <div className="h-3 w-16 rounded-md bg-white/5" />
+                </div>
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white/10" />
+              </div>
+              <div className="relative flex items-center justify-between">
+                <div className="h-3 w-28 rounded-md bg-white/5" />
+                <div className="h-3 w-14 rounded-md bg-white/5" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     );
   }
 
@@ -515,7 +535,7 @@ export default function AudioCardsLatest() {
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={() => setIsHovered(true)}
       onTouchEnd={() => setIsHovered(true)}
-      className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-8 pt-3 sm:pb-10 sm:pt-8 sm:px-8"
+      className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-8 pt-3 px-4 sm:pb-10 sm:pt-8 sm:px-8"
       onWheel={(event) => {
         if (window.matchMedia('(min-width: 640px)').matches && event.deltaY !== 0) {
           event.preventDefault();
