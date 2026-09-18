@@ -73,6 +73,39 @@ function formatTime(seconds: number) {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
+function getCardMetrics(container: HTMLElement) {
+  const row = container.firstElementChild as HTMLElement | null;
+  const card = row?.firstElementChild as HTMLElement | null;
+  const cardWidth = card?.clientWidth || container.clientWidth;
+  const gap = row ? parseFloat(getComputedStyle(row).columnGap) || 0 : 0;
+  const cardStyle = card ? getComputedStyle(card) : null;
+  const margin = cardStyle
+    ? (parseFloat(cardStyle.marginLeft) || 0) + (parseFloat(cardStyle.marginRight) || 0)
+    : 0;
+  const paddingLeft = parseFloat(getComputedStyle(container).paddingLeft) || 0;
+  return { cardWidth, gap, margin, paddingLeft, step: cardWidth + gap + margin };
+}
+
+function getCenteredScrollLeft(container: HTMLElement, index: number) {
+  const row = container.firstElementChild as HTMLElement | null;
+  const card = row?.children[index] as HTMLElement | null;
+  if (!card) return container.scrollLeft;
+
+  const containerRect = container.getBoundingClientRect();
+  const cardRect = card.getBoundingClientRect();
+  const delta =
+    containerRect.left + containerRect.width / 2 - (cardRect.left + cardRect.width / 2);
+
+  return Math.max(
+    0,
+    Math.min(container.scrollLeft + delta, container.scrollWidth - container.clientWidth)
+  );
+}
+
+function isMobileView() {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches;
+}
+
 interface FeaturedAudioStorageItem {
   title?: string;
   fileUrl?: string;
@@ -216,10 +249,22 @@ export default function AudioCardsLatest() {
     if (!window.matchMedia('(max-width: 639px)').matches) return;
 
     requestAnimationFrame(() => {
-      const trackCard = sliderRef.current?.querySelector<HTMLElement>(
+      const container = sliderRef.current;
+      if (!container) return;
+      const trackCard = container.querySelector<HTMLElement>(
         `[data-track-id="${CSS.escape(trackId)}"]`
       );
-      trackCard?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      if (!trackCard) return;
+      const row = container.firstElementChild as HTMLElement | null;
+      const index = Array.from(row?.children || []).indexOf(trackCard);
+      if (index === -1) {
+        trackCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        return;
+      }
+      const target = getCenteredScrollLeft(container, index);
+      if (Math.abs(target - container.scrollLeft) > 1) {
+        container.scrollTo({ left: target, behavior: 'smooth' });
+      }
     });
   };
 
@@ -255,9 +300,29 @@ export default function AudioCardsLatest() {
         const data = await fetchAudioData();
         if (cancelled) return;
 
+        const sourceCount = Array.isArray(data.tracks) ? data.tracks.length : 0;
         const pinned = pinnedFileUrls;
         const nextTracks = normalizeFeaturedTracks(data as AudioPageResponse, pinned);
         if (nextTracks.length === 0) return;
+
+        // A fallback/demo payload never replaces the saved good list. If the
+        // cache has real tracks, keep showing them; only show placeholders when
+        // there is nothing genuine saved.
+        const isPlaceholder = data.fallback === true || sourceCount === 0;
+        if (isPlaceholder) {
+          const cached = featuredCache ?? readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE);
+          if (cached && cached.length > 0) {
+            setTracks((prev) =>
+              prev.length === 0 || JSON.stringify(prev) !== JSON.stringify(cached) ? cached : prev
+            );
+            return;
+          }
+        }
+
+        if (isPlaceholder) {
+          setTracks((prev) => (prev.length > 0 ? prev : nextTracks));
+          return;
+        }
 
         featuredCache = nextTracks;
         writeCachedData(FEATURED_TRACKS_CACHE, nextTracks);
@@ -415,10 +480,10 @@ export default function AudioCardsLatest() {
       if (!container) return;
 
       const nextIndex = (currentIndex + 1) % tracks.length;
-      const cardWidth = container.firstElementChild?.firstElementChild?.clientWidth || container.clientWidth;
+      const { cardWidth } = getCardMetrics(container);
 
       container.scrollTo({
-        left: nextIndex * cardWidth,
+        left: isMobileView() ? getCenteredScrollLeft(container, nextIndex) : nextIndex * cardWidth,
         behavior: 'smooth',
       });
 
@@ -427,6 +492,37 @@ export default function AudioCardsLatest() {
 
     return () => clearInterval(interval);
   }, [activeTrackId, currentIndex, isPlaying, tracks.length, isHovered]);
+
+  // On mobile, center the nearest card once a manual scroll settles. Native
+  // scroll-snap snaps during the swipe; this is a safety net so the first and
+  // last cards (which browsers sometimes fail to center) still land centered.
+  useEffect(() => {
+    const el = sliderRef.current;
+    if (!el) return;
+
+    if (!isMobileView()) return;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const handleScroll = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const { step, paddingLeft } = getCardMetrics(el);
+        const index = Math.round((el.scrollLeft - paddingLeft) / step);
+        const clamped = Math.max(0, Math.min(index, tracksRef.current.length - 1));
+        const target = getCenteredScrollLeft(el, clamped);
+        if (Math.abs(target - el.scrollLeft) > 1) {
+          el.scrollTo({ left: target, behavior: 'smooth' });
+        }
+      }, 100);
+    };
+
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      if (timer) clearTimeout(timer);
+      el.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   const handleTogglePlay = (track: FeaturedAudioTrack) => {
     if (activeTrackId === track.id) {
@@ -491,12 +587,12 @@ export default function AudioCardsLatest() {
 
   if (loading) {
     return (
-      <div className="w-full overflow-x-auto scrollbar-none pb-8 pt-3 px-4 sm:pb-10 sm:pt-8 sm:px-8">
+      <div className="-mx-4 overflow-x-auto scrollbar-none pb-8 pt-3 sm:w-full sm:mx-0 sm:px-8 sm:pb-10 sm:pt-8">
         <div className="flex gap-4 sm:gap-5">
           {Array.from({ length: 3 }, (_, index) => (
             <div
               key={index}
-              className="w-full shrink-0 snap-center sm:w-96 rounded-3xl p-5 bg-Audicard/60 backdrop-blur-xl border border-white/10 flex flex-col justify-between gap-4 overflow-hidden relative animate-pulse"
+              className="w-[calc(100%-1rem)] mx-2 shrink-0 sm:w-96 sm:mx-0 rounded-3xl p-5 bg-Audicard/60 backdrop-blur-xl border border-white/10 flex flex-col justify-between gap-4 overflow-hidden relative animate-pulse"
             >
               <div className="absolute inset-0 bg-neutral-900/40" />
               <div className="relative flex justify-between items-center gap-4 w-full">
@@ -546,7 +642,7 @@ export default function AudioCardsLatest() {
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={() => setIsHovered(true)}
       onTouchEnd={() => setIsHovered(true)}
-      className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-8 pt-3 px-4 sm:pb-10 sm:pt-8 sm:px-8"
+className="-mx-4 overflow-x-auto snap-x snap-mandatory scrollbar-none pb-8 pt-3 sm:w-full sm:mx-0 sm:px-8 sm:pb-10 sm:pt-8"
       onWheel={(event) => {
         if (window.matchMedia('(min-width: 640px)').matches && event.deltaY !== 0) {
           event.preventDefault();
@@ -554,11 +650,12 @@ export default function AudioCardsLatest() {
         }
       }}
       onScroll={(event) => {
-        const cardWidth =
-          event.currentTarget.firstElementChild?.firstElementChild?.clientWidth ||
-          event.currentTarget.clientWidth;
+        const { cardWidth, step, paddingLeft } = getCardMetrics(event.currentTarget);
+        const raw = isMobileView()
+          ? (event.currentTarget.scrollLeft - paddingLeft) / step
+          : event.currentTarget.scrollLeft / cardWidth;
         setCurrentIndex(
-          Math.round(event.currentTarget.scrollLeft / cardWidth)
+          Math.max(0, Math.min(Math.round(raw), tracks.length - 1))
         );
       }}
       >
@@ -581,18 +678,20 @@ export default function AudioCardsLatest() {
               onClick={() => handleTogglePlay(track)}
               onPointerEnter={() => primeTrack(track.fileUrl)}
               onFocus={() => primeTrack(track.fileUrl)}
-              className={`w-full shrink-0 snap-center sm:w-96 rounded-3xl p-5 bg-Audicard/90 backdrop-blur-xl border flex flex-col justify-between cursor-pointer transition-all duration-500 relative overflow-hidden group ${
+              className={`w-[calc(100%-1rem)] mx-2 shrink-0 snap-center sm:w-96 sm:mx-0 rounded-3xl p-5 bg-Audicard/90 backdrop-blur-xl border flex flex-col justify-between cursor-pointer transition-all duration-500 relative overflow-hidden group ${
                 isSelected ? '' : 'hover:bg-Audicard'
               }`}
               style={{
                 borderColor: isSelected
                   ? 'transparent'
                   : track.pinned
-                    ? 'rgba(255, 110, 0, 0.75)'
+                    ? 'rgba(255, 130, 0, 0.95)'
                     : 'rgba(255,255,255,0.10)',
                 boxShadow: isSelected
                   ? `inset 0 0 0 2px ${cardColor}55, 0 0 30px ${cardColor}30, 0 8px 30px rgba(0,0,0,0.36)`
-                  : '0 8px 30px rgba(0,0,0,0.36)',
+                  : track.pinned
+                    ? '0 0 14px rgba(255,150,0,0.42), 0 0 36px rgba(255,80,0,0.22), 0 0 72px rgba(255,40,0,0.12), inset 0 0 14px rgba(255,110,0,0.2), 0 8px 30px rgba(0,0,0,0.36)'
+                    : '0 8px 30px rgba(0,0,0,0.36)',
               }}
             >
               {/* Background Thumbnail Image with Modern Frosted Glass Glow & Fade */}
@@ -614,7 +713,8 @@ export default function AudioCardsLatest() {
                   <div
                     className="w-full h-full"
                     style={{
-                      background: 'radial-gradient(circle at 50% 50%, rgba(255,110,0,0.22) 0%, transparent 60%)',
+                      background:
+                        'radial-gradient(circle at 50% 50%, rgba(255,210,60,0.3) 0%, rgba(255,120,0,0.2) 38%, rgba(255,40,0,0.1) 62%, transparent 78%)',
                     }}
                   />
                 </div>
@@ -631,7 +731,7 @@ export default function AudioCardsLatest() {
                 >
                   {/* Front face — first view (idle) */}
                   <div
-                    className={`col-start-1 row-start-1 flex flex-col justify-between gap-4 w-full ${isSelected ? 'pointer-events-none' : ''}`}
+                    className={`col-start-1 row-start-1 flex flex-col justify-between gap-2.5 sm:gap-4 w-full ${isSelected ? 'pointer-events-none' : ''}`}
                     style={{
                       WebkitBackfaceVisibility: 'hidden',
                       backfaceVisibility: 'hidden',
@@ -694,15 +794,15 @@ export default function AudioCardsLatest() {
 
                   {/* Back face — selected (now playing) */}
                   <div
-                    className={`col-start-1 row-start-1 flex flex-col justify-between gap-4 w-full ${isSelected ? '' : 'pointer-events-none'}`}
+                    className={`col-start-1 row-start-1 flex flex-col justify-between gap-2.5 sm:gap-4 w-full ${isSelected ? '' : 'pointer-events-none'}`}
                     style={{
                       WebkitBackfaceVisibility: 'hidden',
                       backfaceVisibility: 'hidden',
                       transform: 'rotateY(180deg)',
                     }}
-                  >
+                    >
                     <div className="flex flex-col justify-start w-full">
-                      <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center justify-between mb-2 sm:mb-3">
                         <span
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium backdrop-blur-md"
                           style={{ backgroundColor: `${cardColor}22`, color: cardColor, border: `1px solid ${cardColor}40` }}
@@ -739,13 +839,13 @@ export default function AudioCardsLatest() {
                       <div className="flex items-center gap-3">
                         {/* Modern Circular Play/Pause Button with Glow */}
                         <div
-                          className="w-12 h-12 rounded-full text-white flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-105 active:scale-95"
+                          className="w-10 h-10 sm:w-12 sm:h-12 rounded-full text-white flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-105 active:scale-95"
                           style={{ backgroundColor: cardColor, boxShadow: `0 4px 20px ${cardColor}55` }}
                         >
                           {isCurrentlyPlaying ? (
-                            <Pause className="w-5 h-5 fill-current" />
+                            <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                           ) : (
-                            <Play className="w-5 h-5 fill-current ml-0.5" />
+                            <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current ml-0.5" />
                           )}
                         </div>
 
@@ -756,7 +856,7 @@ export default function AudioCardsLatest() {
                             e.stopPropagation();
                             void handleDownloadClick(e, track);
                           }}
-                          className="inline-flex items-center justify-center text-white/90 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-xl transition-all p-2.5 sm:py-2 sm:px-3.5 rounded-2xl border border-white/10 shadow-sm hover:border-white/20 active:scale-95"
+                          className="inline-flex items-center justify-center text-white/90 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-xl transition-all p-2 sm:py-2 sm:px-3.5 rounded-2xl border border-white/10 shadow-sm hover:border-white/20 active:scale-95"
                           title="Download"
                         >
                           <Download className="w-4 h-4 shrink-0 text-white/80" />
@@ -765,7 +865,7 @@ export default function AudioCardsLatest() {
                       </div>
 
                       {/* Timer & Sleek Indicator */}
-                      <div className="flex items-center gap-2.5 bg-black/20 px-3 py-1.5 rounded-xl border border-white/5 backdrop-blur-md">
+                      <div className="flex items-center gap-2 bg-black/20 px-2.5 py-1 sm:gap-2.5 sm:px-3 sm:py-1.5 rounded-xl border border-white/5 backdrop-blur-md">
                         <span className="text-xs font-mono font-medium tracking-wider text-white/80">
                           {formatTime(trackCurrentTime)} <span className="text-white/40">/</span> {formatTime(trackDuration)}
                         </span>
@@ -780,11 +880,13 @@ export default function AudioCardsLatest() {
                       </div>
                     </div>
                   </div>
+
                 </div>
               </div>
             </div>
           );
         })}
+        <div className="w-2 shrink-0 sm:hidden" aria-hidden />
       </div>
     </div>
   </div>

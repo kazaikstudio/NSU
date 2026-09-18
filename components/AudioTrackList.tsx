@@ -43,13 +43,16 @@ function getPlayableAudioUrl(url: string) {
   return match?.[1] ? `/api/dashboard/media/${match[1]}` : url;
 }
 
-async function fetchAudioTracks(): Promise<AudioTrack[]> {
+async function fetchAudioTracks(): Promise<{ tracks: AudioTrack[]; fallback: boolean }> {
   const data = await fetchAudioData();
   const loadedTracks = Array.isArray(data.tracks) ? data.tracks : [];
-  return loadedTracks.map((track: AudioTrack & { featured_artist_name?: string | null }) => ({
-    ...track,
-    featuredArtistName: track.featuredArtistName ?? track.featured_artist_name ?? null,
-  }));
+  return {
+    tracks: loadedTracks.map((track: AudioTrack & { featured_artist_name?: string | null }) => ({
+      ...track,
+      featuredArtistName: track.featuredArtistName ?? track.featured_artist_name ?? null,
+    })),
+    fallback: data.fallback ?? false,
+  };
 }
 
 export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
@@ -74,14 +77,26 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
 
     const loadTracks = async () => {
       try {
-        const loadedTracks = await fetchAudioTracks();
+        const { tracks: loadedTracks, fallback } = await fetchAudioTracks();
         if (cancelled) return;
         loadedOnceRef.current = true;
-        writeCachedData(CACHE_KEY, loadedTracks);
+
+        // When the API falls back to demo tracks, keep showing the last-known-
+        // good list from the cache instead of the demo payload.
+        const cached = readCachedData<AudioTrack[]>(CACHE_KEY);
+        const nextTracks =
+          fallback && cached && cached.length > 0 ? cached : loadedTracks;
+
+        // Only persist genuine track data so a temporary outage never saves
+        // demo tracks over the good cache.
+        if (!fallback && nextTracks.length > 0) {
+          writeCachedData(CACHE_KEY, nextTracks);
+        }
+
         setError('');
         setTracks((prev: AudioTrack[]) => {
-          const hasChanges = JSON.stringify(prev) !== JSON.stringify(loadedTracks);
-          return hasChanges ? loadedTracks : prev;
+          const hasChanges = JSON.stringify(prev) !== JSON.stringify(nextTracks);
+          return hasChanges ? nextTracks : prev;
         });
       } catch (loadError) {
         if (!cancelled && !loadedOnceRef.current) {

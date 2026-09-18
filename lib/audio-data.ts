@@ -49,7 +49,12 @@ export async function fetchAudioData(): Promise<AudioPageResponse> {
       throw new Error(response.statusText || 'Failed to load audio data');
     }
     const data = (await response.json()) as AudioPageResponse;
-    writeCachedData(CACHE_KEY, data);
+    // Never overwrite good cached data with a fallback/demo payload — a
+    // transient database outage should keep the last-known-good list around
+    // instead of replacing it with demo tracks.
+    if (!data.fallback) {
+      writeCachedData(CACHE_KEY, data);
+    }
     return data;
   })().finally(() => {
     inFlight = null;

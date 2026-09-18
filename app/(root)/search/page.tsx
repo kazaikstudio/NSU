@@ -46,7 +46,8 @@ interface YouTubeVideo {
   url: string
   type?: 'short' | 'official'
   views?: number
-  source?: 'youtube'
+  fileUrl?: string
+  source?: 'youtube' | 'talk-show'
 }
 
 interface SearchArtist {
@@ -123,9 +124,11 @@ function SearchClient() {
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isListening, setIsListening] = useState(false)
+  const [resultsQuery, setResultsQuery] = useState('')
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const debounceRef = useRef<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const lastPushedQueryRef = useRef(initialQuery)
 
   useEffect(() => {
     const win = window as unknown as WindowWithSpeech
@@ -175,11 +178,14 @@ function SearchClient() {
 
     debounceRef.current = window.setTimeout(() => {
       if (!normalized) {
+        // Clearing the box resets state and the URL so the UI stays in sync.
         setTracks([])
         setArtists([])
         setVideos([])
+        setResultsQuery('')
         setSearching(false)
         setError(null)
+        lastPushedQueryRef.current = ''
         const currentParams = new URLSearchParams(window.location.search)
         if (currentParams.has('q')) {
           currentParams.delete('q')
@@ -190,6 +196,16 @@ function SearchClient() {
       }
 
       setSearching(true)
+
+      // Push the typed query to the URL before fetching so the URL always
+      // matches the search box, even if the request fails.
+      const params = new URLSearchParams(window.location.search)
+      if ((params.get('q') ?? '') !== normalized) {
+        params.set('q', normalized)
+        router.replace(`/search?${params.toString()}`, { scroll: false })
+        lastPushedQueryRef.current = normalized
+      }
+
       const controller = new AbortController()
       abortRef.current = controller
 
@@ -207,13 +223,8 @@ function SearchClient() {
           setTracks(data.tracks ?? [])
           setArtists(data.artists ?? [])
           setVideos(data.videos ?? [])
+          setResultsQuery(normalized)
           setError(null)
-
-          const params = new URLSearchParams(window.location.search)
-          if ((params.get('q') ?? '') !== normalized) {
-            params.set('q', normalized)
-            router.replace(`/search?${params.toString()}`, { scroll: false })
-          }
         } catch (err) {
           if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) return
           setError(err instanceof Error ? err.message : 'Unable to search')
@@ -228,6 +239,23 @@ function SearchClient() {
     }
   }, [query, router])
 
+  // Sync the search box back to the URL on browser back/forward navigation,
+  // without stomping on what the user is currently typing.
+  useEffect(() => {
+    const urlQuery = searchParams.get('q') ?? ''
+    if (!urlQuery) {
+      if (query.trim() !== '' && lastPushedQueryRef.current !== '') {
+        lastPushedQueryRef.current = ''
+        setQuery('')
+      }
+      return
+    }
+    if (urlQuery !== query.trim() && urlQuery !== lastPushedQueryRef.current) {
+      lastPushedQueryRef.current = urlQuery
+      setQuery(urlQuery)
+    }
+  }, [searchParams, query])
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const normalized = query.trim()
@@ -235,6 +263,7 @@ function SearchClient() {
     const params = new URLSearchParams(window.location.search)
     params.set('q', normalized)
     router.replace(`/search?${params.toString()}`, { scroll: false })
+    lastPushedQueryRef.current = normalized
   }
 
   const toggleListening = () => {
@@ -253,8 +282,9 @@ function SearchClient() {
     setIsListening(true)
   }
 
+  const resultsMatch = resultsQuery === query.trim()
   const hasResults =
-    tracks.length > 0 || artists.length > 0 || videos.length > 0 || searching
+    tracks.length > 0 || artists.length > 0 || videos.length > 0
 
   const artistCountText = useMemo(
     () => `${tracks.length}${artists.length > 0 ? ` · ${artists.length} artist${artists.length === 1 ? '' : 's'}` : ''}`,
@@ -336,7 +366,7 @@ function SearchClient() {
             <Search className="h-8 w-8 text-secondry/40" />
             <p className="text-xs sm:text-sm text-secondry">Start typing to search across audio and video content.</p>
           </div>
-        ) : searching && !hasResults ? (
+        ) : searching || !resultsMatch ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-card1/20 bg-cardcl/40 py-20 text-center backdrop-blur-sm">
             <div className="h-6 w-6 rounded-full border-2 border-rose-400 border-t-transparent animate-spin" />
             <p className="text-xs sm:text-sm text-secondry">Searching…</p>
@@ -445,7 +475,9 @@ function SearchClient() {
                   {videos.map((video) => (
                     <a
                       key={video.id}
-                      href={`/video/${encodeURIComponent(video.id)}`}
+                      href={video.source === 'talk-show'
+                        ? `/Comedy/${encodeURIComponent(video.id)}`
+                        : `/video/${encodeURIComponent(video.id)}`}
                       className="group flex flex-col rounded-2xl border border-card1/15 bg-cardcl/60 overflow-hidden backdrop-blur-sm transition hover:border-amber-400/30 hover:shadow-lg hover:shadow-amber-400/5"
                     >
                       <div className="relative h-44 sm:h-48 overflow-hidden bg-black">
@@ -456,7 +488,11 @@ function SearchClient() {
                           unoptimized
                           className="object-cover transition duration-300 group-hover:scale-105"
                         />
-                        {video.type === 'short' && (
+                        {video.source === 'talk-show' ? (
+                          <span className="absolute top-2 right-2 rounded-md bg-black/60 backdrop-blur-md px-1.5 py-0.5 text-[10px] font-bold text-amber-300 border border-white/10">
+                            UPLOAD
+                          </span>
+                        ) : video.type === 'short' && (
                           <span className="absolute top-2 right-2 rounded-md bg-black/60 backdrop-blur-md px-1.5 py-0.5 text-[10px] font-bold text-amber-300 border border-white/10">
                             SHORT
                           </span>

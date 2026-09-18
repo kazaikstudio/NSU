@@ -564,7 +564,7 @@ onPlay={() => {
             <span className="block min-w-0 truncate text-xs font-semibold text-Eltext1 sm:text-sm">
               {title}
             </span>
-            {isPinned && <Pined size="xs" />}
+            {isPinned && <Pined size="xs" className="scale-125" />}
             {isShared && <ShareDot size="xs" className="relative border-cardcl" />}
           </div>
           <span className="mt-0.5 block truncate text-[10px] text-secondry/60 sm:text-xs">

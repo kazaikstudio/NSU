@@ -2,7 +2,7 @@
 
 import { Download, Headphones, Play, Search } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 
 import Dock, { type DockItemData } from './Dock'
 
@@ -22,6 +22,16 @@ const DockBar = ({ onScrollToSearch, searchHref }: DockBarProps) => {
   const isVideo = pathname === '/' || pathname.startsWith('/video/')
   const isSearch = pathname === '/search'
   const resolvedSearchHref = searchHref ?? '/search'
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+  )
+
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 639px)')
+    const handleChange = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mql.addEventListener('change', handleChange)
+    return () => mql.removeEventListener('change', handleChange)
+  }, [])
 
   useEffect(() => {
     router.prefetch(resolvedSearchHref)
@@ -51,10 +61,9 @@ const DockBar = ({ onScrollToSearch, searchHref }: DockBarProps) => {
       onClick: () => router.push('/download'),
       className: isDownload ? activeClass : inactiveClass
     },
-    { separator: true },
     {
       icon: <Search aria-hidden="true" />,
-      label: isSearch ? 'Go back' : 'Open search page',
+      label: isSearch ? 'Go back' : 'Search',
       onClick: () =>
         onScrollToSearch
           ? onScrollToSearch()
@@ -70,10 +79,9 @@ const DockBar = ({ onScrollToSearch, searchHref }: DockBarProps) => {
       <div className="pointer-events-auto">
         <Dock
           items={items}
-          panelHeight={68}
-          baseItemSize={44}
-          magnification={62}
-          distance={180}
+          panelHeight={isMobile ? 56 : 68}
+          baseItemSize={isMobile ? 42 : 50}
+          magnification={isMobile ? 54 : 70}
         />
       </div>
     </div>

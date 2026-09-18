@@ -39,20 +39,32 @@ export default function Pined({
       {/* Glow background */}
       <span
         aria-hidden="true"
-        className={`pined-fire absolute rounded-full bg-orange-500/45 blur-[3px] ${glowSize[size]}`}
-        style={{ animation: 'pined-glow 1.6s ease-in-out infinite' }}
+        className={`pined-fire absolute rounded-full blur-[3px] ${glowSize[size]}`}
+        style={{
+          background:
+            'radial-gradient(circle, rgba(255,220,120,0.6) 0%, rgba(255,120,0,0.42) 45%, rgba(255,40,0,0.26) 100%)',
+          animation: 'pined-glow 1.6s ease-in-out infinite',
+        }}
       />
 
       {/* Burning flame icon */}
-      <Flame
+      <span
         aria-hidden="true"
-        size={iconSize[size]}
-        className="pined-fire relative text-orange-400 fill-orange-500/45 drop-shadow-[0_0_6px_rgba(255,120,0,0.9)]"
+        className="pined-fire relative"
         style={{
           animation: 'pined-flame 0.9s ease-in-out infinite',
           transformOrigin: '50% 100%',
         }}
-      />
+      >
+        <Flame
+          size={iconSize[size]}
+          className="relative text-red-500 fill-rose-600/60 drop-shadow-[0_0_8px_rgba(255,70,0,0.95)]"
+        />
+        <Flame
+          size={Math.round(iconSize[size] * 0.55)}
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-amber-300 fill-yellow-400 drop-shadow-[0_0_6px_rgba(255,210,0,0.95)]"
+        />
+      </span>
 
       {/* Rising sparks */}
       <span aria-hidden="true" className="pointer-events-none absolute inset-0">
