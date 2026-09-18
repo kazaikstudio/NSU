@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import AudioRow from './AudioRow';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
+import { fetchAudioData, readCachedAudioData } from '@/lib/audio-data';
 import { playerTrackFor } from '@/lib/audio-player';
 
 const CACHE_KEY = 'audio:tracks';
@@ -43,9 +44,7 @@ function getPlayableAudioUrl(url: string) {
 }
 
 async function fetchAudioTracks(): Promise<AudioTrack[]> {
-  const response = await fetch('/api/audio', { cache: 'no-store' });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Unable to load music');
+  const data = await fetchAudioData();
   const loadedTracks = Array.isArray(data.tracks) ? data.tracks : [];
   return loadedTracks.map((track: AudioTrack & { featured_artist_name?: string | null }) => ({
     ...track,
@@ -54,8 +53,19 @@ async function fetchAudioTracks(): Promise<AudioTrack[]> {
 }
 
 export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
-  const [tracks, setTracks] = useState<AudioTrack[]>(cachedTracks || []);
-  const [loading, setLoading] = useState(cachedTracks == null);
+  const [tracks, setTracks] = useState<AudioTrack[]>(
+    cachedTracks ||
+    (() => {
+      const shared = readCachedAudioData();
+      return shared && Array.isArray(shared.tracks)
+        ? shared.tracks.map((track) => ({
+            ...track,
+            featuredArtistName: track.featuredArtistName ?? null,
+          }))
+        : [];
+    })()
+  );
+  const [loading, setLoading] = useState(cachedTracks == null && !readCachedAudioData());
   const [error, setError] = useState('');
   const loadedOnceRef = useRef(false);
 

@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import DockBar from './DockBar';
 import ArtistList from './ArtistList';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
+import { fetchAudioData, readCachedAudioData } from '@/lib/audio-data';
 
 const AudioCardsLatest = dynamic(() => import('./AudioCardsLatest'), {
   ssr: false,
@@ -39,7 +40,7 @@ interface TrendingArtist {
 function rankTopArtists(artists: TrendingArtist[]): TrendingArtist[] {
   return [...artists]
     .sort((left, right) => right.downloads - left.downloads)
-    .slice(0, 5);
+    .slice(0, 8);
 }
 
 export default function AudioPageClient() {
@@ -153,8 +154,8 @@ export default function AudioPageClient() {
 
     const loadMusicCount = async () => {
       try {
-        const response = await fetch('/api/audio', { cache: 'no-store' });
-        const data = await response.json();
+        let data = readCachedAudioData();
+        if (!data) data = await fetchAudioData();
         if (!cancelled) {
           const count = (data.tracks as unknown[] || []).length;
           writeCachedData('audio-page:music-count', count);
@@ -194,17 +195,36 @@ export default function AudioPageClient() {
         </span>
       </p>
 
-      <div className="mt-4 flex gap-3 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none [-ms-overflow-style:none][&::-webkit-scrollbar]:hidden">
+      {/* Mobile: 4 per page, swipe to see the next 4 */}
+      <div className="sm:hidden mt-4 flex overflow-x-auto pb-4 pt-1 snap-x snap-mandatory scrollbar-none [-ms-overflow-style:none][&::-webkit-scrollbar]:hidden">
         {topArtists.length > 0 ? (
-          topArtists.map((artist, index) => (
-            <div key={artist.id} className="snap-start shrink-0">
-              <TrendingArtist artist={artist} isTop={index === 0} />
-            </div>
-          ))
+          Array.from({ length: Math.ceil(topArtists.length / 4) }, (_, pageIndex) => {
+            const pageArtists = topArtists.slice(pageIndex * 4, pageIndex * 4 + 4);
+            return (
+              <div key={pageIndex} className="w-full shrink-0 snap-start px-1">
+                <div className="grid grid-cols-4 gap-3">
+                  {pageArtists.map((artist, index) => (
+                    <TrendingArtist key={artist.id} artist={artist} isTop={pageIndex === 0 && index === 0} />
+                  ))}
+                </div>
+              </div>
+            );
+          })
         ) : (
-          <div className="snap-start shrink-0">
+          <div className="w-full shrink-0 snap-start px-1">
             <TrendingArtist />
           </div>
+        )}
+      </div>
+
+      {/* Desktop: all artists in a single horizontal row */}
+      <div className="hidden sm:flex mt-4 gap-3 overflow-x-auto pb-4 pt-1 scrollbar-none [-ms-overflow-style:none][&::-webkit-scrollbar]:hidden">
+        {topArtists.length > 0 ? (
+          topArtists.map((artist, index) => (
+            <TrendingArtist key={artist.id} artist={artist} isTop={index === 0} />
+          ))
+        ) : (
+          <TrendingArtist />
         )}
       </div>
 

@@ -6,10 +6,11 @@ import {
   Download,
   Play,
   Pause,
+  Flame,
 } from 'lucide-react';
 import { getPinnedTrackFileUrls, subscribePinnedTracks } from '@/lib/pinned-tracks';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
-import MagicRings from '@/components/MagicRings';
+import { fetchAudioData, type AudioPageResponse } from '@/lib/audio-data';
 import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer } from '@/lib/audio-player';
 import { subscribeTrackCounts, type TrackCountsSnapshot } from '@/lib/audio-counts';
@@ -25,9 +26,9 @@ export interface FeaturedAudioTrack {
   featuredArtistName?: string | null;
   fileUrl: string;
   coverUrl?: string;
-  driveFileId?: string;
-  thumbnailUrl?: string;
-  thumbnailDriveFileId?: string;
+  driveFileId?: string | null;
+  thumbnailUrl?: string | null;
+  thumbnailDriveFileId?: string | null;
   duration?: string;
   playCount?: number;
   downloadCount?: number;
@@ -251,13 +252,11 @@ export default function AudioCardsLatest() {
 
     const syncTracks = async () => {
       try {
-        const response = await fetch('/api/audio', { cache: 'no-store' });
-        if (!response.ok) return;
-        const data = await response.json();
+        const data = await fetchAudioData();
         if (cancelled) return;
 
         const pinned = pinnedFileUrls;
-        const nextTracks = normalizeFeaturedTracks(data, pinned);
+        const nextTracks = normalizeFeaturedTracks(data as AudioPageResponse, pinned);
         if (nextTracks.length === 0) return;
 
         featuredCache = nextTracks;
@@ -492,7 +491,7 @@ export default function AudioCardsLatest() {
 
   if (loading) {
     return (
-      <div className="w-[calc(100%+2rem)] overflow-x-auto scrollbar-none pb-8 pt-3 -mx-4 sm:w-full sm:mx-0 sm:pb-10 sm:pt-8 sm:px-8">
+      <div className="w-full overflow-x-auto scrollbar-none pb-8 pt-3 px-4 sm:pb-10 sm:pt-8 sm:px-8">
         <div className="flex gap-4 sm:gap-5">
           {Array.from({ length: 3 }, (_, index) => (
             <div
@@ -547,7 +546,7 @@ export default function AudioCardsLatest() {
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={() => setIsHovered(true)}
       onTouchEnd={() => setIsHovered(true)}
-      className="w-[calc(100%+2rem)] overflow-x-auto snap-x snap-mandatory scrollbar-none pb-8 pt-3 -mx-4 sm:w-full sm:mx-0 sm:pb-10 sm:pt-8 sm:px-8"
+      className="w-full overflow-x-auto snap-x snap-mandatory scrollbar-none pb-8 pt-3 px-4 sm:pb-10 sm:pt-8 sm:px-8"
       onWheel={(event) => {
         if (window.matchMedia('(min-width: 640px)').matches && event.deltaY !== 0) {
           event.preventDefault();
@@ -612,16 +611,11 @@ export default function AudioCardsLatest() {
 
               {track.pinned && (
                 <div className="pointer-events-none absolute inset-0 z-0">
-                  <MagicRings
-                    color="#ff2d00"
-                    colorTwo="#ffb000"
-                    speed={1}
-                    ringCount={6}
-                    attenuation={10}
-                    lineThickness={2}
-                    opacity={0.85}
-                    noiseAmount={0.08}
-                    scaleRate={0.1}
+                  <div
+                    className="w-full h-full"
+                    style={{
+                      background: 'radial-gradient(circle at 50% 50%, rgba(255,110,0,0.22) 0%, transparent 60%)',
+                    }}
                   />
                 </div>
               )}
@@ -652,15 +646,11 @@ export default function AudioCardsLatest() {
                             {track.title || 'Untitled Track'}
                           </span>
                           {track.pinned && (
-                            <svg
-                              className="h-4 w-4 shrink-0 text-orange-400 drop-shadow-[0_0_4px_rgba(255,110,0,0.9)]"
-                              fill="currentColor"
-                              viewBox="0 0 24 24"
+                            <Flame
+                              size={16}
+                              className="shrink-0 text-orange-400 drop-shadow-[0_0_4px_rgba(255,110,0,0.9)] fill-orange-400/30"
                               aria-label="Pinned to the featured audio carousel"
-                              role="img"
-                            >
-                              <path d="M12 2c.5 3-1 4.5-2.5 6C8 9.5 7 11 7 13a5 5 0 0 0 4 4.9V22h2v-4.1A5 5 0 0 0 17 13c0-2-1-3.5-2.5-5C13 6.5 11.5 5 12 2Z" />
-                            </svg>
+                            />
                           )}
                         </div>
                         <p className="text-xs text-white/60 truncate mt-0.5">

@@ -55,7 +55,7 @@ const TrendingArtist: React.FC<TrendingArtistProps> = ({ artist, isTop }) => {
       onClick={handleOpenArtist}
       onKeyDown={handleKeyDown}
       aria-label={`Open ${artist.name || 'artist'} profile`}
-      className="relative flex flex-col items-center gap-1.5 w-24 sm:w-28 shrink-0 text-center cursor-pointer"
+      className="relative flex flex-col items-center gap-1.5 w-full sm:w-28 shrink-0 text-center cursor-pointer"
     >
       {isTop && (
         <div className="absolute -top-1 left-1 z-10 bg-amber-400 text-black text-[10px] px-2 py-0.5 rounded-full font-semibold shadow">
@@ -64,14 +64,14 @@ const TrendingArtist: React.FC<TrendingArtistProps> = ({ artist, isTop }) => {
       )}
 
       {/* Circular Avatar */}
-      <div className="relative mt-4 w-20 h-20 sm:w-28 sm:h-28 rounded-full overflow-hidden border border-white/10 shadow-lg bg-zinc-800 shrink-0">
+      <div className="relative mt-4 w-16 h-16 sm:w-28 sm:h-28 rounded-full overflow-hidden border border-white/10 shadow-lg bg-zinc-800 shrink-0">
         {artist.avatarUrl ? (
           <Image
             fill
             unoptimized
             src={normalizeImageUrl(artist.avatarUrl) || '/noll.jpg'}
             alt={artist.name || 'Artist'}
-            sizes="(max-width: 640px) 80px, 112px"
+            sizes="(max-width: 640px) 64px, 112px"
             className="object-cover transition-transform duration-300 hover:scale-110"
           />
         ) : (

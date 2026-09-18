@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
 import { getTrackCounts, subscribeTrackCounts, type TrackCountsSnapshot } from '@/lib/audio-counts';
 import { downloadTrackFile } from '@/lib/download-track';
@@ -12,6 +12,8 @@ import ShareDot from './ShareDot';
 import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying, type NowPlayingSnapshot } from '@/lib/audio-now-playing';
 import { extractStoredFileId, recordTrackPlay } from '@/lib/media-url';
 import { buildArtistCredit, buildAudioDownloadName } from '@/lib/download';
+import Pined from './Pined';
+import { getPinnedTrackFileUrls, subscribePinnedTracks } from '@/lib/pinned-tracks';
 
 interface DownloadCountUpdate {
   trackDownloads?: number;
@@ -110,6 +112,7 @@ export default function AudioRow({
 }: AudioRowProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const sourceKey = useId();
+  const pinnedFileUrls = useSyncExternalStore(subscribePinnedTracks, getPinnedTrackFileUrls, getPinnedTrackFileUrls);
   const [currentSrc, setCurrentSrc] = useState(src);
   const [isPlaying, setIsPlaying] = useState(() => {
     const cached = getAudioCacheEntry(src);
@@ -321,6 +324,20 @@ export default function AudioRow({
   const downloadUrl = getDownloadUrl(fileUrl, downloadName, title, artistCredit);
   const hasArtistDetails = Boolean(artistCredit);
   const registryPlaying = registrySnapshot?.isPlaying ?? false;
+  const isPinned = (() => {
+    if (!fileUrl && !src) return false;
+    if (pinnedFileUrls.length === 0) return false;
+    const pinnedSet = new Set(pinnedFileUrls);
+    const candidates = fileUrl ? [fileUrl, src] : [src];
+    for (const candidate of candidates) {
+      if (pinnedSet.has(candidate)) return true;
+      const matchId = candidate.match(/[?&]id=([^&]+)/)?.[1];
+      if (matchId && Array.from(pinnedSet).some((pinned) => pinned === matchId || pinned.includes(matchId))) {
+        return true;
+      }
+    }
+    return false;
+  })();
   // A row looks "playing" if its own <audio> is playing OR the shared registry
   // says this file is being streamed (e.g. by the full-screen player), which
   // keeps the clicked row highlighted even after the player closes.
@@ -466,7 +483,12 @@ onPlay={() => {
     return (
       <div onClick={handleRowClick} onPointerEnter={primeAudio} onFocus={primeAudio} className="cursor-pointer">
         {audioTag}
-        {isExpanded || isEffectivelyPlaying ? playButton : <div className="text-Eltext1 text-sm font-semibold truncate">{title}</div>}
+        {isExpanded || isEffectivelyPlaying ? playButton : (
+          <div className="flex min-w-0 items-center gap-1.5 text-Eltext1 text-sm font-semibold truncate">
+            {isPinned && <Pined size="sm" />}
+            <span className="truncate">{title}</span>
+          </div>
+        )}
       </div>
     );
   }
@@ -542,6 +564,7 @@ onPlay={() => {
         {/* Title + artist + plays */}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
+            {isPinned && <Pined size="xs" />}
             <span className="block min-w-0 truncate text-xs font-semibold text-Eltext1 sm:text-sm">
               {title}
             </span>

@@ -19,9 +19,17 @@ const fallbackTracks = [
   },
 ];
 
+let mediaTableReady: Promise<void> | null = null;
+
 async function ensureMediaTable() {
-  await ensureDatabaseReady();
-  await pool.query(`
+  // These DDL statements are idempotent, so they only ever need to run once
+  // per process. Running them on every request is wasteful (each one scans
+  // the catalogs and takes locks), which is what made /api/audio so slow.
+  if (mediaTableReady) return mediaTableReady;
+
+  mediaTableReady = (async () => {
+    await ensureDatabaseReady();
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS artist_media (
       id TEXT PRIMARY KEY,
       artist_id TEXT NOT NULL,
@@ -62,19 +70,28 @@ async function ensureMediaTable() {
     ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
   `);
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS storage_items (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      type TEXT NOT NULL,
-      file_url TEXT NOT NULL,
-      drive_file_id TEXT,
-      thumbnail_url TEXT,
-      thumbnail_drive_file_id TEXT,
-      source TEXT NOT NULL DEFAULT 'talk-show',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-  await pool.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
+      CREATE TABLE IF NOT EXISTS storage_items (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        type TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        drive_file_id TEXT,
+        thumbnail_url TEXT,
+        thumbnail_drive_file_id TEXT,
+        source TEXT NOT NULL DEFAULT 'talk-show',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
+  })().catch((error) => {
+    // Allow a retry on the next request if this attempt failed (e.g. the
+    // database was briefly unreachable), so a transient failure doesn't
+    // permanently sabotage the process.
+    mediaTableReady = null;
+    throw error;
+  });
+
+  return mediaTableReady;
 }
 
 export async function GET() {
