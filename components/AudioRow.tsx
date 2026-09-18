@@ -8,6 +8,7 @@ import { readCachedData, writeCachedData } from '@/lib/client-cache';
 import { playNextAfter, primeNextAfter, registerPlaybackEntry, unregisterPlaybackEntry, type PlaybackEntry } from '@/lib/audio-playback';
 import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer, requestPlaybackToggle, type PlayerTrack } from '@/lib/audio-player';
+import ShareDot from './ShareDot';
 import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying, type NowPlayingSnapshot } from '@/lib/audio-now-playing';
 import { extractStoredFileId, recordTrackPlay } from '@/lib/media-url';
 import { buildAudioDownloadName } from '@/lib/download';
@@ -529,13 +530,7 @@ onPlay={() => {
               className="h-full w-full object-cover transition-transform duration-300 group-hover/thumb:scale-110"
             />
             {isShared && (
-              <span
-                title="Also available on another artist's page"
-                aria-label="Also available on another artist's page"
-                className="absolute right-0.5 top-0.5 flex h-3 w-3 items-center justify-center rounded-full border-[1.5px] border-cardcl bg-emerald-500"
-              >
-                <span className="h-1 w-1 rounded-full bg-white" />
-              </span>
+              <ShareDot size="xs" className="right-0.5 top-0.5 border-cardcl" />
             )}
           </div>
         </div>

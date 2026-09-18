@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useSyncExternalStore } from 'react';
 import { useParams } from 'next/navigation';
 import { getArtistById } from '@/lib/artists';
 import { extractAudioCoverArt } from '@/lib/audio-cover';
 import ArtistProfileLoading from '@/components/ArtistProfileLoading';
+import ShareDot from '@/components/ShareDot';
+import { getPinnedTrackFileUrls, setPinnedTrackFileUrls, subscribePinnedTracks, togglePinnedTrackFileUrl } from '@/lib/pinned-tracks';
 
 interface Artist {
   id: string;
@@ -146,6 +148,27 @@ export default function ArtistDetailPage() {
 
   // Inline audio preview state (simple play button per track)
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
+
+  // Pinned track state (checkbox = pin track to the featured audio carousel)
+  const pinnedFileUrls = useSyncExternalStore(subscribePinnedTracks, getPinnedTrackFileUrls, getPinnedTrackFileUrls);
+
+  const toggleTrackSelection = (track: Track) => {
+    if (!track.fileUrl) return;
+    togglePinnedTrackFileUrl(track.fileUrl);
+  };
+
+  const toggleSelectAllTracks = () => {
+    const trackFileUrls = tracks
+      .map((track) => track.fileUrl)
+      .filter((url): url is string => Boolean(url));
+    if (trackFileUrls.length === 0) return;
+
+    const allPinned = trackFileUrls.every((url) => pinnedFileUrls.includes(url));
+    const next = allPinned
+      ? pinnedFileUrls.filter((url) => !trackFileUrls.includes(url))
+      : Array.from(new Set([...pinnedFileUrls, ...trackFileUrls]));
+    setPinnedTrackFileUrls(next);
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -623,6 +646,11 @@ export default function ArtistDetailPage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.error || 'Unable to delete track');
+      }
+
+      const deletedTrack = tracks.find((track) => track.id === id);
+      if (deletedTrack?.fileUrl) {
+        setPinnedTrackFileUrls(pinnedFileUrls.filter((url) => url !== deletedTrack.fileUrl));
       }
 
       setTracks((prevTracks) => prevTracks.filter((track) => track.id !== id));
@@ -1170,6 +1198,18 @@ export default function ArtistDetailPage() {
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-slate-800 bg-slate-900/50 text-xs uppercase tracking-wider text-slate-400">
                     <tr>
+                      <th className="w-14 px-4 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            checked={tracks.length > 0 && tracks.every((track) => track.fileUrl && pinnedFileUrls.includes(track.fileUrl))}
+                            onChange={toggleSelectAllTracks}
+                            aria-label="Pin all tracks to the featured audio carousel"
+                            className="h-4 w-4 rounded border-slate-700 bg-slate-900 accent-indigo-600"
+                          />
+                          <span className="text-[10px] font-medium text-slate-500">Pin</span>
+                        </div>
+                      </th>
                       <th className="px-6 py-3.5">Thumbnail</th>
                       <th className="px-6 py-3.5">Song Title</th>
                       <th className="px-6 py-3.5">Artist</th>
@@ -1182,7 +1222,7 @@ export default function ArtistDetailPage() {
                   <tbody className="divide-y divide-slate-800">
                     {tracks.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                        <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <svg className="h-8 w-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
@@ -1197,6 +1237,15 @@ export default function ArtistDetailPage() {
                         const isOwnedTrack = !track.ownerArtistId || track.ownerArtistId === artist.id;
                         return (
                         <tr key={track.id} className="transition hover:bg-slate-900/40">
+                          <td className="px-4 py-4">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(track.fileUrl && pinnedFileUrls.includes(track.fileUrl))}
+                              onChange={() => toggleTrackSelection(track)}
+                              aria-label={`Pin ${track.title} to the featured audio carousel`}
+                              className="h-4 w-4 rounded border-slate-700 bg-slate-900 accent-indigo-600"
+                            />
+                          </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-800">
@@ -1206,15 +1255,9 @@ export default function ArtistDetailPage() {
                                   alt={track.title}
                                   className="h-full w-full object-cover"
                                 />
-                                {track.isShared ? (
-                                  <span
-                                    title="Shared with another artist account"
-                                    aria-label="Shared with another artist account"
-                                    className="absolute right-0 top-0 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-slate-900 bg-emerald-500"
-                                  >
-                                    <span className="h-1 w-1 rounded-full bg-white" />
-                                  </span>
-                                ) : null}
+                                {track.isShared && (
+                                  <ShareDot className="right-0 top-0 border-slate-900" title="Shared with another artist account" />
+                                )}
                                 {/* Thumbnail Edit Overlay */}
                                 {isOwnedTrack && (
                                 <label className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/70 opacity-0 transition group-hover:opacity-100 cursor-pointer text-[10px] font-medium text-white text-center px-1">

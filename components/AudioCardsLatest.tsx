@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useSyncExternalStore } from 'react';
 import Image from 'next/image';
 import {
   Download,
@@ -8,6 +8,8 @@ import {
   Pause,
 } from 'lucide-react';
 import { writeCachedData } from '@/lib/client-cache';
+import { getPinnedTrackFileUrls, subscribePinnedTracks, togglePinnedTrackFileUrl } from '@/lib/pinned-tracks';
+import ShareDot from '@/components/ShareDot';
 import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer } from '@/lib/audio-player';
 import { subscribeTrackCounts, type TrackCountsSnapshot } from '@/lib/audio-counts';
@@ -30,6 +32,8 @@ export interface FeaturedAudioTrack {
   duration?: string;
   playCount?: number;
   downloadCount?: number;
+  pinned?: boolean;
+  pinKey?: string;
 }
 
 function getPlayableAudioUrl(url: string) {
@@ -72,29 +76,48 @@ interface FeaturedAudioStorageItem {
   thumbnailUrl?: string;
 }
 
+const MAX_FEATURED_TRACKS = 5;
+
 function normalizeFeaturedTracks(data: {
   tracks?: FeaturedAudioTrack[];
   storageItems?: FeaturedAudioStorageItem[];
-}): FeaturedAudioTrack[] {
+}, pinnedFileUrls: string[] = []): FeaturedAudioTrack[] {
   const storageItems = Array.isArray(data.storageItems) ? data.storageItems : [];
   const sourceTracks = Array.isArray(data.tracks) && data.tracks.length > 0 ? data.tracks : [];
 
   if (sourceTracks.length === 0) return exampleTracks;
 
-  return sourceTracks.slice(0, 5).map((track) => {
+  const pinnedSet = new Set(pinnedFileUrls);
+  const normalized = sourceTracks.map((track) => {
     const dashboardItem = storageItems.find(
       (item) =>
         item.fileUrl === track.fileUrl ||
         item.title?.trim().toLowerCase() === track.title?.trim().toLowerCase(),
     );
 
+    const rawFileUrl = track.fileUrl;
+    const rawMatchId = rawFileUrl.match(/[?&]id=([^&]+)/)?.[1] ?? null;
+    const isPinned = rawMatchId
+      ? Array.from(pinnedSet).some((pinned) => pinned === rawFileUrl || pinned === rawMatchId || pinned.includes(rawMatchId))
+      : pinnedSet.has(rawFileUrl);
+
     return {
       ...track,
       artist: track.artist || track.artistName,
       fileUrl: getPlayableAudioUrl(track.fileUrl),
       thumbnailUrl: dashboardItem?.thumbnailUrl || track.thumbnailUrl,
+      pinned: isPinned,
+      pinKey: rawFileUrl,
     };
   });
+
+  // Keep pinned tracks at the front so new uploads never push them off the
+  // carousel. Remaining slots are filled with the latest unpinned tracks.
+  const pinnedTracks = normalized.filter((track) => track.pinned);
+  const otherTracks = normalized.filter((track) => !track.pinned);
+  const fillCount = Math.max(0, MAX_FEATURED_TRACKS - pinnedTracks.length);
+
+  return [...pinnedTracks, ...otherTracks.slice(0, fillCount)];
 }
 
 const CARD_COLORS = ['#8B5CF6', '#3B82F6', '#06B6D4', '#EC4899', '#F59E0B'];
@@ -118,6 +141,7 @@ const exampleTracks: FeaturedAudioTrack[] = [
 
 export default function AudioCardsLatest() {
   const [tracks, setTracks] = useState<FeaturedAudioTrack[]>([]);
+  const pinnedFileUrls = useSyncExternalStore(subscribePinnedTracks, getPinnedTrackFileUrls, getPinnedTrackFileUrls);
   const [liveCounts, setLiveCounts] = useState<Record<string, TrackCountsSnapshot>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
@@ -231,7 +255,8 @@ export default function AudioCardsLatest() {
         const data = await response.json();
         if (cancelled) return;
 
-        const nextTracks = normalizeFeaturedTracks(data);
+        const pinned = pinnedFileUrls;
+        const nextTracks = normalizeFeaturedTracks(data, pinned);
         if (nextTracks.length === 0) return;
 
         writeCachedData(FEATURED_TRACKS_CACHE, nextTracks);
@@ -240,7 +265,8 @@ export default function AudioCardsLatest() {
           const hasChanges =
             prev.length !== nextTracks.length ||
             nextTracks.some((track) => !currentIds.has(track.id)) ||
-            nextTracks.some((track, i) => prev[i]?.id !== track.id);
+            nextTracks.some((track, i) => prev[i]?.id !== track.id) ||
+            nextTracks.some((track, i) => prev[i]?.pinned !== track.pinned);
           return hasChanges ? nextTracks : prev;
         });
 
@@ -267,7 +293,7 @@ export default function AudioCardsLatest() {
       cancelled = true;
       window.removeEventListener('focus', handleFocus);
     };
-  }, []);
+  }, [pinnedFileUrls]);
 
   // Sync the audio element's playback state and time updates.
   useEffect(() => {
@@ -429,6 +455,12 @@ export default function AudioCardsLatest() {
     });
   };
 
+  const handleTogglePin = (event: React.MouseEvent, track: FeaturedAudioTrack) => {
+    event.stopPropagation();
+    const pinKey = track.pinKey || extractStoredFileId(track.fileUrl) || track.fileUrl;
+    togglePinnedTrackFileUrl(pinKey);
+  };
+
   if (loading) {
     return (
       <p className="py-12 text-center text-sm text-slate-400">
@@ -549,6 +581,17 @@ export default function AudioCardsLatest() {
                           <span className="text-white font-semibold text-base sm:text-lg tracking-tight truncate min-w-0 drop-shadow-sm">
                             {track.title || 'Untitled Track'}
                           </span>
+                          {track.pinned && (
+                            <button
+                              type="button"
+                              onClick={(event) => handleTogglePin(event, track)}
+                              title="Pinned to the featured audio carousel — click to unpin"
+                              aria-label="Unpin from the featured audio carousel"
+                              className="relative flex h-4 w-4 shrink-0 items-center justify-center"
+                            >
+                              <ShareDot size="xs" className="left-0 top-0 border border-white/30" />
+                            </button>
+                          )}
                         </div>
                         <p className="text-xs text-white/60 truncate mt-0.5">
                           {track.artist || 'Audio Track'}
