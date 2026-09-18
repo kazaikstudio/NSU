@@ -8,8 +8,8 @@ import {
   Pause,
 } from 'lucide-react';
 import { writeCachedData } from '@/lib/client-cache';
-import { getPinnedTrackFileUrls, subscribePinnedTracks, togglePinnedTrackFileUrl } from '@/lib/pinned-tracks';
-import ShareDot from '@/components/ShareDot';
+import { getPinnedTrackFileUrls, subscribePinnedTracks } from '@/lib/pinned-tracks';
+import MagicRings from '@/components/MagicRings';
 import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer } from '@/lib/audio-player';
 import { subscribeTrackCounts, type TrackCountsSnapshot } from '@/lib/audio-counts';
@@ -33,7 +33,6 @@ export interface FeaturedAudioTrack {
   playCount?: number;
   downloadCount?: number;
   pinned?: boolean;
-  pinKey?: string;
 }
 
 function getPlayableAudioUrl(url: string) {
@@ -107,7 +106,6 @@ function normalizeFeaturedTracks(data: {
       fileUrl: getPlayableAudioUrl(track.fileUrl),
       thumbnailUrl: dashboardItem?.thumbnailUrl || track.thumbnailUrl,
       pinned: isPinned,
-      pinKey: rawFileUrl,
     };
   });
 
@@ -455,12 +453,6 @@ export default function AudioCardsLatest() {
     });
   };
 
-  const handleTogglePin = (event: React.MouseEvent, track: FeaturedAudioTrack) => {
-    event.stopPropagation();
-    const pinKey = track.pinKey || extractStoredFileId(track.fileUrl) || track.fileUrl;
-    togglePinnedTrackFileUrl(pinKey);
-  };
-
   if (loading) {
     return (
       <p className="py-12 text-center text-sm text-slate-400">
@@ -536,7 +528,11 @@ export default function AudioCardsLatest() {
                 isSelected ? '' : 'hover:bg-Audicard'
               }`}
               style={{
-                borderColor: isSelected ? `${cardColor}70` : 'rgba(255,255,255,0.10)',
+                borderColor: isSelected
+                  ? `${cardColor}70`
+                  : track.pinned
+                    ? 'rgba(255, 110, 0, 0.75)'
+                    : 'rgba(255,255,255,0.10)',
                 boxShadow: isSelected
                   ? `0 0 0 2px ${cardColor}50, 0 0 30px ${cardColor}30, 0 8px 30px rgba(0,0,0,0.36)`
                   : '0 8px 30px rgba(0,0,0,0.36)',
@@ -555,6 +551,22 @@ export default function AudioCardsLatest() {
                 <div className="absolute inset-0 bg-linear-to-br from-Audicard/90 via-Audicard/70 to-Audicard/95 backdrop-blur-md" />
                 <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${cardColor}20 0%, transparent 65%)` }} />
               </div>
+
+              {track.pinned && (
+                <div className="pointer-events-none absolute inset-0 z-0">
+                  <MagicRings
+                    color="#ff2d00"
+                    colorTwo="#ffb000"
+                    speed={1}
+                    ringCount={6}
+                    attenuation={10}
+                    lineThickness={2}
+                    opacity={0.85}
+                    noiseAmount={0.08}
+                    scaleRate={0.1}
+                  />
+                </div>
+              )}
 
               {/* Flip container — holds both card faces and animates between them */}
               <div className="relative z-10" style={{ perspective: '1200px' }}>
@@ -582,15 +594,15 @@ export default function AudioCardsLatest() {
                             {track.title || 'Untitled Track'}
                           </span>
                           {track.pinned && (
-                            <button
-                              type="button"
-                              onClick={(event) => handleTogglePin(event, track)}
-                              title="Pinned to the featured audio carousel — click to unpin"
-                              aria-label="Unpin from the featured audio carousel"
-                              className="relative flex h-4 w-4 shrink-0 items-center justify-center"
+                            <svg
+                              className="h-4 w-4 shrink-0 text-orange-400 drop-shadow-[0_0_4px_rgba(255,110,0,0.9)]"
+                              fill="currentColor"
+                              viewBox="0 0 24 24"
+                              aria-label="Pinned to the featured audio carousel"
+                              role="img"
                             >
-                              <ShareDot size="xs" className="left-0 top-0 border border-white/30" />
-                            </button>
+                              <path d="M12 2c.5 3-1 4.5-2.5 6C8 9.5 7 11 7 13a5 5 0 0 0 4 4.9V22h2v-4.1A5 5 0 0 0 17 13c0-2-1-3.5-2.5-5C13 6.5 11.5 5 12 2Z" />
+                            </svg>
                           )}
                         </div>
                         <p className="text-xs text-white/60 truncate mt-0.5">
