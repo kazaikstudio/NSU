@@ -8,6 +8,7 @@ import {
   Pause,
 } from 'lucide-react';
 import { getPinnedTrackFileUrls, subscribePinnedTracks } from '@/lib/pinned-tracks';
+import { readCachedData, writeCachedData } from '@/lib/client-cache';
 import MagicRings from '@/components/MagicRings';
 import { primeAudioStart } from '@/lib/audio-preload';
 import { openAudioPlayer } from '@/lib/audio-player';
@@ -32,6 +33,8 @@ export interface FeaturedAudioTrack {
   downloadCount?: number;
   pinned?: boolean;
 }
+
+const FEATURED_TRACKS_CACHE = 'audio-page:featured-tracks';
 
 let featuredCache: FeaturedAudioTrack[] | null = null;
 
@@ -258,6 +261,7 @@ export default function AudioCardsLatest() {
         if (nextTracks.length === 0) return;
 
         featuredCache = nextTracks;
+        writeCachedData(FEATURED_TRACKS_CACHE, nextTracks);
         setTracks((prev) => {
           const currentIds = new Set(prev.map((track) => track.id));
           const hasChanges =
@@ -290,6 +294,14 @@ export default function AudioCardsLatest() {
     const loadInitial = async () => {
       await Promise.resolve();
 
+      // Restore from disk so switching tabs or navigating away and back never
+      // re-fetches the whole list — the network is only hit when the saved
+      // cache is missing or has gone stale.
+      const saved = readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE);
+      if (saved && saved.length > 0) {
+        featuredCache = saved;
+      }
+
       const cached = featuredCache;
       const isHardRefresh =
         typeof performance.getEntriesByType === 'function' &&
@@ -306,7 +318,7 @@ export default function AudioCardsLatest() {
     void loadInitial();
 
     const handleFocus = () => {
-      if (!featuredCache) {
+      if (!featuredCache && !readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE)) {
         void syncTracks();
       }
     };
