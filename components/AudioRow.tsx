@@ -555,19 +555,17 @@ onPlay={() => {
               onFocus={primeAudio}
               className="h-full w-full object-cover transition-transform duration-300 group-hover/thumb:scale-110"
             />
-            {isShared && (
-              <ShareDot size="xs" className="right-0.5 top-0.5 border-cardcl" />
-            )}
           </div>
         </div>
 
         {/* Title + artist + plays */}
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            {isPinned && <Pined size="xs" />}
+          <div className="flex min-w-0 items-center gap-1.5">
             <span className="block min-w-0 truncate text-xs font-semibold text-Eltext1 sm:text-sm">
               {title}
             </span>
+            {isPinned && <Pined size="xs" />}
+            {isShared && <ShareDot size="xs" className="relative border-cardcl" />}
           </div>
           <span className="mt-0.5 block truncate text-[10px] text-secondry/60 sm:text-xs">
             {artistCredit}
