@@ -1,9 +1,10 @@
 'use client'
 
-import Link from 'next/link'
+import { Download, Headphones, Play, Search } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Download, Headphones, Play } from 'lucide-react'
 import { useEffect, type Dispatch, type SetStateAction } from 'react'
+
+import Dock, { type DockItemData } from './Dock'
 
 interface DockBarProps {
   onScrollToSearch?: () => void
@@ -26,60 +27,54 @@ const DockBar = ({ onScrollToSearch, searchHref }: DockBarProps) => {
     router.prefetch(resolvedSearchHref)
   }, [router, resolvedSearchHref])
 
-  const navLinkBase =
-    'relative rounded-xl px-3 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer whitespace-nowrap'
-  const navLinkActive =
+  const activeClass =
     'bg-linear-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30'
-  const navLinkInactive =
+  const inactiveClass =
     'text-white/40 hover:text-white/80 hover:bg-white/[0.06]'
 
-  const searchBtnBase = `flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-200 active:scale-95 ${
-    isSearch
-      ? 'bg-linear-to-r from-rose-500 to-pink-500 text-white shadow-lg shadow-rose-500/30'
-      : 'bg-white/[0.06] text-white/40 hover:bg-white/10 hover:text-white'
-  }`
+  const items: DockItemData[] = [
+    {
+      icon: <Play aria-hidden="true" />,
+      label: 'Watch',
+      onClick: () => router.push('/'),
+      className: isVideo ? activeClass : inactiveClass
+    },
+    {
+      icon: <Headphones aria-hidden="true" />,
+      label: 'Listen',
+      onClick: () => router.push('/Audio'),
+      className: isAudio ? activeClass : inactiveClass
+    },
+    {
+      icon: <Download aria-hidden="true" />,
+      label: 'Download',
+      onClick: () => router.push('/download'),
+      className: isDownload ? activeClass : inactiveClass
+    },
+    { separator: true },
+    {
+      icon: <Search aria-hidden="true" />,
+      label: isSearch ? 'Go back' : 'Open search page',
+      onClick: () =>
+        onScrollToSearch
+          ? onScrollToSearch()
+          : isSearch
+            ? router.back()
+            : router.push(resolvedSearchHref),
+      className: isSearch ? activeClass : inactiveClass
+    }
+  ]
 
   return (
-    <div className="fixed inset-x-0 bottom-4 sm:bottom-6 z-50 flex items-center justify-center px-3 sm:px-4 pointer-events-none">
-      <div className="pointer-events-auto flex max-w-[calc(100vw-1.5rem)] items-center gap-0.5 sm:gap-1 rounded-2xl border border-white/8 bg-black/70 p-1 sm:p-1.5 shadow-2xl shadow-black/60 backdrop-blur-2xl ring-1 ring-inset ring-white/4">
-
-        <Link href="/" className={`${navLinkBase} ${isVideo ? navLinkActive : navLinkInactive}`}>
-          <Play className="inline-block h-3 w-3 mr-1.5 -mt-px" aria-hidden="true" />Watch
-        </Link>
-        <Link href="/Audio" className={`${navLinkBase} ${isAudio ? navLinkActive : navLinkInactive}`}>
-          <Headphones className="inline-block h-3 w-3 mr-1.5 -mt-px" aria-hidden="true" />Listen
-        </Link>
-        <Link href="/download" className={`${navLinkBase} ${isDownload ? navLinkActive : navLinkInactive}`}>
-          <Download className="inline-block h-3 w-3 mr-1.5 -mt-px" aria-hidden="true" />Download
-        </Link>
-
-        <div className="mx-1 h-5 w-px bg-white/8" aria-hidden="true" />
-
-        {onScrollToSearch ? (
-          <button
-            type="button"
-            onClick={onScrollToSearch}
-            title="Focus search input"
-            className={searchBtnBase}
-          >
-            <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-            </svg>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => isSearch ? router.back() : router.push(resolvedSearchHref)}
-            title={isSearch ? 'Go back' : 'Open search page'}
-            aria-label={isSearch ? 'Go back' : 'Open search page'}
-            className={searchBtnBase}
-          >
-            <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-            </svg>
-          </button>
-        )}
-
+    <div className="fixed inset-x-0 bottom-4 sm:bottom-6 z-50 flex items-end justify-center px-3 sm:px-4 pointer-events-none">
+      <div className="pointer-events-auto">
+        <Dock
+          items={items}
+          panelHeight={68}
+          baseItemSize={44}
+          magnification={62}
+          distance={180}
+        />
       </div>
     </div>
   )
