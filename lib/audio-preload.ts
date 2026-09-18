@@ -2,10 +2,24 @@ const primedUrls = new Set<string>();
 
 const DEFAULT_BUDGET_MS = 4000;
 
-// Buffers the very start of a track so playback begins instantly on click,
-// while only downloading the first moments instead of the whole file.
-// A budget timer stops additional buffering shortly after if the user hasn't
-// started playing, keeping data usage low.
+// How close to the end of the file the buffer must be before we treat it as
+// "well loaded" and keep it cached instead of discarding it at the budget.
+const FULLY_BUFFERED_MARGIN_SEC = 16;
+
+function isFullyBuffered(audio: HTMLAudioElement) {
+  if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return false;
+  if (!Number.isFinite(audio.duration) || audio.duration <= 0) return false;
+
+  const lastBuffered = audio.buffered.length
+    ? audio.buffered.end(audio.buffered.length - 1)
+    : 0;
+  return lastBuffered >= audio.duration - FULLY_BUFFERED_MARGIN_SEC;
+}
+
+// Buffers a track so playback begins instantly on click. Once the file is
+// (nearly) completely buffered it is kept warm in the element, so re-clicking
+// the track plays instantly without re-downloading. Files that only got a
+// partial buffer before the budget fires are released to keep data usage low.
 export function primeAudioStart(
   url: string,
   audio: HTMLAudioElement | null,
@@ -36,6 +50,10 @@ export function primeAudioStart(
     // Once play() has been requested the element is no longer paused, so an
     // in-use buffer is never discarded.
     if (audio.paused && audio.currentTime === 0) {
+      // A fully-buffered track stays cached so the next click starts instantly
+      // without waiting on the network again.
+      if (isFullyBuffered(audio)) return;
+
       // Forget the prime so a later hover re-primes this track instead of
       // leaving the click to restart the download from scratch.
       primedUrls.delete(url);

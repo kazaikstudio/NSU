@@ -7,7 +7,7 @@ import {
   Play,
   Pause,
 } from 'lucide-react';
-import { writeCachedData } from '@/lib/client-cache';
+import { writeCachedData, readCachedData } from '@/lib/client-cache';
 import { getPinnedTrackFileUrls, subscribePinnedTracks } from '@/lib/pinned-tracks';
 import MagicRings from '@/components/MagicRings';
 import { primeAudioStart } from '@/lib/audio-preload';
@@ -15,7 +15,7 @@ import { openAudioPlayer } from '@/lib/audio-player';
 import { subscribeTrackCounts, type TrackCountsSnapshot } from '@/lib/audio-counts';
 import { extractStoredFileId, getStoredThumbnailUrl, recordTrackPlay } from '@/lib/media-url';
 import { downloadTrackFile } from '@/lib/download-track';
-import { buildAudioDownloadName } from '@/lib/download';
+import { buildArtistCredit, buildAudioDownloadName } from '@/lib/download';
 
 const FEATURED_TRACKS_CACHE = 'audio-page:featured-tracks';
 
@@ -24,6 +24,7 @@ export interface FeaturedAudioTrack {
   title: string;
   artist?: string;
   artistName?: string;
+  featuredArtistName?: string | null;
   fileUrl: string;
   coverUrl?: string;
   driveFileId?: string;
@@ -102,7 +103,7 @@ function normalizeFeaturedTracks(data: {
 
     return {
       ...track,
-      artist: track.artist || track.artistName,
+      artist: buildArtistCredit(track.artistName || track.artist, track.featuredArtistName),
       fileUrl: getPlayableAudioUrl(track.fileUrl),
       thumbnailUrl: dashboardItem?.thumbnailUrl || track.thumbnailUrl,
       pinned: isPinned,
@@ -283,8 +284,33 @@ export default function AudioCardsLatest() {
       }
     };
 
-    void syncTracks();
-    const handleFocus = () => void syncTracks();
+    // Serve the cached list on first mount and when navigating back to this
+    // page, so the network is only hit on a hard refresh or when the cache
+    // has gone stale. Deferred by a microtask so no state is set synchronously
+    // within the effect body.
+    const loadInitial = async () => {
+      await Promise.resolve();
+
+      const cached = readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE);
+      const isHardRefresh =
+        typeof performance.getEntriesByType === 'function' &&
+        ((performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload');
+
+      if (cached && cached.length > 0 && !isHardRefresh) {
+        setTracks(cached);
+        setLoading(false);
+        return;
+      }
+
+      await syncTracks();
+    };
+    void loadInitial();
+
+    const handleFocus = () => {
+      if (!readCachedData<FeaturedAudioTrack[]>(FEATURED_TRACKS_CACHE)) {
+        void syncTracks();
+      }
+    };
     window.addEventListener('focus', handleFocus);
 
     return () => {
@@ -529,7 +555,7 @@ export default function AudioCardsLatest() {
               }`}
               style={{
                 borderColor: isSelected
-                  ? `${cardColor}70`
+                  ? 'transparent'
                   : track.pinned
                     ? 'rgba(255, 110, 0, 0.75)'
                     : 'rgba(255,255,255,0.10)',

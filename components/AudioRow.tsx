@@ -11,7 +11,7 @@ import { openAudioPlayer, requestPlaybackToggle, type PlayerTrack } from '@/lib/
 import ShareDot from './ShareDot';
 import { clearNowPlaying, getNowPlaying, reportNowPlaying, subscribeNowPlaying, type NowPlayingSnapshot } from '@/lib/audio-now-playing';
 import { extractStoredFileId, recordTrackPlay } from '@/lib/media-url';
-import { buildAudioDownloadName } from '@/lib/download';
+import { buildArtistCredit, buildAudioDownloadName } from '@/lib/download';
 
 interface DownloadCountUpdate {
   trackDownloads?: number;
@@ -249,6 +249,10 @@ export default function AudioRow({
       return;
     }
 
+    // Kick off buffering right away so playback starts as soon as the first
+    // data arrives — hover priming may never fire on touch/keyboard taps.
+    primeAudio();
+
     try {
       recordTrackPlay(src);
       await audio.play();
@@ -296,6 +300,10 @@ export default function AudioRow({
       return;
     }
 
+    // Kick off buffering right away so playback starts as soon as the first
+    // data arrives — hover priming may never fire on touch/keyboard taps.
+    primeAudio();
+
     try {
       recordTrackPlay(src);
       await audio.play();
@@ -308,11 +316,7 @@ export default function AudioRow({
     }
   };
 
-  const artistCredit = artistName
-    ? featuredArtistName
-      ? `${artistName} ft ${featuredArtistName}`
-      : artistName
-    : '';
+  const artistCredit = buildArtistCredit(artistName, featuredArtistName);
   const downloadName = buildAudioDownloadName(title, artistCredit || artistName);
   const downloadUrl = getDownloadUrl(fileUrl, downloadName, title, artistCredit);
   const hasArtistDetails = Boolean(artistCredit);

@@ -122,6 +122,13 @@ export function getDownloadPath(filename: string, category?: DownloadCategory, a
   return resolvedFilename;
 }
 
+export function buildArtistCredit(artistName?: string | null, featuredArtistName?: string | null) {
+  const mainArtist = artistName ? sanitizeDownloadFilename(artistName).trim() : '';
+  const featuredArtist = featuredArtistName ? sanitizeDownloadFilename(featuredArtistName).trim() : '';
+  if (mainArtist && featuredArtist) return `${mainArtist} ft ${featuredArtist}`;
+  return mainArtist || featuredArtist;
+}
+
 export function buildAudioDownloadName(title: string, artistName?: string, extension = 'mp3') {
   let normalizedTitle = sanitizeDownloadFilename(title || '').trim();
   normalizedTitle = normalizedTitle
@@ -131,7 +138,7 @@ export function buildAudioDownloadName(title: string, artistName?: string, exten
     .trim();
 
   const normalizedArtist = artistName ? sanitizeDownloadFilename(artistName).trim() : '';
-  const titleAndArtist = normalizedArtist ? `${normalizedTitle} By ${normalizedArtist}` : normalizedTitle;
+  const titleAndArtist = normalizedArtist ? `${normalizedTitle} By artist = ${normalizedArtist}` : normalizedTitle;
   const withSuffix = titleAndArtist ? `${titleAndArtist} (Nollstudios.org)` : 'Nollstudios.org';
   const audioExtension = normalizeAudioDownloadExtension(extension);
   return `${withSuffix}.${audioExtension}`;
