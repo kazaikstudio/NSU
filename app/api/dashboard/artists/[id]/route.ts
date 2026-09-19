@@ -232,18 +232,24 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     const body = await request.json().catch(() => ({}));
     const name = typeof body?.name === 'string' ? body.name.trim() : '';
     const genre = typeof body?.genre === 'string' ? body.genre.trim() : '';
+    const status = typeof body?.status === 'string' ? body.status : '';
 
     if (!name || !genre) {
       return NextResponse.json({ error: 'Artist name and genre are required' }, { status: 400 });
     }
 
+    const allowedStatuses = ['Active', 'Inactive', 'Suspended'];
+    if (status && !allowedStatuses.includes(status)) {
+      return NextResponse.json({ error: 'Invalid artist status' }, { status: 400 });
+    }
+
     await ensureArtistsTable();
     const { rows } = await pool.query(
       `UPDATE artists
-       SET name = $1, genre = $2, updated_at = NOW()
-       WHERE id::text = $3
+       SET name = $1, genre = $2, status = $3, updated_at = NOW()
+       WHERE id::text = $4
        RETURNING id, name, genre, tracks_count AS "tracksCount", status, bio, followers, total_downloads AS "totalDownloads", total_plays AS "totalPlays", featured_track AS "featuredTrack", monthly_listeners AS "monthlyListeners", banner_url AS "bannerUrl", profile_url AS "profileUrl"`,
-      [name, genre, id]
+      [name, genre, status || 'Active', id]
     );
 
     if (rows.length === 0) {

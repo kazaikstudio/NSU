@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { getArtistById } from '@/lib/artists';
 import { extractAudioCoverArt } from '@/lib/audio-cover';
+import { ARTIST_STATUS_OPTIONS, getArtistStatusStyle } from '@/lib/artist-status';
 import ArtistProfileLoading from '@/components/ArtistProfileLoading';
 import ShareDot from '@/components/ShareDot';
 import { setPinnedTrackFileUrls, togglePinnedTrackFileUrl, usePinnedTrackFileUrls } from '@/lib/pinned-tracks';
@@ -136,6 +137,9 @@ export default function ArtistDetailPage() {
   const [artistNameDraft, setArtistNameDraft] = useState('');
   const [isEditingGenre, setIsEditingGenre] = useState(false);
   const [artistGenreDraft, setArtistGenreDraft] = useState('');
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [isSavingStatus, setIsSavingStatus] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [trackTitleDraft, setTrackTitleDraft] = useState('');
   const [trackAlbumDraft, setTrackAlbumDraft] = useState('');
@@ -304,6 +308,9 @@ export default function ArtistDetailPage() {
     const handleOutsideClick = (event: MouseEvent) => {
       if (featuredDropdownRef.current && !featuredDropdownRef.current.contains(event.target as Node)) {
         setFeaturedDropdownOpen(false);
+      }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setStatusDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
@@ -512,6 +519,46 @@ export default function ArtistDetailPage() {
     } catch (error) {
       setProcessMessage(error instanceof Error ? error.message : 'Unable to update artist information.');
       setTimeout(() => setProcessMessage(''), 3000);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!artist) {
+      setStatusDropdownOpen(false);
+      return;
+    }
+
+    if (newStatus === artist.status) {
+      setStatusDropdownOpen(false);
+      return;
+    }
+
+    setIsSavingStatus(true);
+    try {
+      const response = await fetch(`/api/dashboard/artists/${artist.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: artist.name, genre: artist.genre, status: newStatus }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Unable to update artist status');
+
+      setArtist((currentArtist) => currentArtist
+        ? {
+          ...currentArtist,
+          name: data.artist?.name || currentArtist.name,
+          genre: data.artist?.genre || currentArtist.genre,
+          status: data.artist?.status || newStatus,
+        }
+        : currentArtist);
+      setProcessMessage('Artist status updated successfully.');
+      setTimeout(() => setProcessMessage(''), 3000);
+    } catch (error) {
+      setProcessMessage(error instanceof Error ? error.message : 'Unable to update artist status.');
+      setTimeout(() => setProcessMessage(''), 3000);
+    } finally {
+      setIsSavingStatus(false);
+      setStatusDropdownOpen(false);
     }
   };
 
@@ -918,11 +965,45 @@ export default function ArtistDetailPage() {
               <p className="mt-2 max-w-2xl text-sm text-slate-400">{artist.bio}</p>
             </div>
 
-            <div className="shrink-0 rounded-2xl border border-slate-800 bg-slate-950/80 px-5 py-3">
+            <div className="relative shrink-0 rounded-2xl border border-slate-800 bg-slate-950/80 px-5 py-3" ref={statusDropdownRef}>
               <p className="text-xs text-slate-400">Status</p>
-              <span className="mt-1 inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
-                {artist.status}
-              </span>
+              <button
+                type="button"
+                onClick={() => setStatusDropdownOpen((open) => !open)}
+                className={`mt-1 inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${getArtistStatusStyle(artist.status).pillClass}`}
+                aria-haspopup="listbox"
+                aria-expanded={statusDropdownOpen}
+                disabled={isSavingStatus}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${getArtistStatusStyle(artist.status).dotClass}`} />
+                {isSavingStatus ? 'Saving...' : artist.status}
+                <svg className={`h-3 w-3 opacity-60 transition ${statusDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {statusDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 py-1 shadow-2xl" role="listbox" aria-label="Artist status">
+                  {ARTIST_STATUS_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={artist.status === option.value}
+                      onClick={() => void handleStatusChange(option.value)}
+                      className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-xs font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${option.dotClass}`} />
+                      {option.value}
+                      {artist.status === option.value && (
+                        <svg className="ml-auto h-3.5 w-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

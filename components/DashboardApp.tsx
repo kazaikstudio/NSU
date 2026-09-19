@@ -7,6 +7,7 @@ import { LayoutDashboard, Users, History, HardDrive, LogOut, Video } from 'lucid
 import { clampUploadProgress, formatUploadStatusMessage } from '@/lib/talk-show-upload';
 import { getStoredThumbnailUrl } from '@/lib/media-url';
 import { extractAudioCoverArt } from '@/lib/audio-cover';
+import { getArtistStatusStyle } from '@/lib/artist-status';
 import type { DashboardUser } from '@/lib/dashboard-auth';
 import DashboardCharts from '@/components/DashboardCharts';
 import EditMemberModal, { type MemberFormValues } from '@/components/EditMemberModal';
@@ -19,7 +20,7 @@ interface Artist {
   genre: string;
   tracksCount: number;
   totalDownloads: number;
-  status: 'Active' | 'Inactive' | 'Pending';
+  status: string;
   profileUrl?: string | null;
 }
 
@@ -213,6 +214,37 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
     };
 
     void loadDashboardData();
+  }, []);
+
+  // Revalidate the artists list against the database whenever the dashboard
+  // mounts while a session cache already exists (e.g. returning from an artist
+  // page where the status was changed). The cached rows render immediately and
+  // are replaced once the fresh data arrives.
+  useEffect(() => {
+    const cached = dashboardDataCache;
+    if (!cached) return;
+
+    let cancelled = false;
+
+    const revalidateArtists = async () => {
+      try {
+        const response = await fetch('/api/dashboard/artists');
+        if (!response.ok) return;
+        const data = await response.json();
+        const artists = Array.isArray(data.artists) ? data.artists : [];
+        if (cancelled) return;
+        setArtists(artists);
+        dashboardDataCache = { ...cached, artists };
+      } catch {
+        // keep the cached artist rows when revalidation fails
+      }
+    };
+
+    void revalidateArtists();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Keep the session cache in sync with in-place mutations (add/edit/delete)
@@ -1010,7 +1042,9 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                           </td>
                         </tr>
                       ) : (
-                        artists.map((artist) => (
+                        artists.map((artist) => {
+                          const statusStyle = getArtistStatusStyle(artist.status);
+                          return (
                           <tr
                             key={artist.id}
                             onClick={() => router.push(`/dashboard/artist/${artist.id}`)}
@@ -1040,12 +1074,8 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${
-                                artist.status === 'Active'
-                                  ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 shadow-emerald-500/5'
-                                  : 'border border-amber-500/20 bg-amber-500/10 text-amber-400 shadow-amber-500/5'
-                              }`}>
-                                <span className={`h-1.5 w-1.5 rounded-full ${artist.status === 'Active' ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                              <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${statusStyle.pillClass}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${statusStyle.dotClass}`}></span>
                                 {artist.status}
                               </span>
                             </td>
@@ -1063,7 +1093,8 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                               </button>
                             </td>
                           </tr>
-                        ))
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
