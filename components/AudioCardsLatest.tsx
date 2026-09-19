@@ -8,7 +8,7 @@ import {
   Pause,
 } from 'lucide-react';
 import Pined from './Pined';
-import { usePinnedTrackFileUrls } from '@/lib/pinned-tracks';
+import { usePinnedTrackFileUrls, usePinnedTracksLoaded } from '@/lib/pinned-tracks';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
 import { fetchAudioData, type AudioPageResponse } from '@/lib/audio-data';
 import { primeAudioStart } from '@/lib/audio-preload';
@@ -114,6 +114,26 @@ interface FeaturedAudioStorageItem {
 
 const MAX_FEATURED_TRACKS = 5;
 
+function getMediaFileKey(fileUrl: string): string {
+  const m = fileUrl.match(/[?&]id=([^&]+)/);
+  if (m) return m[1];
+  const n = fileUrl.match(/\/media\/([^/?]+)/);
+  if (n) return n[1];
+  return fileUrl;
+}
+
+// Tells whether a track file URL is pinned, regardless of whether the URL is
+// the raw stored value or the playable `/api/dashboard/media/{id}` form.
+function isPinnedFileUrl(fileUrl: string, pinnedFileUrls: string[]): boolean {
+  if (!fileUrl) return false;
+  const key = getMediaFileKey(fileUrl);
+  return pinnedFileUrls.some((pinned) => {
+    if (!pinned) return false;
+    if (pinned === fileUrl || pinned === key) return true;
+    return getMediaFileKey(pinned) === key || pinned.includes(key);
+  });
+}
+
 function normalizeFeaturedTracks(data: {
   tracks?: FeaturedAudioTrack[];
   storageItems?: FeaturedAudioStorageItem[];
@@ -123,7 +143,6 @@ function normalizeFeaturedTracks(data: {
 
   if (sourceTracks.length === 0) return exampleTracks;
 
-  const pinnedSet = new Set(pinnedFileUrls);
   const normalized = sourceTracks.map((track) => {
     const dashboardItem = storageItems.find(
       (item) =>
@@ -131,11 +150,7 @@ function normalizeFeaturedTracks(data: {
         item.title?.trim().toLowerCase() === track.title?.trim().toLowerCase(),
     );
 
-    const rawFileUrl = track.fileUrl;
-    const rawMatchId = rawFileUrl.match(/[?&]id=([^&]+)/)?.[1] ?? null;
-    const isPinned = rawMatchId
-      ? Array.from(pinnedSet).some((pinned) => pinned === rawFileUrl || pinned === rawMatchId || pinned.includes(rawMatchId))
-      : pinnedSet.has(rawFileUrl);
+    const isPinned = isPinnedFileUrl(track.fileUrl, pinnedFileUrls);
 
     return {
       ...track,
@@ -177,6 +192,7 @@ const exampleTracks: FeaturedAudioTrack[] = [
 export default function AudioCardsLatest() {
   const [tracks, setTracks] = useState<FeaturedAudioTrack[]>([]);
   const pinnedFileUrls = usePinnedTrackFileUrls();
+  const pinsLoaded = usePinnedTracksLoaded();
   const [liveCounts, setLiveCounts] = useState<Record<string, TrackCountsSnapshot>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
@@ -372,8 +388,27 @@ export default function AudioCardsLatest() {
         ((performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload');
 
       if (cached && cached.length > 0 && !isHardRefresh) {
-        setTracks(cached);
+        // The cached list bakes in the `pinned` flags from when it was saved.
+        // Once the live pin registry has loaded, re-derive them so pins that
+        // changed after caching surface without a hard refresh. If the
+        // re-derived state disagrees with the cache, kick off a background
+        // sync so freshly pinned tracks that aren't yet in the cache get
+        // pulled into the carousel.
+        const applyPins = pinnedFileUrls.length > 0 || pinsLoaded;
+        const reDerived = applyPins
+          ? normalizeFeaturedTracks({ tracks: cached }, pinnedFileUrls)
+          : cached;
+
+        setTracks(reDerived);
         setLoading(false);
+
+        const shouldRefresh =
+          pinsLoaded &&
+          pinnedFileUrls.length > 0 &&
+          pinnedFileUrls.some(
+            (pinned) => !reDerived.some((track) => isPinnedFileUrl(track.fileUrl, [pinned])),
+          );
+        if (shouldRefresh) void syncTracks();
         return;
       }
 
@@ -392,7 +427,7 @@ export default function AudioCardsLatest() {
       cancelled = true;
       window.removeEventListener('focus', handleFocus);
     };
-  }, [pinnedFileUrls]);
+  }, [pinnedFileUrls, pinsLoaded]);
 
   // Sync the audio element's playback state and time updates.
   useEffect(() => {

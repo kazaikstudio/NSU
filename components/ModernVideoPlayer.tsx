@@ -42,8 +42,10 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
   const [isMuted, setIsMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [videoRatio, setVideoRatio] = useState<string | null>(null);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+  const computedRatio = videoRatio ?? "16 / 9";
 
   useEffect(() => {
     const video = videoRef.current;
@@ -74,6 +76,9 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
 
     const handleLoadedMetadata = () => {
       setDuration(video.duration || 0);
+      if (video.videoWidth && video.videoHeight) {
+        setVideoRatio(`${video.videoWidth} / ${video.videoHeight}`);
+      }
     };
 
     const handleFullscreenChange = () => {
@@ -285,7 +290,7 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
   const playerStyle: CSSProperties = {
     position: "relative",
     width: "100%",
-    aspectRatio: "16 / 9",
+    aspectRatio: computedRatio,
     overflow: "hidden",
     borderRadius: isFullscreen ? 0 : isMobile ? 22 : 28,
     background: "radial-gradient(circle at top, rgba(92, 100, 255, 0.24), transparent 42%), linear-gradient(180deg, #101322 0%, #06070d 100%)",

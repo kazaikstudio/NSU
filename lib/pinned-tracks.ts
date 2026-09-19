@@ -5,10 +5,15 @@ import { useEffect, useSyncExternalStore } from 'react';
 const EMPTY_PINNED_TRACKS: string[] = [];
 
 let pinnedFileUrls: string[] = EMPTY_PINNED_TRACKS;
+let pinnedTracksLoaded = false;
 const listeners = new Set<() => void>();
 
 function getPinnedSnapshot(): string[] {
   return pinnedFileUrls;
+}
+
+export function arePinnedTracksLoaded(): boolean {
+  return typeof window !== 'undefined' && pinnedTracksLoaded;
 }
 
 function emitPinnedTracksChange(): void {
@@ -43,6 +48,7 @@ export async function loadPinnedTracks(): Promise<void> {
       if (!response.ok) return;
       const data = (await response.json()) as { fileUrls?: unknown };
       if (Array.isArray(data.fileUrls)) {
+        pinnedTracksLoaded = true;
         applyPinnedTrackFileUrls(data.fileUrls as string[]);
       }
     } catch {
@@ -100,4 +106,8 @@ export function usePinnedTrackFileUrls(): string[] {
   }, []);
 
   return fileUrls;
+}
+
+export function usePinnedTracksLoaded(): boolean {
+  return useSyncExternalStore(subscribePinnedTracks, arePinnedTracksLoaded, () => false);
 }
