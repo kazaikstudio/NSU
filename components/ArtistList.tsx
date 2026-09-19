@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Mic2, Music } from 'lucide-react';
 import { getClientCachedData, readCachedData, writeCachedData } from '@/lib/client-cache';
+import { getArtistStatusStyle } from '@/lib/artist-status';
 
 interface RegisteredArtist {
   id: string;
@@ -147,11 +148,7 @@ export default function ArtistList({ searchTerm }: { searchTerm: string }) {
             </div>
             {/* Status dot */}
             <span
-              className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-cardcl shadow-sm transition-colors duration-200 ${
-                artist.status.toLowerCase() === 'active'
-                  ? 'bg-glow shadow-glow/40'
-                  : 'bg-secondry/30'
-              }`}
+              className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-cardcl shadow-sm transition-colors duration-200 ${getArtistStatusStyle(artist.status).dotClass}`}
             />
           </div>
 
