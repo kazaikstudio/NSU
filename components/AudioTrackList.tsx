@@ -5,6 +5,7 @@ import AudioRow from './AudioRow';
 import { readCachedData, writeCachedData } from '@/lib/client-cache';
 import { fetchAudioData, readCachedAudioData } from '@/lib/audio-data';
 import { playerTrackFor } from '@/lib/audio-player';
+import { usePinnedTrackFileUrls } from '@/lib/pinned-tracks';
 
 const CACHE_KEY = 'audio:tracks';
 const cachedTracks = readCachedData<AudioTrack[]>(CACHE_KEY);
@@ -71,6 +72,7 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
   const [loading, setLoading] = useState(cachedTracks == null && !readCachedAudioData());
   const [error, setError] = useState('');
   const loadedOnceRef = useRef(false);
+  const pinnedFileUrls = usePinnedTrackFileUrls();
 
   useEffect(() => {
     let cancelled = false;
@@ -118,13 +120,27 @@ export default function AudioTrackList({ searchTerm }: { searchTerm: string }) {
   }, []);
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
+  const isTrackPinned = (fileUrl?: string | null) => {
+    if (!fileUrl || pinnedFileUrls.length === 0) return false;
+    const pinnedSet = new Set(pinnedFileUrls);
+    if (pinnedSet.has(fileUrl)) return true;
+    const matchId = fileUrl.match(/[?&]id=([^&]+)/)?.[1];
+    return Boolean(
+      matchId && Array.from(pinnedSet).some((pinned) => pinned === matchId || pinned.includes(matchId))
+    );
+  };
   const filteredTracks = tracks
     .filter((track) =>
       [track.title, track.artistName, track.featuredArtistName || '', track.album || ''].some((value) =>
         value.toLowerCase().includes(normalizedSearch)
       )
     )
-    .sort((left, right) => left.title.localeCompare(right.title, undefined, { sensitivity: 'base' }));
+    .sort((left, right) => {
+      const leftPinRank = isTrackPinned(left.fileUrl) ? 0 : 1;
+      const rightPinRank = isTrackPinned(right.fileUrl) ? 0 : 1;
+      if (leftPinRank !== rightPinRank) return leftPinRank - rightPinRank;
+      return left.title.localeCompare(right.title, undefined, { sensitivity: 'base' });
+    });
 
   const playerQueue = filteredTracks
     .filter((track) => track.fileUrl)
