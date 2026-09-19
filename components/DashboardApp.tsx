@@ -8,6 +8,7 @@ import { clampUploadProgress, formatUploadStatusMessage } from '@/lib/talk-show-
 import { getStoredThumbnailUrl } from '@/lib/media-url';
 import { extractAudioCoverArt } from '@/lib/audio-cover';
 import { getArtistStatusStyle } from '@/lib/artist-status';
+import { getMemberStatusStyle } from '@/lib/member-status';
 import type { DashboardUser } from '@/lib/dashboard-auth';
 import DashboardCharts from '@/components/DashboardCharts';
 import EditMemberModal, { type MemberFormValues } from '@/components/EditMemberModal';
@@ -31,7 +32,7 @@ interface Member {
   contact?: string;
   profilePic?: string;
   category: 'Board Members' | 'Artists' | 'Dancers' | 'Regular Members';
-  status: 'Active' | 'Inactive' | 'Pending';
+  status: 'Active' | 'Inactive' | 'Pending' | 'Suspended';
 }
 
 interface StorageItem {
@@ -958,7 +959,8 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <span className="inline-flex items-center rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">
+                              <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${getMemberStatusStyle(member.status).pillClass}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${getMemberStatusStyle(member.status).dotClass}`}></span>
                                 {member.status}
                               </span>
                             </td>

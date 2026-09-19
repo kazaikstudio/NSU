@@ -233,3 +233,40 @@ input[type="number"]:focus::-webkit-inner-spin-button {
     line-height: 1.3;
   }
 }
+
+/* A4 printable member form */
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    background-image: none !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #printable,
+  #printable * {
+    visibility: visible !important;
+  }
+
+  #printable {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: #ffffff;
+    color: #0f172a;
+  }
+
+  .print-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}

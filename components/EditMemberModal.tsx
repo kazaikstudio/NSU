@@ -1,7 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
+import { Download } from 'lucide-react';
+import PrintableMemberForm from '@/components/PrintableMemberForm';
 
 export type MemberCategory = 'Board Members' | 'Artists' | 'Dancers' | 'Regular Members';
 export type MemberStatus = 'Active' | 'Inactive' | 'Pending' | 'Suspended';
@@ -74,6 +77,402 @@ const STATUS_OPTIONS: { value: Exclude<MemberStatus, 'Pending'>; label: string; 
   },
 ];
 
+function CategorySearchDropdown({
+  value,
+  options,
+  onChange,
+  isDarkMode,
+}: {
+  value: MemberCategory;
+  options: MemberCategory[];
+  onChange: (category: MemberCategory) => void;
+  isDarkMode: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  const filtered = options;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => {
+          setOpen((prev) => !prev);
+        }}
+        className={`flex items-center gap-2 appearance-none rounded-xl border px-3 py-2 pr-2.5 text-sm font-medium outline-none transition cursor-pointer focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+          isDarkMode
+            ? 'border-slate-700 bg-slate-800 text-white hover:bg-slate-700'
+            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+        }`}
+      >
+        <span className="max-w-35 truncate">{value}</span>
+        <svg
+          className={`h-4 w-4 text-indigo-500 transition-transform ${open ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          className={`absolute right-0 top-full mt-2 w-60 rounded-2xl border p-2 shadow-xl z-50 animate-fadeIn ${
+            isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
+          }`}
+        >
+          <div className="max-h-56 overflow-y-auto custom-scrollbar">
+            {filtered.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => {
+                    onChange(c);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium outline-none transition cursor-pointer ${
+                    c === value
+                      ? 'bg-indigo-600/10 text-indigo-500'
+                      : isDarkMode
+                      ? 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  {c}
+                  {c === value && (
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DatePicker({
+  value,
+  onChange,
+  isDarkMode,
+}: {
+  value: string;
+  onChange: (date: string) => void;
+  isDarkMode: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const today = new Date();
+  const initial = value ? new Date(`${value}T00:00:00`) : today;
+  const [viewYear, setViewYear] = useState(initial.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initial.getMonth());
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  const formatted = value
+    ? new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '';
+
+  const firstWeekday = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanks = Array.from({ length: firstWeekday }, (_, i) => i);
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  const dayLabels = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+  const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const selectedISO = value || '';
+  const isSelected = (day: number) => selectedISO === `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const isToday = (day: number) => todayISO === `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  const select = (day: number) => {
+    onChange(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+    setOpen(false);
+  };
+
+  const prevMonth = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+
+  const nextMonth = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
+  const goToday = () => {
+    setViewYear(today.getFullYear());
+    setViewMonth(today.getMonth());
+    onChange(todayISO);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`flex w-full items-center justify-between gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium outline-none transition cursor-pointer focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
+          value
+            ? isDarkMode
+              ? 'border-slate-700 bg-slate-800 text-white hover:bg-slate-700'
+              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+            : isDarkMode
+            ? 'border-slate-700 bg-slate-800/60 text-slate-500 hover:bg-slate-800'
+            : 'border-slate-300 bg-white text-slate-400 hover:bg-slate-50'
+        }`}
+      >
+        <span className={value ? '' : 'italic'}>{formatted || 'Select date'}</span>
+        <svg
+          className={`h-4 w-4 shrink-0 text-indigo-500 transition-transform ${open ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          className={`absolute right-0 top-full mt-2 z-50 w-72 rounded-2xl border p-3 shadow-xl animate-fadeIn ${
+            isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <button
+              type="button"
+              onClick={prevMonth}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition cursor-pointer ${
+                isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+              {monthNames[viewMonth]} {viewYear}
+            </span>
+            <button
+              type="button"
+              onClick={nextMonth}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition cursor-pointer ${
+                isDarkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center mb-1">
+            {dayLabels.map((d) => (
+              <span key={d} className={`text-[10px] font-bold uppercase ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                {d}
+              </span>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {blanks.map((b) => (
+              <span key={`blank-${b}`} />
+            ))}
+            {days.map((day) => (
+              <button
+                key={day}
+                type="button"
+                onClick={() => select(day)}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm transition cursor-pointer ${
+                  isSelected(day)
+                    ? 'bg-indigo-600 font-semibold text-white shadow-sm'
+                    : isToday(day)
+                    ? isDarkMode
+                      ? 'text-indigo-400 ring-1 ring-indigo-500/50 hover:bg-slate-800'
+                      : 'text-indigo-600 ring-1 ring-indigo-500/40 hover:bg-slate-100'
+                    : isDarkMode
+                    ? 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={goToday}
+            className={`mt-2 w-full rounded-lg px-3 py-1.5 text-xs font-semibold text-indigo-500 transition cursor-pointer ${
+              isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-indigo-50'
+            }`}
+          >
+            Today
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgeSlider({
+  value,
+  onChange,
+  isDarkMode,
+}: {
+  value: string;
+  onChange: (age: string) => void;
+  isDarkMode: boolean;
+}) {
+  const num = Number(value) || 0;
+  const clamp = (n: number) => Math.min(99, Math.max(0, Math.round(n)));
+
+  const handleInput = (v: string) => {
+    const n = clamp(Number(v));
+    onChange(n === 0 ? '' : String(n));
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      <input
+        type="range"
+        min={0}
+        max={99}
+        value={num}
+        onChange={(e) => handleInput(e.target.value)}
+        className="flex-1 h-2 accent-indigo-600 cursor-pointer"
+      />
+      <div
+        className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl border font-bold leading-none shadow-sm transition ${
+          isDarkMode
+            ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-400'
+            : 'border-indigo-200 bg-indigo-50 text-indigo-600'
+        }`}
+      >
+        <span className="text-sm">{num || 0}</span>
+        <span className={`text-[8px] font-semibold uppercase tracking-wider mt-0.5 ${isDarkMode ? 'text-indigo-400/70' : 'text-indigo-500/70'}`}>
+          yrs
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SuspensionDurationInput({
+  value,
+  unit,
+  onValueChange,
+  onUnitChange,
+  isDarkMode,
+}: {
+  value: string;
+  unit: 'days' | 'weeks' | 'months';
+  onValueChange: (v: string) => void;
+  onUnitChange: (u: 'days' | 'weeks' | 'months') => void;
+  isDarkMode: boolean;
+}) {
+  const num = Number(value) || 0;
+  const clamp = (n: number) => Math.min(60, Math.max(0, Math.round(n)));
+
+  const handleInput = (v: string) => {
+    const n = clamp(Number(v));
+    onValueChange(n === 0 ? '' : String(n));
+  };
+
+  return (
+    <div className="space-y-2.5">
+      <div className={`flex items-center gap-1 rounded-xl border p-1 ${isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-rose-200 bg-white'}`}>
+        {(['days', 'weeks', 'months'] as const).map((u) => (
+          <button
+            key={u}
+            type="button"
+            onClick={() => onUnitChange(u)}
+            className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold capitalize transition-all ${
+              unit === u
+                ? 'bg-rose-500 text-white shadow-sm'
+                : isDarkMode
+                ? 'text-slate-400 hover:text-white'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {u}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <input
+          type="range"
+          min={0}
+          max={60}
+          value={num}
+          onChange={(e) => handleInput(e.target.value)}
+          className="flex-1 h-2 accent-rose-500 cursor-pointer"
+        />
+        <div
+          className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl border font-bold leading-none shadow-sm transition ${
+            isDarkMode
+              ? 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+              : 'border-rose-200 bg-rose-50 text-rose-600'
+          }`}
+        >
+          <span className="text-sm">{num || 0}</span>
+          <span className={`text-[8px] font-semibold uppercase tracking-wider mt-0.5 ${isDarkMode ? 'text-rose-400/70' : 'text-rose-500/70'}`}>
+            {unit}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function formatRemaining(ms: number) {
   if (ms <= 0) return 'Expired';
   const totalSeconds = Math.floor(ms / 1000);
@@ -92,7 +491,11 @@ export default function EditMemberModal({ member, isDarkMode, onClose, onSave }:
   const [contact2, setContact2] = useState(member?.contact2 ?? '');
   const [profilePic, setProfilePic] = useState(member?.profilePic ?? '');
   const [age, setAge] = useState(member?.age ? String(member.age) : '');
-  const [dateJoined, setDateJoined] = useState(member?.dateJoined ?? '');
+  const [dateJoined, setDateJoined] = useState(
+  () =>
+    member?.dateJoined ??
+    new Date().toISOString().slice(0, 10)
+);
   const [village, setVillage] = useState(member?.village ?? '');
   const [district, setDistrict] = useState(member?.district ?? '');
   const [guardianName, setGuardianName] = useState(member?.guardianName ?? '');
@@ -128,6 +531,10 @@ export default function EditMemberModal({ member, isDarkMode, onClose, onSave }:
     } else {
       setSuspendedAt(null);
     }
+  };
+
+  const handleDownload = () => {
+    window.print();
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -167,6 +574,7 @@ export default function EditMemberModal({ member, isDarkMode, onClose, onSave }:
   const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5';
 
   return (
+    <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-2 sm:p-4 md:p-6 animate-fadeIn">
         <div className={`w-full max-w-6xl h-full max-h-[92vh] rounded-3xl border flex flex-col shadow-2xl transition-all duration-300 overflow-hidden ${
           isDarkMode
@@ -191,32 +599,29 @@ export default function EditMemberModal({ member, isDarkMode, onClose, onSave }:
             </div>
 
             <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={handleDownload}
+                title="Download form as A4 PDF"
+                className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium outline-none transition cursor-pointer hover:scale-[1.02] active:scale-95 ${
+                  isDarkMode
+                    ? 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <Download className="h-4 w-4" />
+                <span className="sr-only">Download form</span>
+              </button>
               <div className="hidden md:flex items-center gap-2">
                 <label className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                   Category
                 </label>
-                <div className="relative">
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as MemberCategory)}
-                    className={`appearance-none rounded-xl border px-3 py-2 pr-9 text-sm font-medium outline-none transition cursor-pointer focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ${
-                      isDarkMode
-                        ? 'border-slate-700 bg-slate-800 text-white hover:bg-slate-700'
-                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-indigo-500">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
+                <CategorySearchDropdown
+                  value={category}
+                  options={CATEGORIES}
+                  onChange={(c) => setCategory(c)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
 
               <button
@@ -334,31 +739,12 @@ export default function EditMemberModal({ member, isDarkMode, onClose, onSave }:
                             <label className="block text-xs font-semibold uppercase tracking-wider text-rose-400 mb-1.5">
                               Suspension Duration
                             </label>
-                            <div className={`grid grid-cols-3 gap-1 rounded-xl border p-1 mb-2.5 ${isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-rose-200 bg-white'}`}>
-                              {(['days', 'weeks', 'months'] as const).map((u) => (
-                                <button
-                                  key={u}
-                                  type="button"
-                                  onClick={() => setDurationUnit(u)}
-                                  className={`rounded-lg px-2 py-1.5 text-xs font-semibold capitalize transition-all ${
-                                    durationUnit === u
-                                      ? 'bg-rose-500 text-white shadow-sm'
-                                      : isDarkMode
-                                      ? 'text-slate-400 hover:text-white'
-                                      : 'text-slate-500 hover:text-slate-800'
-                                  }`}
-                                >
-                                  {u}
-                                </button>
-                              ))}
-                            </div>
-                            <input
-                              type="number"
-                              min={0}
+                            <SuspensionDurationInput
                               value={durationValue}
-                              onChange={(e) => setDurationValue(e.target.value)}
-                              placeholder={`Enter number of ${durationUnit}`}
-                              className={`${inputClass} ${isDarkMode ? 'border-rose-500/40 bg-rose-950/20' : 'border-rose-300 bg-rose-50/30'}`}
+                              unit={durationUnit}
+                              onValueChange={setDurationValue}
+                              onUnitChange={(u) => setDurationUnit(u)}
+                              isDarkMode={isDarkMode}
                             />
                           </div>
                           <div className={`flex-1 rounded-xl border px-4 py-3 ${isDarkMode ? 'border-rose-500/40 bg-rose-950/40' : 'border-rose-200 bg-rose-50'}`}>
@@ -410,23 +796,11 @@ export default function EditMemberModal({ member, isDarkMode, onClose, onSave }:
                       </div>
                       <div>
                         <label className={labelClass}>Age</label>
-                        <input
-                          type="number"
-                          min={0}
-                          value={age}
-                          onChange={(e) => setAge(e.target.value)}
-                          placeholder="e.g. 25"
-                          className={inputClass}
-                        />
+                        <AgeSlider value={age} onChange={setAge} isDarkMode={isDarkMode} />
                       </div>
                       <div>
                         <label className={labelClass}>Date Joined Noll Studio</label>
-                        <input
-                          type="date"
-                          value={dateJoined}
-                          onChange={(e) => setDateJoined(e.target.value)}
-                          className={inputClass}
-                        />
+                        <DatePicker value={dateJoined} onChange={setDateJoined} isDarkMode={isDarkMode} />
                       </div>
                     </div>
                   </div>
@@ -546,6 +920,31 @@ export default function EditMemberModal({ member, isDarkMode, onClose, onSave }:
 
         </div>
       </div>
+
+      {createPortal(
+        <PrintableMemberForm
+          filled={isEditing}
+          values={{
+            name,
+            email,
+            profilePic,
+            age,
+            dateJoined,
+            contact,
+            contact2,
+            village,
+            district,
+            subCounty,
+            guardianName,
+            guardianContact,
+            category,
+            status,
+            suspension: status === 'Suspended' && durationValue ? { value: durationValue, unit: durationUnit } : undefined,
+          }}
+        />,
+        document.body
+      )}
+    </>
     );
 
 }
