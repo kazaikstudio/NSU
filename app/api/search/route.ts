@@ -53,6 +53,30 @@ function escapeLike(value: string) {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
+// The YouTube channel feed lives outside our own infrastructure and can hang
+// for a very long time (youtubei.js session setup, slow Google API responses,
+// etc.). Global search must never wait on it — cap it and cache the outcome so
+// a slow/blocked feed turns into fast, empty video results instead of a 90s
+// spinner.
+const CHANNEL_SEARCH_TIMEOUT_MS = Number(process.env.SEARCH_CHANNEL_TIMEOUT_MS || 6000);
+const CHANNEL_SEARCH_CACHE_TTL_MS = 60_000;
+
+function withTimeoutFallback<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise<T | null>((resolve) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(null);
+      },
+    );
+  });
+}
+
 async function searchAudioTracks(term: string, limit: number): Promise<SearchTrack[]> {
   await ensureDatabaseReady();
   const pattern = `%${escapeLike(term)}%`;
@@ -143,6 +167,10 @@ async function searchStorageVideos(term: string, limit: number): Promise<SearchV
   await ensureDatabaseReady();
   const pattern = `%${escapeLike(term)}%`;
 
+  // Uploaded videos live in the bucket under the "videos/" folder, but the
+  // storage_items.type column has historically been tagged 'music' for those
+  // rows. Classify by content (bucket folder / URL) so the site's own video
+  // library — talk-shows, official uploads — actually shows up in search.
   const { rows } = await pool.query(
     `SELECT
         id,
@@ -152,7 +180,12 @@ async function searchStorageVideos(term: string, limit: number): Promise<SearchV
         source,
         created_at AS "createdAt"
       FROM storage_items
-      WHERE LOWER(type) = 'video' AND title ILIKE $1
+      WHERE title ILIKE $1
+        AND (
+          LOWER(type) = 'video'
+          OR LOWER(file_url) LIKE '%videos%2f%'
+          OR drive_file_id LIKE 'videos/%'
+        )
       ORDER BY created_at DESC
       LIMIT $2`,
     [pattern, limit],
@@ -200,25 +233,52 @@ async function searchArtists(term: string, limit: number): Promise<SearchArtist[
   }));
 }
 
+let channelFeedCache: { videos: SearchVideo[]; fetchedAt: number } | undefined;
+let channelFeedInFlight: Promise<SearchVideo[]> | undefined;
+
+// The channel feed is identical for every query term, so fetch it once and
+// filter per term. Cache both the success and the empty/timeout outcome so a
+// sluggish YouTube API can't stall a typing session more than once per window.
+async function getChannelFeedVideos(): Promise<SearchVideo[]> {
+  const now = Date.now();
+  if (channelFeedCache && now - channelFeedCache.fetchedAt < CHANNEL_SEARCH_CACHE_TTL_MS) {
+    return channelFeedCache.videos;
+  }
+
+  if (!channelFeedInFlight) {
+    channelFeedInFlight = (async () => {
+      const feed = await withTimeoutFallback(fetchChannelVideos(), CHANNEL_SEARCH_TIMEOUT_MS);
+      const videos: SearchVideo[] = feed
+        ? [...feed.videos, ...feed.shorts].map((video) => ({
+            id: video.id,
+            title: video.title,
+            thumbnail: video.thumbnail,
+            date: video.date,
+            url: video.url,
+            type: video.type === 'short' ? ('short' as const) : ('official' as const),
+            views: video.views && video.views > 0 ? video.views : undefined,
+            source: 'youtube' as const,
+          }))
+        : [];
+      channelFeedCache = { videos, fetchedAt: Date.now() };
+      return videos;
+    })();
+  }
+
+  try {
+    return await channelFeedInFlight;
+  } finally {
+    channelFeedInFlight = undefined;
+  }
+}
+
 async function searchChannelVideos(term: string, limit: number): Promise<SearchVideo[]> {
   try {
-    const feed = await fetchChannelVideos();
+    const videos = await getChannelFeedVideos();
     const pattern = term.toLowerCase();
-
-    const matches = [...feed.videos, ...feed.shorts].filter((video) =>
-      video.title?.toLowerCase().includes(pattern),
-    );
-
-    return matches.slice(0, limit).map((video) => ({
-      id: video.id,
-      title: video.title,
-      thumbnail: video.thumbnail,
-      date: video.date,
-      url: video.url,
-      type: video.type === 'short' ? ('short' as const) : ('official' as const),
-      views: video.views && video.views > 0 ? video.views : undefined,
-      source: 'youtube' as const,
-    }));
+    return videos
+      .filter((video) => video.title?.toLowerCase().includes(pattern))
+      .slice(0, limit);
   } catch (error) {
     console.warn('Channel video lookup failed:', error);
     return [];
@@ -238,30 +298,36 @@ export async function GET(request: Request) {
   let tracks: SearchTrack[] = [];
   let artists: SearchArtist[] = [];
   let storageItems: SearchTrack[] = [];
+  let storageVideos: SearchVideo[] = [];
   let dbAvailable = true;
 
+  // All database work shares a single connection/recovery attempt: if Postgres
+  // is slow to wake (Railway cold start) the request pays at most one reconnect
+  // window instead of one per query, and the channel-video fetch below stays
+  // independently capped so it can never hold the response hostage.
+  const videoLimit = Math.max(limit, 8);
+  const taskLimit = Math.max(limit, 12);
   try {
-    const taskLimit = Math.max(limit, 12);
-    const [trackRows, artistRows, storageRows] = await Promise.all([
+    const [trackRows, artistRows, storageRows, storageVideoRows] = await Promise.all([
       searchAudioTracks(query, taskLimit),
       searchArtists(query, taskLimit),
       searchStorageMusic(query, 5),
+      searchStorageVideos(query, videoLimit),
     ]);
     tracks = trackRows;
     artists = artistRows;
     storageItems = storageRows;
+    storageVideos = storageVideoRows;
   } catch (error) {
     console.warn('Database search failed:', error);
     dbAvailable = false;
   }
 
-  // Videos come only from the site's own library: uploaded video items plus
-  // the channel feed — never from arbitrary external YouTube searches.
-  const videoLimit = Math.max(limit, 8);
-  const [storageVideos, channelVideos] = await Promise.all([
-    searchStorageVideos(query, videoLimit).catch(() => []),
-    searchChannelVideos(query, videoLimit),
-  ]);
+  // Videos come only from the site's own library: uploaded video items plus the
+  // channel feed — never from arbitrary external YouTube searches. The channel
+  // fetch is time-capped and cached so a slow YouTube API degrades to "no
+  // channel results" instead of stalling the whole search.
+  const channelVideos = await searchChannelVideos(query, videoLimit);
   const videos = [...storageVideos, ...channelVideos].slice(0, videoLimit);
 
   const trackById = new Map<string, SearchTrack>();

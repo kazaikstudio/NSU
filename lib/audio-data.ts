@@ -44,18 +44,24 @@ export async function fetchAudioData(): Promise<AudioPageResponse> {
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
-    const response = await fetch('/api/audio');
-    if (!response.ok) {
-      throw new Error(response.statusText || 'Failed to load audio data');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch('/api/audio', { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(response.statusText || 'Failed to load audio data');
+      }
+      const data = (await response.json()) as AudioPageResponse;
+      // Never overwrite good cached data with a fallback/demo payload — a
+      // transient database outage should keep the last-known-good list around
+      // instead of replacing it with demo tracks.
+      if (!data.fallback) {
+        writeCachedData(CACHE_KEY, data);
+      }
+      return data;
+    } finally {
+      clearTimeout(timer);
     }
-    const data = (await response.json()) as AudioPageResponse;
-    // Never overwrite good cached data with a fallback/demo payload — a
-    // transient database outage should keep the last-known-good list around
-    // instead of replacing it with demo tracks.
-    if (!data.fallback) {
-      writeCachedData(CACHE_KEY, data);
-    }
-    return data;
   })().finally(() => {
     inFlight = null;
   });

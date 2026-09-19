@@ -29,51 +29,27 @@ async function ensureMediaTable() {
 
   mediaTableReady = (async () => {
     await ensureDatabaseReady();
+    // Batched into a handful of round trips: the Postgres host can be slow, and
+    // every individual statement previously cost a full network + catalog scan,
+    // which made the very first /api/audio request take minutes (and the client
+    // would give up with a network error in the meantime).
     await pool.query(`
-    CREATE TABLE IF NOT EXISTS artist_media (
-      id TEXT PRIMARY KEY,
-      artist_id TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      title TEXT NOT NULL,
-      album TEXT,
-      file_name TEXT NOT NULL,
-      mime_type TEXT NOT NULL,
-      file_url TEXT NOT NULL,
-      drive_file_id TEXT,
-      download_count INTEGER NOT NULL DEFAULT 0,
-      thumbnail_url TEXT,
-      thumbnail_drive_file_id TEXT,
-      featured_artist_name TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-  await pool.query(`
-    ALTER TABLE artist_media
-    ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0;
-  `);
-  await pool.query(`
-    ALTER TABLE artist_media
-    ADD COLUMN IF NOT EXISTS play_count INTEGER NOT NULL DEFAULT 0;
-  `);
-  await pool.query(`
-    ALTER TABLE artist_media
-    ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
-    ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
-    ADD COLUMN IF NOT EXISTS featured_artist_name TEXT;
-  `);
-  await pool.query(`
-    ALTER TABLE artist_media
-    ADD COLUMN IF NOT EXISTS featured_artist_id TEXT;
-  `);
-  await pool.query(`
-    ALTER TABLE artist_media
-    ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
-  `);
-  await pool.query(`
-    ALTER TABLE artist_media
-    ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;
-  `);
-  await pool.query(`
+      CREATE TABLE IF NOT EXISTS artist_media (
+        id TEXT PRIMARY KEY,
+        artist_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        album TEXT,
+        file_name TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        drive_file_id TEXT,
+        download_count INTEGER NOT NULL DEFAULT 0,
+        thumbnail_url TEXT,
+        thumbnail_drive_file_id TEXT,
+        featured_artist_name TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
       CREATE TABLE IF NOT EXISTS storage_items (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
@@ -84,9 +60,20 @@ async function ensureMediaTable() {
         thumbnail_drive_file_id TEXT,
         source TEXT NOT NULL DEFAULT 'talk-show',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
+      );
     `);
-    await pool.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
+  await pool.query(`
+    ALTER TABLE artist_media
+    ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS play_count INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS thumbnail_url TEXT,
+    ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT,
+    ADD COLUMN IF NOT EXISTS featured_artist_name TEXT,
+    ADD COLUMN IF NOT EXISTS featured_artist_id TEXT,
+    ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;
+  `);
+  await pool.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
   })().catch((error) => {
     // Allow a retry on the next request if this attempt failed (e.g. the
     // database was briefly unreachable), so a transient failure doesn't
@@ -99,8 +86,12 @@ async function ensureMediaTable() {
 }
 
 export async function GET() {
+  const __t0 = Date.now();
+  const __stamp = (label: string) => console.log(`[route-timing] ${label}: ${Date.now() - __t0}ms`);
   try {
+    __stamp('start');
     await ensureMediaTable();
+    __stamp('after ensureMediaTable');
     const { rows } = await pool.query(`
       SELECT
         media.id,
@@ -126,12 +117,14 @@ export async function GET() {
       WHERE media.kind = 'track'
       ORDER BY media.sort_order ASC, media.created_at DESC
     `);
+    __stamp('after SELECT tracks');
     const { rows: storageRows } = await pool.query(`
       SELECT title, file_url AS "fileUrl", thumbnail_url AS "thumbnailUrl"
       FROM storage_items
       WHERE LOWER(type) = 'music'
       ORDER BY created_at DESC
     `);
+    __stamp('after SELECT storage');
 
     if (!rows?.length) {
       const storageCards = storageRows.slice(0, 5).map((item) => ({

@@ -61,7 +61,7 @@ export function buildDatabasePoolConfig({
   connectionString?: string;
   isProduction?: boolean;
 }) {
-  const timeoutMs = Number(process.env.DATABASE_TIMEOUT_MS || 10000);
+  const timeoutMs = Number(process.env.DATABASE_TIMEOUT_MS || 2000);
 
   return {
     connectionString,
@@ -70,9 +70,14 @@ export function buildDatabasePoolConfig({
       : isProduction
         ? { rejectUnauthorized: false }
         : false,
-    connectionTimeoutMillis: timeoutMs,
-    idleTimeoutMillis: timeoutMs,
-    max: 2,
+    keepAlive: true,
+    // Railway's database can take a while to wake from a cold start, and
+    // between page loads a too-short idle timeout makes the pool throw away
+    // a perfectly good connection, forcing a slow reconnect on every visit.
+    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS || timeoutMs * 3),
+    idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS || 60000),
+    query_timeout: Number(process.env.QUERY_TIMEOUT_MS || 60000),
+    max: Number(process.env.PGPOOL_MAX || 4),
   };
 }
 
@@ -103,14 +108,38 @@ const createNoopPool = (): DatabasePool => ({
 
 const noopPool = createNoopPool();
 
-const connectWithTimeout = async (connectFn: () => Promise<PoolClient>) => {
-  const timeoutMs = Number(process.env.DATABASE_TIMEOUT_MS || 10000);
-  return Promise.race([
-    connectFn(),
-    new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Database connection timed out')), timeoutMs);
-    }),
-  ]);
+const connectWithTimeout = (connectFn: () => Promise<PoolClient>) => {
+  const timeoutMs = Number(process.env.DATABASE_CONNECT_TIMEOUT_MS || process.env.DATABASE_TIMEOUT_MS || 6000);
+  return new Promise<PoolClient>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('Database connection timed out'));
+    }, timeoutMs);
+
+    connectFn().then(
+      (client) => {
+        if (settled) {
+          // The caller already gave up waiting for this connection. Hand the
+          // client back to the pool instead of abandoning it, otherwise the
+          // slot is leaked forever and (with a tiny pool) every later request
+          // wedges waiting for a free connection.
+          client.release();
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(client);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 };
 
 let recoveryPromise: Promise<boolean> | null = null;
@@ -162,19 +191,46 @@ if (pool) {
     return originalQuery(...args);
   }) as QueryMethod;
 
-  pool.connect = (async (): Promise<PoolClient> => {
-    const available = await ensureAvailable();
-    if (!available) {
-      throw new Error('Database is not configured or not reachable');
+  // pg-pool's Pool.prototype.query internally calls `this.connect(cb)` — and
+  // other callers use both callback and promise forms of connect. The previous
+  // wrapper here was an async `() => client` that swallowed the callback, so
+  // after it the pool's query path silently hung: pg checked out an idle
+  // client and then waited forever for the callback that never fired. Mirror
+  // pg's real connect contract: callback form `(err, client, release)` and
+  // promise form `Promise<PoolClient>`.
+  pool.connect = ((...args: unknown[]) => {
+    const callback =
+      typeof args[0] === 'function'
+        ? (args[0] as (err: Error | undefined, client?: PoolClient, release?: (err?: Error) => void) => void)
+        : undefined;
+
+    const attempt = async () => {
+      const available = await ensureAvailable();
+      if (!available) {
+        throw new Error('Database is not configured or not reachable');
+      }
+      return connectWithTimeout(() => originalConnect());
+    };
+
+    if (callback) {
+      attempt().then(
+        (client) => callback(undefined, client, client.release),
+        (err: unknown) => callback(err instanceof Error ? err : new Error(String(err))),
+      );
+      return undefined;
     }
-    return originalConnect();
+
+    return attempt();
   }) as ConnectMethod;
 }
 
-// Idempotent DDL that mirrors db/schema.sql. Runs per-statement so a single
-// failure (e.g. a table created by another route first) can never take the
-// whole pool offline — only a failing connection disables it.
-const schemaStatements: string[] = [
+// Idempotent DDL that mirrors db/schema.sql. Statements are grouped into a
+// handful of batches: each batch runs as one round trip with the client kept
+// free between awaits. Never run these concurrently on a single pg client —
+// queued `client.query()` calls (Promise.all) leave the connection permanently
+// "busy", after which every later pool.query on it queues forever and the whole
+// app hangs on database-backed routes.
+const schemaBatches: string[] = [
   `
     CREATE TABLE IF NOT EXISTS artists (
       id TEXT PRIMARY KEY,
@@ -195,8 +251,6 @@ const schemaStatements: string[] = [
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-  `,
-  `
     CREATE TABLE IF NOT EXISTS members (
       id SERIAL PRIMARY KEY,
       name VARCHAR(255) NOT NULL,
@@ -217,8 +271,6 @@ const schemaStatements: string[] = [
       status VARCHAR(50) DEFAULT 'Active',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
-  `,
-  `
     CREATE TABLE IF NOT EXISTS artist_media (
       id TEXT PRIMARY KEY,
       artist_id TEXT NOT NULL,
@@ -237,16 +289,12 @@ const schemaStatements: string[] = [
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-  `,
-  `
     CREATE TABLE IF NOT EXISTS artist_follows (
       artist_id TEXT NOT NULL,
       subscriber_id TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (artist_id, subscriber_id)
     );
-  `,
-  `
     CREATE TABLE IF NOT EXISTS storage_items (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -335,9 +383,13 @@ const initDatabase = async () => {
 
   try {
     databaseAvailable = true;
-    await Promise.all(schemaStatements.map((statement) => client!.query(statement).catch((error) => {
-      console.warn('Database schema statement skipped:', error);
-    })));
+    // Sequential, one batch at a time on the single connection: pg queues
+    // concurrent client.query() calls and can leave the client stuck forever.
+    for (const batch of schemaBatches) {
+      await client!.query(batch).catch((error) => {
+        console.warn('Database schema batch skipped:', error);
+      });
+    }
     console.log('Database tables verified/created successfully.');
   } catch (err) {
     console.warn('Database schema verification finished with non-critical errors.', err);

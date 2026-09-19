@@ -209,6 +209,12 @@ function SearchClient() {
       const controller = new AbortController()
       abortRef.current = controller
 
+      let timedOut = false
+      const timeoutId = window.setTimeout(() => {
+        timedOut = true
+        controller.abort()
+      }, 12000)
+
       void (async () => {
         try {
           const response = await fetch(`/api/search?q=${encodeURIComponent(normalized)}`, {
@@ -226,10 +232,15 @@ function SearchClient() {
           setResultsQuery(normalized)
           setError(null)
         } catch (err) {
-          if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) return
+          if (controller.signal.aborted) {
+            if (timedOut) setError('Search took too long. Please try again.')
+            return
+          }
+          if (err instanceof Error && err.name === 'AbortError') return
           setError(err instanceof Error ? err.message : 'Unable to search')
         } finally {
-          if (!controller.signal.aborted) setSearching(false)
+          window.clearTimeout(timeoutId)
+          if (!controller.signal.aborted || timedOut) setSearching(false)
         }
       })()
     }, normalized ? 250 : 0)
