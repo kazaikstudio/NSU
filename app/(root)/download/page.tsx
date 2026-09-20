@@ -45,6 +45,49 @@ function getDirectUrl(value: string) {
   }
 }
 
+const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'm4b', 'aac', 'ogg', 'oga', 'opus', 'wav', 'flac', 'weba', 'wma'])
+const VIDEO_EXTENSIONS = new Set(['mp4', 'm4v', 'webm', 'mkv', 'mov', 'avi', 'ogv', '3gp', 'mpeg', 'mpg', 'ts'])
+
+function getUrlExtension(value: string) {
+  try {
+    const pathname = new URL(value).pathname
+    const match = pathname.split('.').pop()
+    return match && match.split('/').pop() ? match.split('/').pop()!.toLowerCase() : ''
+  } catch {
+    return ''
+  }
+}
+
+function MediaPreview({ url }: { url: string }) {
+  const [previewError, setPreviewError] = useState('')
+  const extension = getUrlExtension(url)
+  const isAudio = AUDIO_EXTENSIONS.has(extension)
+  const isVideo = VIDEO_EXTENSIONS.has(extension)
+  const canPlay = isAudio || isVideo
+
+  if (!canPlay) return null
+
+  return (
+    <div className="overflow-hidden rounded-2xl bg-black shadow-xl shadow-black/30">
+      {isAudio ? (
+        <div className="flex items-center gap-3 px-4 py-6">
+          <audio src={url} controls preload="metadata" className="w-full" onError={() => setPreviewError('This audio link cannot be played in the browser.')} />
+        </div>
+      ) : (
+        <video
+          src={url}
+          controls
+          preload="metadata"
+          playsInline
+          className="max-h-72 w-full"
+          onError={() => setPreviewError('This video link cannot be played in the browser.')}
+        />
+      )}
+      {previewError && <p className="px-4 py-2 text-xs text-amber-400">{previewError}</p>}
+    </div>
+  )
+}
+
 type DownloadFormat = {
   itag: number
   label: string
@@ -367,6 +410,11 @@ function DownloadForm() {
               />
             </div>
           </div>
+        )}
+
+        {/* Direct media preview */}
+        {!videoId && getDirectUrl(source) && (
+          <MediaPreview url={getDirectUrl(source)} />
         )}
 
         {/* Direct URL download */}
