@@ -60,10 +60,20 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
+    const detail = error instanceof Error && 'detail' in error ? String((error as { detail?: unknown }).detail || '') : '';
+    const workerCode = error instanceof Error && 'workerCode' in error ? (error as { workerCode?: unknown }).workerCode : undefined;
+    console.error(`YouTube formats route error for ${id}: ${error instanceof Error ? error.message : String(error)}`, {
+      videoId: id,
+      workerDetail: detail || undefined,
+      workerCode,
+    });
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Unable to fetch YouTube formats.',
         code: 'YOUTUBE_INFO_FAILED',
+        detail: detail || undefined,
+        workerCode: typeof workerCode === 'number' ? workerCode : undefined,
+        videoId: id,
         diagnostics: {
           runtime: getRuntimeDiagnostics(),
           ffmpeg: getFfmpegDiagnostics(getFfmpegPath()),
