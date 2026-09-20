@@ -47,6 +47,8 @@ function getDirectUrl(value: string) {
 
 const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'm4b', 'aac', 'ogg', 'oga', 'opus', 'wav', 'flac', 'weba', 'wma'])
 const VIDEO_EXTENSIONS = new Set(['mp4', 'm4v', 'webm', 'mkv', 'mov', 'avi', 'ogv', '3gp', 'mpeg', 'mpg', 'ts'])
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'ico', 'apng', 'heic', 'heif', 'tiff', 'tif', 'jfif'])
+const DOCUMENT_EXTENSIONS = new Set(['pdf'])
 
 function getUrlExtension(value: string) {
   try {
@@ -58,22 +60,29 @@ function getUrlExtension(value: string) {
   }
 }
 
+function getContentType(value: string) {
+  const extension = getUrlExtension(value)
+  if (AUDIO_EXTENSIONS.has(extension)) return 'audio'
+  if (VIDEO_EXTENSIONS.has(extension)) return 'video'
+  if (IMAGE_EXTENSIONS.has(extension)) return 'image'
+  if (DOCUMENT_EXTENSIONS.has(extension)) return 'document'
+  return null
+}
+
 function MediaPreview({ url }: { url: string }) {
   const [previewError, setPreviewError] = useState('')
-  const extension = getUrlExtension(url)
-  const isAudio = AUDIO_EXTENSIONS.has(extension)
-  const isVideo = VIDEO_EXTENSIONS.has(extension)
-  const canPlay = isAudio || isVideo
-
-  if (!canPlay) return null
+  const contentType = getContentType(url)
+  if (!contentType) return null
 
   return (
     <div className="overflow-hidden rounded-2xl bg-black shadow-xl shadow-black/30">
-      {isAudio ? (
+      {contentType === 'audio' && (
         <div className="flex items-center gap-3 px-4 py-6">
           <audio src={url} controls preload="metadata" className="w-full" onError={() => setPreviewError('This audio link cannot be played in the browser.')} />
         </div>
-      ) : (
+      )}
+
+      {contentType === 'video' && (
         <video
           src={url}
           controls
@@ -83,6 +92,22 @@ function MediaPreview({ url }: { url: string }) {
           onError={() => setPreviewError('This video link cannot be played in the browser.')}
         />
       )}
+
+      {contentType === 'image' && (
+        <div className="flex items-center justify-center">
+          <img src={url} alt="" loading="lazy" className="max-h-72 w-auto max-w-full" onError={() => setPreviewError('This image link could not be previewed.')} />
+        </div>
+      )}
+
+      {contentType === 'document' && (
+        <iframe
+          src={url}
+          title="Document preview"
+          className="h-72 w-full"
+          onError={() => setPreviewError('This document link cannot be previewed.')}
+        />
+      )}
+
       {previewError && <p className="px-4 py-2 text-xs text-amber-400">{previewError}</p>}
     </div>
   )
