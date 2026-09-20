@@ -173,7 +173,7 @@ export async function PATCH(request: Request, context: Context) {
     try {
       await client.query('BEGIN');
       for (let index = 0; index < trackIds.length; index += 1) {
-        await client.query(`UPDATE artist_media SET sort_order = $1 WHERE id = $2 AND artist_id = $3`, [index + 1, trackIds[index], artistId]);
+        await client.query(`UPDATE artist_media SET sort_order = $1 WHERE id = $2 AND (artist_id = $3 OR featured_artist_id = $3)`, [index + 1, trackIds[index], artistId]);
       }
       await client.query('COMMIT');
     } catch (error) {
