@@ -161,7 +161,7 @@ export async function PATCH(request: Request, context: Context) {
     await ensureMediaTable();
 
     const { rows } = await pool.query<{ id: string }>(
-      `SELECT id FROM artist_media WHERE artist_id = $1 AND kind = 'track'`,
+      `SELECT id FROM artist_media WHERE (artist_id = $1 OR featured_artist_id = $1) AND kind = 'track'`,
       [artistId]
     );
     const ownedIds = new Set(rows.map((row) => row.id));

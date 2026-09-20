@@ -1336,9 +1336,6 @@ export default function ArtistDetailPage() {
                                   alt={track.title}
                                   className="h-full w-full object-cover"
                                 />
-                                {track.isShared && (
-                                  <ShareDot className="right-0 top-0 border-slate-900" title="Shared with another artist account" />
-                                )}
                                 {/* Thumbnail Edit Overlay */}
                                 {isOwnedTrack && (
                                 <label className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/70 opacity-0 transition group-hover:opacity-100 cursor-pointer text-[10px] font-medium text-white text-center px-1">
@@ -1370,7 +1367,12 @@ export default function ArtistDetailPage() {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="font-medium text-white">{track.title}</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="font-medium text-white">{track.title}</span>
+                              {track.isShared && (
+                                <ShareDot size="xs" className="relative" title="Shared with another artist account" />
+                              )}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-slate-400">
                             {!isOwnedTrack && track.ownerArtistName ? track.ownerArtistName : artist.name}
