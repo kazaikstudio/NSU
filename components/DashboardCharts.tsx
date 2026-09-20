@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Music, Upload, Users } from 'lucide-react';
+import { useState } from 'react';
+import { Music, Trophy, Upload, Users } from 'lucide-react';
 
 interface ChartThemeProps {
   isDarkMode: boolean;
@@ -19,15 +19,14 @@ interface RegionChartProps extends ChartThemeProps {
 }
 
 
-function Graph1({ isDarkMode, artistsCount, totalUploads, membersCount }: ChartThemeProps & { artistsCount: number; totalUploads: number; membersCount: number }) {
-  const [timeframe, setTimeframe] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
-  const [isOpen, setIsOpen] = useState(false);
+function Graph1({ isDarkMode, artistsCount, totalUploads, membersCount, artists }: ChartThemeProps & { artistsCount: number; totalUploads: number; membersCount: number; artists: Array<{ name: string; totalDownloads?: number }> }) {
   const [showClicks, setShowClicks] = useState(true);
   const [showImpressions, setShowImpressions] = useState(true);
-  const [showCtr, setShowCtr] = useState(false);
-  const [showPosition, setShowPosition] = useState(false);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const topArtist = [...artists]
+    .map((artist) => ({ ...artist, totalDownloads: Number(artist.totalDownloads || 0) }))
+    .sort((first, second) => second.totalDownloads - first.totalDownloads)[0];
 
   const dataPoints = [
     { date: '7/20/26', dayName: 'Monday, Jul 20', clicks: 0, impressions: 0 },
@@ -67,16 +66,6 @@ function Graph1({ isDarkMode, artistsCount, totalUploads, membersCount }: ChartT
 
   const clicksAreaPath = `${clicksPath} L 100,100 L 0,100 Z`;
   const impressionsAreaPath = `${impressionsPath} L 100,100 L 0,100 Z`;
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   return (
     <div className={`p-6 sm:p-8 rounded-2xl border transition-all duration-300 shadow-xl backdrop-blur-xl ${
@@ -155,69 +144,34 @@ function Graph1({ isDarkMode, artistsCount, totalUploads, membersCount }: ChartT
             <div className="text-3xl font-bold tracking-tight">{membersCount}</div>
           </div>
 
-          {/* Average Position */}
+          {/* Top Artist */}
           <div
-            onClick={() => setShowPosition(!showPosition)}
-            className={`p-4 rounded-xl cursor-pointer relative transition-all duration-200 border ${
-              showPosition
-                ? isDarkMode
-                  ? 'bg-amber-950/30 border-amber-500/30 shadow-lg shadow-amber-950/50'
-                  : 'bg-white border-amber-200 shadow-md shadow-amber-500/5'
-                : isDarkMode
-                  ? 'bg-gray-900/20 border-transparent opacity-60 hover:opacity-100'
-                  : 'bg-transparent border-transparent opacity-60 hover:opacity-100'
+            className={`p-4 rounded-xl relative transition-all duration-200 border ${
+              isDarkMode
+                ? 'bg-amber-950/30 border-amber-500/30 shadow-lg shadow-amber-950/50'
+                : 'bg-white border-amber-200 shadow-md shadow-amber-500/5'
             }`}
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2.5">
-                <div className={`w-3 h-3 rounded-full transition-transform ${showPosition ? 'bg-amber-500 scale-110 shadow-sm shadow-amber-500' : 'bg-gray-400'}`} />
-                <span className={`text-xs font-semibold uppercase tracking-wider ${showPosition ? (isDarkMode ? 'text-amber-400' : 'text-amber-600') : 'text-gray-400'}`}>
-                  Position
+                <div className="w-3 h-3 rounded-full bg-amber-500 scale-110 shadow-sm shadow-amber-500" />
+                <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                  Top Artist
                 </span>
               </div>
-              <span className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors">ⓘ</span>
+              <span className="text-gray-400 transition-colors">
+                <Trophy className="h-4 w-4" />
+              </span>
             </div>
-            <div className="text-3xl font-bold tracking-tight">2.0</div>
+            <div className="text-xl font-bold tracking-tight truncate">{topArtist?.name || 'No artists yet'}</div>
+            {topArtist ? (
+              <div className={`mt-1 text-xs font-semibold ${isDarkMode ? 'text-amber-400/80' : 'text-amber-600/80'}`}>
+                {topArtist.totalDownloads.toLocaleString()} total downloads
+              </div>
+            ) : null}
           </div>
         </div>
 
-        {/* Interactive Dropdown */}
-        <div className="relative self-end xl:self-center shrink-0" ref={dropdownRef}>
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className={`text-xs font-semibold px-4 py-2.5 rounded-xl border flex items-center space-x-3 transition-all shadow-sm ${
-              isDarkMode
-                ? 'bg-gray-900 border-gray-800 text-gray-200 hover:bg-gray-800'
-                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <span>{timeframe}</span>
-            <span className={`text-[10px] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
-          </button>
-
-          {isOpen && (
-            <div className={`absolute right-0 mt-2 w-32 rounded-xl shadow-xl border z-30 overflow-hidden py-1 backdrop-blur-xl ${
-              isDarkMode ? 'bg-gray-900/95 border-gray-800 text-white' : 'bg-white/95 border-gray-100 text-gray-900'
-            }`}>
-              {(['Daily', 'Weekly', 'Monthly'] as const).map((item) => (
-                <button
-                  key={item}
-                  onClick={() => {
-                    setTimeframe(item);
-                    setIsOpen(false);
-                  }}
-                  className={`w-full text-left px-4 py-2 text-xs font-medium transition-colors ${
-                    timeframe === item
-                      ? isDarkMode ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-50 text-blue-600 font-semibold'
-                      : isDarkMode ? 'hover:bg-gray-800/60 text-gray-300' : 'hover:bg-gray-50 text-gray-600'
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Chart Area */}
@@ -343,7 +297,7 @@ function Graph1({ isDarkMode, artistsCount, totalUploads, membersCount }: ChartT
                           <div className="flex items-center justify-between">
                             <span className="flex items-center font-medium">
                               <span className="w-2.5 h-2.5 rounded-full bg-blue-500 mr-2 shadow-sm shadow-blue-500" />
-                              Clicks
+                              Total Artists
                             </span>
                             <span className="font-bold text-sm">{pt.clicks}</span>
                           </div>
@@ -352,7 +306,7 @@ function Graph1({ isDarkMode, artistsCount, totalUploads, membersCount }: ChartT
                           <div className="flex items-center justify-between">
                             <span className="flex items-center font-medium">
                               <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 mr-2 shadow-sm shadow-indigo-500" />
-                              Impressions
+                              Total Uploads
                             </span>
                             <span className="font-bold text-sm">{pt.impressions}</span>
                           </div>
@@ -473,7 +427,7 @@ export default function DashboardCharts({ isDarkMode, artists, downloadRegions, 
     <div className="grid grid-cols-1 gap-4">
       {/* Row 1: Full-width Graph1 */}
       <div className="w-full">
-        <Graph1 isDarkMode={isDarkMode} artistsCount={artists.length} totalUploads={totalUploads} membersCount={membersCount} />
+        <Graph1 isDarkMode={isDarkMode} artists={artists} artistsCount={artists.length} totalUploads={totalUploads} membersCount={membersCount} />
       </div>
 
       {/* Row 2: Graph2 and Graph3 side by side */}
