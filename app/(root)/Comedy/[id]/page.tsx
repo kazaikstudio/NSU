@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, use, useRef } from "react";
 import Link from "next/link";
 import ComedyDirectoryList, { type ComedyDirectoryItem } from '@/components/ComedyDirectoryList';
 import ModernVideoPlayer from '@/components/ModernVideoPlayer';
@@ -101,6 +101,40 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
     const currentIndex = playlist.findIndex((item) => item.id === activeItem.id);
     if (currentIndex !== -1 && currentIndex < playlist.length - 1) {
       selectVideo(playlist[currentIndex + 1]);
+    }
+  };
+
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLElement>) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || !activeItem || playlist.length === 0) return;
+
+    const target = event.target as HTMLElement;
+    if (target.closest("input, button, a")) return;
+
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+
+    const deltaY = touch.clientY - start.y;
+    const deltaX = touch.clientX - start.x;
+    const MIN_DISTANCE = 60;
+    if (Math.abs(deltaY) < MIN_DISTANCE || Math.abs(deltaX) > Math.abs(deltaY) * 1.5) return;
+
+    const currentIndex = playlist.findIndex((item) => item.id === activeItem.id);
+    if (currentIndex === -1) return;
+
+    if (deltaY < 0) {
+      if (currentIndex < playlist.length - 1) selectVideo(playlist[currentIndex + 1]);
+    } else {
+      if (currentIndex > 0) selectVideo(playlist[currentIndex - 1]);
     }
   };
 
@@ -225,7 +259,7 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
 
 
   return (
-    <main className="mt-1 flex min-h-screen flex-col text-Eltext p-1 font-sans sm:p-6">
+    <main className="mt-1 flex min-h-screen flex-col text-Eltext p-1 font-sans sm:p-6" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 items-start gap-2 lg:grid-cols-4">
 
       {/* Sticky Video Section on desktop screens only */}

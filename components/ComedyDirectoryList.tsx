@@ -118,7 +118,7 @@ export default function ComedyDirectoryList({
   };
 
   return (
-    <aside className="flex flex-col gap-2 overflow-hidden rounded-3xl border border-card1/20 bg-cardcl/70 p-3 backdrop-blur-md lg:col-span-1 lg:sticky lg:top-16 lg:h-[calc(100vh-5rem)] lg:self-start">
+    <aside className="hidden flex-col gap-2 overflow-hidden rounded-3xl border border-card1/20 bg-cardcl/70 p-3 backdrop-blur-md lg:flex lg:col-span-1 lg:sticky lg:top-16 lg:h-[calc(100vh-5rem)] lg:self-start">
       <div className="flex shrink-0 items-center justify-between border-b border-card1/20 pb-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-primary">
           <Flame size={18} className="fill-navlink text-navlink" />

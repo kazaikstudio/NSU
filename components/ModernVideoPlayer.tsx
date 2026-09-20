@@ -44,7 +44,7 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [videoRatio, setVideoRatio] = useState<string | null>(null);
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+  const isMobile = true;
   const computedRatio = videoRatio ?? "16 / 9";
 
   useEffect(() => {
@@ -289,13 +289,27 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
 
   const playerStyle: CSSProperties = {
     position: "relative",
-    width: "100%",
     aspectRatio: computedRatio,
     overflow: "hidden",
     borderRadius: isFullscreen ? 0 : isMobile ? 22 : 28,
     background: "radial-gradient(circle at top, rgba(92, 100, 255, 0.24), transparent 42%), linear-gradient(180deg, #101322 0%, #06070d 100%)",
     border: "1px solid rgba(255, 255, 255, 0.08)",
     boxShadow: "0 24px 70px rgba(0, 0, 0, 0.38)",
+    ...(isFullscreen
+      ? {
+          width: "100%",
+          height: "100%",
+          maxWidth: "none",
+          maxHeight: "none",
+          margin: 0,
+        }
+      : {
+          width: "auto",
+          height: "auto",
+          maxWidth: "100%",
+          maxHeight: "calc(100dvh - 140px)",
+          margin: "0 auto",
+        }),
   };
 
   const videoStyle: CSSProperties = {
@@ -534,12 +548,12 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
           appearance: none;
           display: block;
           box-sizing: border-box;
-          width: 16px;
-          min-width: 16px;
-          max-width: 16px;
-          height: 16px;
-          min-height: 16px;
-          max-height: 16px;
+          width: 14px;
+          min-width: 14px;
+          max-width: 14px;
+          height: 14px;
+          min-height: 14px;
+          max-height: 14px;
           margin-top: -4px;
           border: none;
           outline: none;
@@ -553,8 +567,8 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
           appearance: none;
           display: block;
           box-sizing: border-box;
-          width: 16px;
-          height: 16px;
+          width: 14px;
+          height: 14px;
           border: none;
           outline: none;
           border-radius: 999px;
@@ -562,14 +576,9 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
           box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.12);
         }
 
-        .modern-video-range::-webkit-slider-runnable-track {
-          height: 8px;
-          background: transparent;
-          border-radius: 999px;
-        }
-
+        .modern-video-range::-webkit-slider-runnable-track,
         .modern-video-range::-moz-range-track {
-          height: 8px;
+          height: 6px;
           background: transparent;
           border: none;
           border-radius: 999px;
@@ -577,31 +586,6 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
 
         .modern-video-range::-moz-focus-outer {
           border: 0;
-        }
-
-        @media (max-width: 639px) {
-          .modern-video-range::-webkit-slider-thumb {
-            width: 14px;
-            min-width: 14px;
-            max-width: 14px;
-            height: 14px;
-            min-height: 14px;
-            max-height: 14px;
-            margin-top: -4px;
-            border-radius: 50%;
-          }
-
-          .modern-video-range::-moz-range-thumb {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-          }
-
-          .modern-video-range::-webkit-slider-runnable-track,
-          .modern-video-range::-moz-range-track {
-            height: 6px;
-            border-radius: 999px;
-          }
         }
       `}</style>
       {loading ? (
