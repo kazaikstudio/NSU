@@ -54,13 +54,21 @@ export function resolveAssetUrl(url?: string | null) {
   return trimmed;
 }
 
-export function sanitizeDownloadFilename(filename: string) {
-  return filename
+export function sanitizeDownloadFilename(filename: string) {  return filename
     .replace(/[\n"\\/:*?<>|]+/g, '_')
     .trim()
     .replace(/\s+/g, ' ')
     .replace(/_+/g, ' ')
     .replace(/\s+\./g, '.');
+}
+
+export function buildDirectDownloadFilename(filename: string) {
+  const safeFilename = sanitizeDownloadFilename(filename).trim();
+  const baseName = safeFilename.replace(/\.[^.]+$/, '');
+  const extension = safeFilename.includes('.') ? `.${safeFilename.split('.').pop()}` : '';
+  const alreadyBranded = /\(\s*Nollstudios\.org\s*\)$/i.test(baseName);
+  const brandedName = alreadyBranded ? baseName : `${baseName.trim()} (Nollstudios.org)`;
+  return `${brandedName || 'Nollstudios.org'}${extension}`;
 }
 
 export function inferDownloadCategoryFromFilename(filename: string): DownloadCategory {

@@ -12,6 +12,7 @@ export type DirectUrlDownloadResult = {
   totalBytes?: number;
   resumedBytes: number;
   contentType: string;
+  serverFileName?: string;
 };
 
 export const DIRECT_URL_API = '/api/download';

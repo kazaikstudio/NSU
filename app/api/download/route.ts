@@ -74,6 +74,7 @@ export async function GET(request: Request) {
     const headers = new Headers({
       'Content-Type': contentType,
       'Content-Disposition': `attachment; filename="${getSafeFilename(target, response.headers.get('content-disposition'), contentType)}"`,
+      'X-NSU-Filename': getSafeFilename(target, response.headers.get('content-disposition'), contentType),
       'Cache-Control': 'no-store',
       'X-NSU-Download-Code': 'direct-url',
     });
