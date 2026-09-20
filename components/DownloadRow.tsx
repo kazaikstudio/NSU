@@ -46,10 +46,10 @@ interface DownloadRowProps {
 export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, onRetry, onFormats, onDownload }: DownloadRowProps) {
   const progressValue = typeof entry.progress === 'number' ? Math.max(0, Math.min(100, entry.progress)) : undefined;
   const isActive = entry.status === 'downloading';
-  const progressLabel = entry.paused ? 'Paused' : typeof progressValue === 'number' ? `${Math.round(progressValue)}%` : 'Preparing...';
+  const progressLabel = entry.paused ? 'Paused' : typeof progressValue === 'number' ? `${Math.round(progressValue)}%` : 'Calculating size…';
   const sizeLabel = entry.totalBytes
     ? `${formatBytes(entry.downloadedBytes)} / ${formatBytes(entry.totalBytes)}`
-    : `${formatBytes(entry.downloadedBytes)}${entry.downloadedBytes ? '' : ' • Calculating size'}`;
+    : `${formatBytes(entry.downloadedBytes)} • Size unknown • Calculating size`;
 
   if (isActive) {
     return (
@@ -121,8 +121,8 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
                   entry.paused
                     ? 'bg-slate-500'
                     : 'bg-linear-to-r from-amber-500 via-amber-400 to-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.5)]'
-                }`}
-                style={{ width: `${progressValue ?? 8}%` }}
+                } ${typeof progressValue !== 'number' && !entry.paused ? 'animate-pulse' : ''}`}
+                style={{ width: `${progressValue ?? 25}%` }}
               />
             </div>
           </div>

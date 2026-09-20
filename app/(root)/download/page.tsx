@@ -326,7 +326,38 @@ function DownloadForm() {
         throw new Error(payload.error || 'Unable to download this file.')
       }
 
-      const blob = await response.blob()
+      const totalBytes = Number(response.headers.get('content-length')) || undefined
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('Unable to start this download.')
+
+      const chunks: Uint8Array[] = []
+      let downloadedBytes = 0
+      let lastProgress = 0
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        if (!value) continue
+
+        chunks.push(value)
+        downloadedBytes += value.length
+        const progress = totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : -1
+        if (!totalBytes || progress !== lastProgress) {
+          lastProgress = progress
+          emitDownloadHistory({
+            status: 'downloading',
+            title: historyTitle,
+            progress: progress < 0 ? undefined : progress,
+            downloadedBytes,
+            totalBytes: totalBytes ?? downloadedBytes,
+            paused: false,
+            sourceUrl: directUrl,
+          })
+        }
+      }
+
+      const blob = new Blob(chunks as BlobPart[], {
+        type: response.headers.get('content-type') || 'application/octet-stream',
+      })
       const anchor = document.createElement('a')
       anchor.href = URL.createObjectURL(blob)
       anchor.download = 'download'
@@ -345,6 +376,7 @@ function DownloadForm() {
         sourceUrl: directUrl,
       })
     } catch (downloadError) {
+      if (downloadError instanceof Error && downloadError.name === 'AbortError') return
       emitDownloadHistory({
         status: 'error',
         title: historyTitle,
@@ -441,7 +473,7 @@ function DownloadForm() {
           <h2 className="text-2xl xs:text-3xl sm:text-5xl font-black tracking-tight text-primary leading-tight">Download Media</h2>
         </div>
         <p className="mt-1 sm:mt-2 text-xs xs:text-sm sm:text-base text-secondry max-w-md mx-auto">
-          Paste a YouTube link to browse available formats.
+          Paste any Media link here to browse available formats.
         </p>
       </div>
 

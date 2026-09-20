@@ -503,7 +503,60 @@ export default function DownloadsPage() {
         const payload = await response.json().catch(() => ({})) as { error?: string };
         throw new Error(payload.error || 'Unable to download this file.');
       }
-      const blob = await response.blob();
+
+      const totalBytes = Number(response.headers.get('content-length')) || undefined;
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Unable to start this download.');
+
+      const chunks: Uint8Array[] = [];
+      let downloadedBytes = 0;
+      let lastProgress = 0;
+
+      const pushProgress = (overrides?: Partial<DownloadNotice>) => {
+        setDownloadNotice({
+          status: 'downloading',
+          title: entry.title,
+          progress: totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : undefined,
+          downloadedBytes,
+          totalBytes: totalBytes ?? downloadedBytes,
+          paused: false,
+          sourceUrl: entry.sourceUrl,
+          ...overrides,
+        });
+        setDownloadEntries((previousEntries) => {
+          const nextEntries = previousEntries.map((item) => item.id === entry.id
+            ? {
+                ...item,
+                status: 'downloading' as const,
+                paused: false,
+                progress: totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : undefined,
+                downloadedBytes,
+                totalBytes: totalBytes ?? downloadedBytes,
+                updatedAt: new Date().toISOString(),
+              }
+            : item);
+          window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+          return nextEntries;
+        });
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        chunks.push(value);
+        downloadedBytes += value.length;
+        const progress = totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : -1;
+        if (!totalBytes || progress !== lastProgress) {
+          lastProgress = progress;
+          pushProgress();
+        }
+      }
+
+      const blob = new Blob(chunks as BlobPart[], {
+        type: response.headers.get('content-type') || 'application/octet-stream',
+      });
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = objectUrl;
