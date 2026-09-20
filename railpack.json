@@ -6,7 +6,10 @@
   },
   "steps": {
     "python": {
-      "inputs": [{ "step": "packages:mise" }],
+      "inputs": [
+        { "step": "packages:mise" },
+        { "local": true, "include": ["requirements.txt"] }
+      ],
       "commands": [
         "python3 -m venv /app/.venv",
         "/app/.venv/bin/pip install --no-cache-dir --disable-pip-version-check -r requirements.txt"
