@@ -53,6 +53,11 @@ export function getDatabaseConnectionString(env: NodeJS.ProcessEnv = process.env
 
 const connectionString = getDatabaseConnectionString();
 const hasConfiguredDatabase = Boolean(connectionString);
+const warnDatabaseIssue = (...args: unknown[]) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn(...args);
+  }
+};
 
 export function buildDatabasePoolConfig({
   connectionString,
@@ -90,7 +95,7 @@ const pool = hasConfiguredDatabase
 // uncaught exception and takes the whole process down; instead, mark the pool
 // unavailable so the next request transparently reconnects.
 pool?.on('error', (err) => {
-  console.warn('Idle database client error; marking pool unavailable for reconnection.', err);
+  warnDatabaseIssue('Idle database client error; marking pool unavailable for reconnection.', err);
   databaseAvailable = false;
 });
 
@@ -159,7 +164,7 @@ function recoverDatabase(): Promise<boolean> {
         databaseAvailable = true;
         return true;
       } catch (err) {
-        console.warn('Database connection lost; reconnection attempt failed.', err);
+        warnDatabaseIssue('Database connection lost; reconnection attempt failed.', err);
         return false;
       } finally {
         if (client) client.release();
@@ -377,7 +382,7 @@ const initDatabase = async () => {
     client = await connectWithTimeout(() => originalConnect());
   } catch (err) {
     databaseAvailable = false;
-    console.warn('Database initialization skipped because PostgreSQL is unavailable.', err);
+    warnDatabaseIssue('Database initialization skipped because PostgreSQL is unavailable.', err);
     return;
   }
 
@@ -387,12 +392,12 @@ const initDatabase = async () => {
     // concurrent client.query() calls and can leave the client stuck forever.
     for (const batch of schemaBatches) {
       await client!.query(batch).catch((error) => {
-        console.warn('Database schema batch skipped:', error);
+        warnDatabaseIssue('Database schema batch skipped:', error);
       });
     }
     console.log('Database tables verified/created successfully.');
   } catch (err) {
-    console.warn('Database schema verification finished with non-critical errors.', err);
+    warnDatabaseIssue('Database schema verification finished with non-critical errors.', err);
   } finally {
     client?.release();
   }
