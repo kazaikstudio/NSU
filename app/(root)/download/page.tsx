@@ -7,6 +7,7 @@ import { Check, ChevronDown, Download, Link as LinkIcon, X } from 'lucide-react'
 import DockBar from '../../../components/DockBar'
 import { useClickOutside } from '../../../components/useClickOutside'
 import { startYoutubeDownload } from '@/lib/youtube-download-manager'
+import { startDirectUrlDownload } from '@/lib/direct-url-download'
 
 const SAVED_DOWNLOAD_LINK_KEY = 'nsu-download-link'
 
@@ -320,47 +321,24 @@ function DownloadForm() {
       sourceUrl: directUrl,
     })
     try {
-      const response = await fetch(`/api/download?url=${encodeURIComponent(directUrl)}`, { cache: 'no-store' })
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({})) as { error?: string }
-        throw new Error(payload.error || 'Unable to download this file.')
-      }
-
-      const totalBytes = Number(response.headers.get('content-length')) || undefined
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('Unable to start this download.')
-
-      const chunks: Uint8Array[] = []
-      let downloadedBytes = 0
-      let lastProgress = 0
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        if (!value) continue
-
-        chunks.push(value)
-        downloadedBytes += value.length
-        const progress = totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : -1
-        if (!totalBytes || progress !== lastProgress) {
-          lastProgress = progress
+      const { blob } = await startDirectUrlDownload({
+        sourceUrl: directUrl,
+        onProgress: ({ downloadedBytes, totalBytes, progress }) => {
           emitDownloadHistory({
             status: 'downloading',
             title: historyTitle,
-            progress: progress < 0 ? undefined : progress,
+            progress,
             downloadedBytes,
             totalBytes: totalBytes ?? downloadedBytes,
             paused: false,
             sourceUrl: directUrl,
           })
-        }
-      }
-
-      const blob = new Blob(chunks as BlobPart[], {
-        type: response.headers.get('content-type') || 'application/octet-stream',
+        },
       })
+
       const anchor = document.createElement('a')
       anchor.href = URL.createObjectURL(blob)
-      anchor.download = 'download'
+      anchor.download = historyTitle
       document.body.appendChild(anchor)
       anchor.click()
       anchor.remove()
@@ -376,7 +354,15 @@ function DownloadForm() {
         sourceUrl: directUrl,
       })
     } catch (downloadError) {
-      if (downloadError instanceof Error && downloadError.name === 'AbortError') return
+      if (downloadError instanceof Error && downloadError.name === 'AbortError') {
+        emitDownloadHistory({
+          status: 'downloading',
+          title: historyTitle,
+          paused: true,
+          sourceUrl: directUrl,
+        })
+        return
+      }
       emitDownloadHistory({
         status: 'error',
         title: historyTitle,

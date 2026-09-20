@@ -6,6 +6,11 @@ export const dynamic = 'force-dynamic';
 
 const MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 
+function parseContentRangeTotal(contentRange: string | null) {
+  const match = contentRange?.match(/\/(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
 function isPrivateHostname(hostname: string) {
   const normalized = hostname.toLowerCase();
   return normalized === 'localhost'
@@ -41,10 +46,14 @@ export async function GET(request: Request) {
   }
 
   try {
+    const clientRange = request.headers.get('range');
+    const upstreamHeaders: Record<string, string> = { Accept: 'audio/*, video/*, application/octet-stream;q=0.9, */*;q=0.1' };
+    if (clientRange) upstreamHeaders['Range'] = clientRange;
+
     const response = await fetch(target, {
       cache: 'no-store',
       redirect: 'follow',
-      headers: { Accept: 'audio/*, video/*, application/octet-stream;q=0.9, */*;q=0.1' },
+      headers: upstreamHeaders,
       signal: AbortSignal.timeout(30_000),
     });
 
@@ -54,7 +63,8 @@ export async function GET(request: Request) {
 
     const contentType = response.headers.get('content-type') || 'application/octet-stream';
     const contentLength = Number(response.headers.get('content-length') || 0);
-    if (contentLength > MAX_DOWNLOAD_BYTES) {
+    const totalLength = parseContentRangeTotal(response.headers.get('content-range')) || contentLength;
+    if (totalLength > MAX_DOWNLOAD_BYTES) {
       return NextResponse.json({ error: 'This file is larger than the 2 GB download limit.' }, { status: 413 });
     }
     if (contentType.includes('text/html') || contentType.includes('application/xhtml')) {
@@ -68,8 +78,11 @@ export async function GET(request: Request) {
       'X-NSU-Download-Code': 'direct-url',
     });
     if (contentLength > 0) headers.set('Content-Length', String(contentLength));
+    const contentRange = response.headers.get('content-range');
+    if (contentRange) headers.set('Content-Range', contentRange);
+    if (clientRange) headers.set('X-NSU-Resume-Supported', response.status === 206 ? 'true' : 'false');
 
-    return new Response(response.body, { status: 200, headers });
+    return new Response(response.body, { status: response.status === 206 ? 206 : 200, headers });
   } catch (error) {
     const message = error instanceof Error && error.name === 'TimeoutError'
       ? 'The source took too long to respond.'

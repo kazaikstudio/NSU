@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Download, Trash2, Inbox, Sparkles, X } from 'lucide-react';
 import DownloadRow, { DownloadEntry } from '../../../components/DownloadRow';
 import { controlYoutubeDownload, startYoutubeDownload } from '@/lib/youtube-download-manager';
+import { startDirectUrlDownload } from '@/lib/direct-url-download';
+import { getPartialOffset } from '@/lib/direct-download-store';
 
 interface DownloadNotice {
   status: 'downloading' | 'done' | 'error';
@@ -478,6 +480,8 @@ export default function DownloadsPage() {
     if (!entry.sourceUrl) return;
 
     activeUrlRef.current = { title: entry.title, url: entry.sourceUrl, fileName: entry.fileName };
+    const sourceUrl = entry.sourceUrl;
+    const resumedBytes = getPartialOffset(sourceUrl);
 
     setDownloadEntries((previousEntries) => {
       const nextEntries = previousEntries.map((item) => item.id === entry.id
@@ -485,8 +489,9 @@ export default function DownloadsPage() {
             ...item,
             status: 'downloading' as const,
             paused: false,
-            progress: 0,
-            downloadedBytes: 0,
+            progress: resumedBytes > 0 && item.totalBytes ? Math.min(100, Math.round((resumedBytes / item.totalBytes) * 100)) : 0,
+            downloadedBytes: resumedBytes,
+            totalBytes: item.totalBytes ?? (resumedBytes > 0 ? resumedBytes : undefined),
             updatedAt: new Date().toISOString(),
           }
         : item);
@@ -498,65 +503,37 @@ export default function DownloadsPage() {
     abortControllerRef.current = controller;
 
     try {
-      const response = await fetch(`/api/download?url=${encodeURIComponent(entry.sourceUrl)}`, { signal: controller.signal, cache: 'no-store' });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({})) as { error?: string };
-        throw new Error(payload.error || 'Unable to download this file.');
-      }
-
-      const totalBytes = Number(response.headers.get('content-length')) || undefined;
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('Unable to start this download.');
-
-      const chunks: Uint8Array[] = [];
-      let downloadedBytes = 0;
-      let lastProgress = 0;
-
-      const pushProgress = (overrides?: Partial<DownloadNotice>) => {
-        setDownloadNotice({
-          status: 'downloading',
-          title: entry.title,
-          progress: totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : undefined,
-          downloadedBytes,
-          totalBytes: totalBytes ?? downloadedBytes,
-          paused: false,
-          sourceUrl: entry.sourceUrl,
-          ...overrides,
-        });
-        setDownloadEntries((previousEntries) => {
-          const nextEntries = previousEntries.map((item) => item.id === entry.id
-            ? {
-                ...item,
-                status: 'downloading' as const,
-                paused: false,
-                progress: totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : undefined,
-                downloadedBytes,
-                totalBytes: totalBytes ?? downloadedBytes,
-                updatedAt: new Date().toISOString(),
-              }
-            : item);
-          window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
-          return nextEntries;
-        });
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!value) continue;
-
-        chunks.push(value);
-        downloadedBytes += value.length;
-        const progress = totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : -1;
-        if (!totalBytes || progress !== lastProgress) {
-          lastProgress = progress;
-          pushProgress();
-        }
-      }
-
-      const blob = new Blob(chunks as BlobPart[], {
-        type: response.headers.get('content-type') || 'application/octet-stream',
+      const { blob } = await startDirectUrlDownload({
+        sourceUrl: entry.sourceUrl,
+        signal: controller.signal,
+        onProgress: ({ downloadedBytes, totalBytes: total, progress }) => {
+          setDownloadNotice({
+            status: 'downloading',
+            title: entry.title,
+            progress,
+            downloadedBytes,
+            totalBytes: total ?? downloadedBytes,
+            paused: false,
+            sourceUrl: entry.sourceUrl,
+          });
+          setDownloadEntries((previousEntries) => {
+            const nextEntries = previousEntries.map((item) => item.id === entry.id
+              ? {
+                  ...item,
+                  status: 'downloading' as const,
+                  paused: false,
+                  progress,
+                  downloadedBytes,
+                  totalBytes: total ?? downloadedBytes,
+                  updatedAt: new Date().toISOString(),
+                }
+              : item);
+            window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+            return nextEntries;
+          });
+        },
       });
+
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = objectUrl;
@@ -589,6 +566,7 @@ export default function DownloadsPage() {
             ? {
                 ...item,
                 paused: true,
+                downloadedBytes: getPartialOffset(sourceUrl) || item.downloadedBytes,
                 updatedAt: new Date().toISOString(),
               }
             : item);
@@ -603,6 +581,7 @@ export default function DownloadsPage() {
               ...item,
               status: 'error' as const,
               paused: false,
+              downloadedBytes: getPartialOffset(sourceUrl) || item.downloadedBytes,
               updatedAt: new Date().toISOString(),
             }
           : item);
