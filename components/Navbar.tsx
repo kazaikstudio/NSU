@@ -146,9 +146,16 @@ const Navbar = () => {
       dark:border-zinc-800/80 dark:shadow-zinc-950/50"
       style={{
         height: isChromeHidden ? 0 : undefined,
+        minHeight: isChromeHidden ? 0 : undefined,
         marginTop: isChromeHidden ? 0 : undefined,
+        paddingTop: isChromeHidden ? 0 : undefined,
+        paddingBottom: isChromeHidden ? 0 : undefined,
+        borderWidth: isChromeHidden ? 0 : undefined,
+        boxShadow: isChromeHidden ? 'none' : undefined,
+        opacity: isChromeHidden ? 0 : undefined,
+        transform: isChromeHidden ? 'translateY(-100%)' : undefined,
         overflow: isChromeHidden ? 'hidden' : undefined,
-        transition: 'height 300ms ease, margin 300ms ease',
+        transition: 'height 300ms ease, margin 300ms ease, padding 300ms ease, opacity 200ms ease, transform 300ms ease, border-width 300ms ease',
       }}
     >
       <nav className="flex h-12 items-center justify-between px-4 sm:px-6 max-w-7xl mx-auto">

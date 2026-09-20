@@ -37,6 +37,7 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
   const [copied, setCopied] = useState(false);
   const [isMobileView, setIsMobileView] = useState<boolean | null>(null);
   const [chromeHidden, setChromeHidden] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoAspect, setVideoAspect] = useState(16 / 9);
 
   useEffect(() => {
@@ -56,6 +57,10 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
   const handleVideoRatio = useCallback((width: number, height: number) => {
     if (width > 0 && height > 0) setVideoAspect(width / height);
   }, []);
+
+  useEffect(() => {
+    setChromeHidden(isMobileView === true && isVideoPlaying);
+  }, [isMobileView, isVideoPlaying]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('nsu-nav-visibility', { detail: { hidden: chromeHidden } }));
@@ -308,7 +313,6 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
 
   const handlePlayerSurface = () => {
     if (isMobileView !== true) return;
-    setChromeHidden((previous) => !previous);
   };
 
 
@@ -325,6 +329,7 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
               immersive={isMobileView === true}
               onEndedAction={handleVideoEnded}
               onSurfaceAction={handlePlayerSurface}
+              onPlayStateChange={setIsVideoPlaying}
               onRatioAction={handleVideoRatio}
             />
 

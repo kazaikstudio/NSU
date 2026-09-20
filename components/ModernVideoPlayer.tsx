@@ -10,6 +10,7 @@ type ModernVideoPlayerProps = {
   immersive?: boolean;
   onEndedAction?: () => void;
   onSurfaceAction?: () => void;
+  onPlayStateChange?: (playing: boolean) => void;
   onRatioAction?: (width: number, height: number) => void;
 };
 
@@ -31,7 +32,7 @@ function formatTime(timeInSeconds: number) {
   return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 }
 
-export default function ModernVideoPlayer({ src, loading = false, immersive = false, onEndedAction, onSurfaceAction, onRatioAction }: ModernVideoPlayerProps) {
+export default function ModernVideoPlayer({ src, loading = false, immersive = false, onEndedAction, onSurfaceAction, onPlayStateChange, onRatioAction }: ModernVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<number | null>(null);
@@ -119,6 +120,10 @@ export default function ModernVideoPlayer({ src, loading = false, immersive = fa
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
+
+  useEffect(() => {
+    onPlayStateChange?.(isPlaying);
+  }, [isPlaying, onPlayStateChange]);
 
   useEffect(() => {
     return () => {
