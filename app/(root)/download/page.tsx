@@ -473,7 +473,7 @@ function DownloadForm() {
           <h2 className="text-2xl xs:text-3xl sm:text-5xl font-black tracking-tight text-primary leading-tight">Download Media</h2>
         </div>
         <p className="mt-1 sm:mt-2 text-xs xs:text-sm sm:text-base text-secondry max-w-md mx-auto">
-          Paste any Media link here to browse available formats.
+          Paste a link to explore available formats.
         </p>
       </div>
 
@@ -504,7 +504,7 @@ function DownloadForm() {
                   setLoadingFormats(false)
                 }
               }}
-              placeholder="https://youtube.com/watch?v=…"
+              placeholder="Paste any link to begin."
               className="min-w-0 flex-1 bg-transparent py-3.5 text-xs sm:text-sm text-primary outline-none placeholder:text-secondry/40"
               aria-describedby={error ? 'download-error' : undefined}
             />
