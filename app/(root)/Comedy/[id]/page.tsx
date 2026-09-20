@@ -154,15 +154,15 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
     const touch = event.changedTouches[0];
     if (!touch) return;
 
-    const deltaY = touch.clientY - start.y;
     const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
     const MIN_DISTANCE = 60;
-    if (Math.abs(deltaY) < MIN_DISTANCE || Math.abs(deltaX) > Math.abs(deltaY) * 1.5) return;
+    if (Math.abs(deltaX) < MIN_DISTANCE || Math.abs(deltaY) > Math.abs(deltaX) * 1.5) return;
 
     const currentIndex = playlist.findIndex((item) => item.id === activeItem.id);
     if (currentIndex === -1) return;
 
-    if (deltaY < 0) {
+    if (deltaX < 0) {
       if (currentIndex < playlist.length - 1) selectVideo(playlist[currentIndex + 1]);
     } else {
       if (currentIndex > 0) selectVideo(playlist[currentIndex - 1]);

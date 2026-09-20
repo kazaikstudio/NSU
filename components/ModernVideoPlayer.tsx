@@ -15,6 +15,7 @@ type ModernVideoPlayerProps = {
 
 type WebkitVideoElement = HTMLVideoElement & {
   webkitEnterFullscreen?: () => void;
+  webkitExitFullscreen?: () => void;
   webkitDisplayingFullscreen?: boolean;
 };
 
@@ -286,7 +287,11 @@ export default function ModernVideoPlayer({ src, loading = false, immersive = fa
         });
       }
     } else {
-      document.exitFullscreen().catch(() => undefined);
+      if (video.webkitDisplayingFullscreen) {
+        video.webkitExitFullscreen?.();
+      } else {
+        void document.exitFullscreen().catch(() => undefined);
+      }
       (screen.orientation as ScreenOrientationWithLock).unlock?.();
     }
     revealControls();
@@ -321,7 +326,7 @@ export default function ModernVideoPlayer({ src, loading = false, immersive = fa
   const videoStyle: CSSProperties = {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
+    objectFit: isFullscreen || immersive ? "contain" : "cover",
     display: "block",
     background: "#000",
   };

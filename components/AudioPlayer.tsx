@@ -507,10 +507,10 @@ export default function AudioPlayer() {
                 <div aria-hidden className="pointer-events-none absolute -bottom-32 left-1/3 h-112 w-md rounded-full bg-blue-600/10 blur-[120px]" />
 
                 {/* Main Container */}
-                <div className="relative flex h-full w-full flex-col justify-between overflow-hidden border border-white/8 bg-[#0b0e13]/80 px-5 py-6 shadow-[0_30px_80px_rgba(0,0,0,0.7)] backdrop-blur-2xl sm:px-8">
-                  <div className="mx-auto flex w-full max-w-90 flex-col">
+                <div className="relative flex h-full w-full flex-col overflow-hidden border border-white/8 bg-[#0b0e13]/80 px-5 py-6 shadow-[0_30px_80px_rgba(0,0,0,0.7)] backdrop-blur-2xl sm:px-8">
+                  <div className="mx-auto flex min-h-0 w-full max-w-90 flex-1 flex-col">
                     {/* Top Navigation Bar */}
-                    <div className="flex items-center justify-between w-full">
+                    <div className="flex shrink-0 items-center justify-between w-full">
                       <button
                         type="button"
                         onClick={handleClose}
@@ -549,7 +549,8 @@ export default function AudioPlayer() {
                     </div>
 
                     {/* Center Album Art & Info */}
-                    <div className="my-auto flex flex-col items-center pt-6">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                      <div className="my-auto flex flex-col items-center pt-6">
                       <div className="relative aspect-square w-full overflow-hidden rounded-4xl border border-white/10 bg-[#111827] shadow-[0_24px_60px_rgba(0,0,0,0.55)] ring-1 ring-white/5">
                         <Image
                           fill
@@ -643,9 +644,10 @@ export default function AudioPlayer() {
                         </div>
                       </div>
                     </div>
+                    </div>
 
                     {/* Bottom Control Buttons */}
-                    <div className="mt-8 mb-2 flex items-center justify-between w-full mx-auto">
+                    <div className="mt-8 mb-2 flex shrink-0 items-center justify-between w-full mx-auto">
                       <button
                         type="button"
                         onClick={handleToggleShuffle}
