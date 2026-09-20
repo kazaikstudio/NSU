@@ -118,14 +118,24 @@ export async function getYoutubePythonFormats(videoId: string): Promise<PythonFo
   };
 }
 
-export async function downloadWithPython(params: {
+export type PythonDownloadProgress = {
+  percent: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
+};
+
+export type PythonDownloadParams = {
   videoId: string;
   itag: number;
   output: string;
   bitrate: number;
   outPrefix: string;
   ffmpegLocation?: string | null;
-}): Promise<PythonDownloadResult> {
+  onProgress?: (progress: PythonDownloadProgress) => void;
+  signal?: AbortSignal;
+};
+
+export async function downloadWithPython(params: PythonDownloadParams): Promise<PythonDownloadResult> {
   const args = [
     '--id', params.videoId,
     '--itag', String(params.itag),
@@ -137,12 +147,92 @@ export async function downloadWithPython(params: {
     args.push('--ffmpeg-location', params.ffmpegLocation);
   }
 
-  const payload = await runWorker('download', args, 90_000);
-  return {
-    videoId: String(payload.videoId || params.videoId),
-    title: typeof payload.title === 'string' && payload.title ? payload.title : `youtube-${params.videoId}`,
-    file: String(payload.file || ''),
-    size: Number(payload.size) || 0,
-    contentType: typeof payload.contentType === 'string' ? payload.contentType : 'application/octet-stream',
-  };
+  return new Promise((resolve, reject) => {
+    let stdoutBuffer = '';
+    let stderr = '';
+    let lastDone: PythonDownloadResult | null = null;
+
+    const child = spawn(getPythonBinary(), [YOUTUBE_DLP_SCRIPT, 'download', ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: process.env,
+    });
+
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error('The Python download worker timed out.'));
+    }, 90_000);
+
+    const onAbort = () => child.kill('SIGKILL');
+    params.signal?.addEventListener('abort', onAbort, { once: true });
+    if (params.signal?.aborted) onAbort();
+
+    const handleLine = (line: string) => {
+      let payload: Record<string, unknown>;
+      try {
+        payload = JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        return;
+      }
+
+      if (payload.type === 'progress' && typeof payload.percent === 'number' && params.onProgress) {
+        params.onProgress({
+          percent: payload.percent,
+          downloadedBytes: typeof payload.downloadedBytes === 'number' ? payload.downloadedBytes : undefined,
+          totalBytes: typeof payload.totalBytes === 'number' ? payload.totalBytes : undefined,
+        });
+      } else if (payload.status === 'done' && typeof payload.file === 'string') {
+        lastDone = {
+          videoId: String(payload.videoId || params.videoId),
+          title: typeof payload.title === 'string' && payload.title ? payload.title : `youtube-${params.videoId}`,
+          file: payload.file,
+          size: Number(payload.size) || 0,
+          contentType: typeof payload.contentType === 'string' ? payload.contentType : 'application/octet-stream',
+        };
+      }
+    };
+
+    const drainStdout = () => {
+      let newlineIndex: number;
+      while ((newlineIndex = stdoutBuffer.indexOf('\n')) !== -1) {
+        const line = stdoutBuffer.slice(0, newlineIndex).trim();
+        stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
+        if (line) handleLine(line);
+      }
+      if (stdoutBuffer.trim()) {
+        handleLine(stdoutBuffer.trim());
+        stdoutBuffer = '';
+      }
+    };
+
+    child.stdout.on('data', (chunk) => {
+      stdoutBuffer += chunk.toString();
+      drainStdout();
+    });
+
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      params.signal?.removeEventListener('abort', onAbort);
+      reject(new Error(`The Python runtime could not start the download worker: ${error.message}`));
+    });
+
+    child.once('close', (code) => {
+      clearTimeout(timer);
+      params.signal?.removeEventListener('abort', onAbort);
+      drainStdout();
+      if (lastDone) {
+        resolve(lastDone);
+        return;
+      }
+      const errorPayload = parseJsonObject(stderr.trim());
+      const message = errorPayload && typeof errorPayload.error === 'string' && errorPayload.error
+        ? errorPayload.error
+        : `The Python download worker exited with code ${code}.`;
+      const error = new Error(message) as Error & { detail?: string; workerCode?: number | null };
+      error.detail = stderr.trim().slice(0, 2000) || undefined;
+      error.workerCode = code;
+      reject(error);
+    });
+  });
 }

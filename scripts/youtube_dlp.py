@@ -17,6 +17,7 @@ Node runtime can parse the result reliably.
 import argparse
 import contextlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -74,6 +75,10 @@ def base_options() -> list:
     return ["--no-playlist", "--no-warnings", "--no-color", "--quiet", "--no-progress"]
 
 
+def download_options() -> list:
+    return ["--no-playlist", "--no-warnings", "--no-color", "--newline"]
+
+
 def error_payload(message: str, detail: str = "") -> dict:
     return {
         "status": "error",
@@ -99,9 +104,58 @@ def run_ytdlp(args: list) -> subprocess.CompletedProcess:
     )
 
 
+def run_download_command(command: list) -> None:
+    """Run yt-dlp for a download, relaying download progress to stdout as
+    newline-delimited JSON so the Node runtime can stream live progress back
+    to the browser."""
+    process = subprocess.Popen(
+        YTDLP + command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if process.stdout is None:
+        raise RuntimeError("yt-dlp did not expose a readable stdout stream.")
+
+    last_lines = []
+    last_percent = -1.0
+    for out_line in process.stdout:
+        last_lines.append(out_line)
+        if len(last_lines) > 40:
+            last_lines.pop(0)
+        match = re.search(r"\[download\]\s*([\d.]+)%", out_line)
+        if not match:
+            continue
+        percent = float(match.group(1))
+        if percent <= last_percent:
+            continue
+        last_percent = percent
+        sys.stdout.write(
+            json.dumps({"type": "progress", "percent": round(percent, 1)}) + "\n"
+        )
+        sys.stdout.flush()
+
+    return_code = process.wait()
+    if return_code != 0:
+        raise RuntimeError(
+            last_lines[-1].strip()
+            if last_lines
+            else f"yt-dlp exited with code {return_code}."
+        )
+
+
 def format_size(format_obj: dict):
-    size = format_obj.get("filesize") or format_obj.get("filesize_approx")
-    return int(size) if size else None
+    size = (
+        format_obj.get("filesize")
+        or format_obj.get("filesize_approx")
+        or 0
+    )
+    try:
+        return int(size)
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def format_itag(format_obj: dict) -> int:
@@ -171,18 +225,17 @@ def cmd_formats(video_id: str):
     audio_only.sort(key=format_bitrate, reverse=True)
     audio_source = audio_only[0] if audio_only else None
 
-    def video_sources(require_audio):
-        sources = [
-            fmt
-            for fmt in formats
-            if format_itag(fmt) > 0
+    combined: dict[int, dict] = {}
+    video_only: dict[int, dict] = {}
+    for fmt in formats:
+        if (
+            format_itag(fmt) > 0
             and format_ext(fmt) == "mp4"
             and format_height(fmt) >= 360
             and has_video(fmt)
-            and (has_audio(fmt) if require_audio else not has_audio(fmt))
-        ]
-        sources.sort(key=lambda fmt: (format_height(fmt), format_bitrate(fmt)))
-        return sources
+        ):
+            render = (combined if has_audio(fmt) else video_only)
+            render[format_height(fmt)] = fmt
 
     result = []
     if audio_source and format_itag(audio_source) > 0:
@@ -197,27 +250,19 @@ def cmd_formats(video_id: str):
             }
         )
 
-    result.extend(
-        {
-            "itag": format_itag(source),
-            "label": f"{format_height(source)}p",
-            "kind": "video+audio",
-            "extension": "mp4",
-            "size": format_size(source),
-        }
-        for source in video_sources(require_audio=True)
-    )
-
-    result.extend(
-        {
-            "itag": format_itag(source),
-            "label": f"{format_height(source)}p",
-            "kind": "video",
-            "extension": "mp4",
-            "size": format_size(source),
-        }
-        for source in video_sources(require_audio=False)
-    )
+    for height in sorted(set(combined) | set(video_only)):
+        source = combined.get(height) or video_only.get(height)
+        if source is None:
+            continue
+        result.append(
+            {
+                "itag": format_itag(source),
+                "label": f"{height}p",
+                "kind": "video+audio" if height in combined else "video",
+                "extension": "mp4",
+                "size": format_size(source),
+            }
+        )
 
     return {
         "status": "done",
@@ -290,7 +335,7 @@ def cmd_download(video_id, itag, output, bitrate, out_prefix, ffmpeg_location):
     selected = find_format(info, itag) if itag > 0 else None
 
     command = [
-        *base_options(),
+        *download_options(),
         f"https://www.youtube.com/watch?v={video_id}",
     ]
     if ffmpeg_location:
@@ -322,13 +367,7 @@ def cmd_download(video_id, itag, output, bitrate, out_prefix, ffmpeg_location):
         command += ["-f", format_spec, "--merge-output-format", "mp4"]
         format_ext = "mp4"
 
-    result = run_ytdlp(command)
-    if result.returncode != 0:
-        raise RuntimeError(
-            result.stderr.strip().splitlines()[-1]
-            if result.stderr.strip()
-            else f"yt-dlp exited with code {result.returncode}."
-        )
+    run_download_command(command)
 
     produced = locate_produced_file(out_prefix, format_ext)
     if not produced.exists():
@@ -379,7 +418,7 @@ def main(argv):
             args.ffmpeg_location,
         )
 
-    sys.stdout.write(json.dumps(payload))
+    sys.stdout.write(json.dumps(payload) + "\n")
     sys.stdout.flush()
     return 0
 

@@ -152,14 +152,66 @@ async function runDownload(job: YoutubeDownloadJob) {
       throw new Error(payload.error || response.statusText || 'Unable to download this video.');
     }
 
-    const totalBytes = Number(response.headers.get('content-length')) || job.totalBytes || undefined;
-    currentTotalBytes = totalBytes;
     const reader = response.body?.getReader();
     if (!reader) throw new Error('Unable to start download.');
 
     const chunks: Uint8Array[] = [];
     let downloadedBytes = 0;
-    let lastProgress = 0;
+    let metaDone = false;
+    let pythonPercent: number | undefined;
+    let streamTotalBytes = 0;
+    const metaBuffer: number[] = [];
+
+    const emitStatus = (isPaused: boolean) => {
+      emit({
+        status: 'downloading',
+        title: job.title,
+        paused: isPaused,
+        progress: currentProgress,
+        downloadedBytes,
+        totalBytes: streamTotalBytes || currentTotalBytes,
+        sourceVideoId: job.videoId,
+        sourceItag: job.itag,
+        sourceExtension: job.extension,
+        sourceOutputBitrate: job.outputBitrate,
+      });
+    };
+
+    // Parses the leading NDJSON section (progress / error / done meta lines)
+    // and returns any trailing file bytes once the "done" marker is seen.
+    const feedMeta = (value: Uint8Array): Uint8Array | null => {
+      for (let index = 0; index < value.length; index += 1) metaBuffer.push(value[index]);
+
+      let newline = metaBuffer.indexOf(10);
+      while (newline !== -1 && !metaDone) {
+        const lineBytes = metaBuffer.splice(0, newline + 1);
+        const text = new TextDecoder().decode(new Uint8Array(lineBytes)).trim();
+        if (text) {
+          let payload: Record<string, unknown>;
+          try {
+            payload = JSON.parse(text) as Record<string, unknown>;
+          } catch {
+            payload = {};
+          }
+          if (payload.type === 'progress' && typeof payload.percent === 'number') {
+            pythonPercent = payload.percent;
+          } else if (payload.type === 'error') {
+            throw new Error(typeof payload.message === 'string' && payload.message ? payload.message : 'The download failed.');
+          } else if (payload.type === 'done') {
+            metaDone = true;
+            streamTotalBytes = typeof payload.size === 'number' ? payload.size : 0;
+          }
+        }
+        newline = metaBuffer.indexOf(10);
+      }
+
+      if (metaDone && metaBuffer.length) {
+        const remainder = new Uint8Array(metaBuffer);
+        metaBuffer.length = 0;
+        return remainder;
+      }
+      return metaDone ? new Uint8Array(0) : null;
+    };
 
     while (true) {
       await waitUntilResumed();
@@ -168,47 +220,42 @@ async function runDownload(job: YoutubeDownloadJob) {
       const { done, value } = await reader.read();
       if (done) break;
       if (!value) continue;
-      chunks.push(value);
-      downloadedBytes += value.length;
-      currentDownloadedBytes = downloadedBytes;
 
+      let nextProgress: number | undefined;
+      if (!metaDone) {
+        const trailing = feedMeta(value);
+        if (trailing == null) {
+          // Whole chunk was metadata; pythonPercent was just refreshed.
+          nextProgress = pythonPercent;
+        } else {
+          if (trailing.length) {
+            chunks.push(trailing);
+            downloadedBytes += trailing.length;
+          }
+          nextProgress = computeStreamProgress(job, pythonPercent, streamTotalBytes, downloadedBytes);
+        }
+      } else {
+        chunks.push(value);
+        downloadedBytes += value.length;
+        nextProgress = computeStreamProgress(job, pythonPercent, streamTotalBytes, downloadedBytes);
+      }
+      if (typeof nextProgress !== 'number') continue;
+
+      currentDownloadedBytes = downloadedBytes;
       if (paused) {
-        const pausedProgress = totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : undefined;
-        if (typeof pausedProgress === 'number') currentProgress = pausedProgress;
-        emit({
-          status: 'downloading',
-          title: job.title,
-          progress: pausedProgress,
-          paused: true,
-          downloadedBytes,
-          totalBytes,
-          sourceVideoId: job.videoId,
-          sourceItag: job.itag,
-          sourceExtension: job.extension,
-          sourceOutputBitrate: job.outputBitrate,
-        });
+        currentProgress = nextProgress;
+        emitStatus(true);
         continue;
       }
 
-      const progress = typeof totalBytes === 'number' && totalBytes > 0
-        ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
-        : undefined;
-      if (typeof progress === 'number') currentProgress = progress;
-      if (typeof progress === 'number' || downloadedBytes > 0) {
-        lastProgress = typeof progress === 'number' ? progress : lastProgress;
-        emit({
-          status: 'downloading',
-          title: job.title,
-          progress: typeof progress === 'number' ? progress : Math.max(0, lastProgress),
-          paused: false,
-          downloadedBytes,
-          totalBytes,
-          sourceVideoId: job.videoId,
-          sourceItag: job.itag,
-          sourceExtension: job.extension,
-          sourceOutputBitrate: job.outputBitrate,
-        });
+      if (nextProgress !== currentProgress || downloadedBytes > 0) {
+        currentProgress = nextProgress;
+        emitStatus(false);
       }
+    }
+
+    if (!metaDone) {
+      throw new Error('The download stream finished before it was complete.');
     }
 
     if (cancelled) return;
@@ -252,4 +299,24 @@ async function runDownload(job: YoutubeDownloadJob) {
     currentDownloadedBytes = 0;
     currentTotalBytes = undefined;
   }
+}
+
+function computeStreamProgress(
+  job: YoutubeDownloadJob,
+  pythonPercent: number | undefined,
+  streamTotalBytes: number,
+  downloadedBytes: number,
+): number | undefined {
+  const total = streamTotalBytes || job.totalBytes || 0;
+  if (typeof pythonPercent === 'number' && pythonPercent >= 0) {
+    // The Python worker drives 0-100% of the real download; the file stream
+    // completes the remaining span so the bar keeps moving to 100.
+    return total > 0
+      ? Math.min(100, Math.round(pythonPercent + (downloadedBytes / total) * (100 - pythonPercent)))
+      : pythonPercent;
+  }
+  if (total > 0) {
+    return Math.min(100, Math.round((downloadedBytes / total) * 100));
+  }
+  return undefined;
 }

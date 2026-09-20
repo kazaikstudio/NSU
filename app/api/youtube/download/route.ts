@@ -5,7 +5,7 @@ import { createReadStream } from "node:fs";
 import { copyFile, mkdir, mkdtemp, rename, rm, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { ensureDownloadStoragePath } from "@/lib/download-storage";
-import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from "@/lib/download";
+import { buildDownloadFilename } from "@/lib/download";
 import { resolveAllowedOrigin } from "@/lib/request-origin";
 import { downloadWithPython } from "@/lib/youtube-python";
 import {
@@ -49,70 +49,6 @@ function setDiagnosticHeaders(response: Response, diagnosticCode: string) {
   response.headers.set('X-NSU-Download-Code', diagnosticCode);
   response.headers.set('X-NSU-Download-Runtime', process.env.RAILWAY_PUBLIC_DOMAIN ? 'railway-python' : 'python');
   return response;
-}
-
-function createCancelSafeWebStream(streamPath: string): ReadableStream<Uint8Array> {
-  const source = createReadStream(streamPath);
-  let cancelled = false;
-
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      source.on("data", (chunk) => {
-        if (cancelled) return;
-        try {
-          controller.enqueue(chunk as Uint8Array);
-        } catch {
-          cancelled = true;
-          source.destroy();
-          return;
-        }
-        if (controller.desiredSize != null && controller.desiredSize <= 0) {
-          source.pause();
-        }
-      });
-      source.on("end", () => {
-        if (cancelled) return;
-        try {
-          controller.close();
-        } catch {
-          cancelled = true;
-        }
-      });
-      source.on("error", (error) => {
-        console.error("download stream pipeline failed", {
-          path: streamPath,
-          cause: error instanceof Error ? error.message : String(error),
-        });
-        if (cancelled) return;
-        try {
-          controller.error(error);
-        } catch {
-          cancelled = true;
-        }
-      });
-    },
-    pull() {
-      if (!cancelled && source.isPaused()) source.resume();
-    },
-    cancel() {
-      cancelled = true;
-      source.destroy();
-    },
-  });
-}
-
-function createStreamingResponse(streamPath: string, size: number, init: ResponseInit, diagnosticCode: string) {
-  const body = createCancelSafeWebStream(streamPath);
-  const response = new Response(body as unknown as BodyInit, init);
-  return setDiagnosticHeaders(response, diagnosticCode);
-}
-
-function getOutputMimeType(output: string, videoMimeType: string) {
-  if (output === "mp3") return "audio/mpeg";
-  if (output === "wav") return "audio/wav";
-  if (output === "aac") return "audio/mp4";
-  if (output === "m4a") return "audio/mp4";
-  return videoMimeType;
 }
 
 function moveIntoStorage(source: string, targetPath: string) {
@@ -160,7 +96,6 @@ export async function GET(req: Request) {
     );
   }
 
-  let scratchDir = "";
   try {
     if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) {
       throw new YoutubeDownloadError(400, {
@@ -196,67 +131,100 @@ export async function GET(req: Request) {
 
     const scratchRoot = join(process.cwd(), "downloads", ".tmp");
     await mkdir(scratchRoot, { recursive: true });
-    scratchDir = await mkdtemp(join(scratchRoot, "ydl-"));
+    const scratchDir = await mkdtemp(join(scratchRoot, "ydl-"));
 
-    let workerResult;
-    try {
-      workerResult = await downloadWithPython({
-        videoId: id,
-        itag,
-        output,
-        bitrate,
-        outPrefix: join(scratchDir, "download"),
-        ffmpegLocation: executable || null,
+    const workerSignal = new AbortController();
+    const cleanupScratch = () => rm(scratchDir, { recursive: true, force: true }).catch((error) => {
+      console.error('failed to clean up python download scratch directory', {
+        scratchDir,
+        cause: error instanceof Error ? error.message : String(error),
       });
-    } catch (workerError) {
-      throw new YoutubeDownloadError(502, {
-        code: 'YOUTUBE_STREAM_FAILED',
-        message: workerError instanceof Error ? workerError.message : 'The Python download worker failed to produce the requested media.',
-        details: {
-          ...getRequestDiagnostics(id, itag, output),
-          cause: workerError instanceof Error ? workerError.message : String(workerError),
-          workerDetail: (workerError as Error & { detail?: string }).detail || undefined,
-          ffmpeg: getFfmpegDiagnostics(executable),
-        },
-      });
-    }
+    });
+    req.signal.addEventListener('abort', () => workerSignal.abort(), { once: true });
 
-    const safeTitle = workerResult.title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").trim() || `youtube-${id}`;
-    const downloadDisplayName = buildDownloadFilename(`${safeTitle}.${extension}`, category);
-    const storedPath = await createStoredDownloadPath(downloadDisplayName, category);
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        const safeEnqueue = (text: string) => {
+          try {
+            controller.enqueue(encoder.encode(text));
+          } catch {
+            // The client disconnected; stop producing output.
+          }
+        };
 
-    try {
-      await moveIntoStorage(workerResult.file, storedPath);
-    } catch (moveError) {
-      throw new YoutubeDownloadError(500, {
-        code: 'DOWNLOAD_STORAGE_FAILED',
-        message: 'The downloaded media could not be stored on this server.',
-        details: {
-          ...getRequestDiagnostics(id, itag, output),
-          cause: moveError instanceof Error ? moveError.message : String(moveError),
-        },
-      });
-    }
+        try {
+          const workerResult = await downloadWithPython({
+            videoId: id,
+            itag,
+            output,
+            bitrate,
+            outPrefix: join(scratchDir, "download"),
+            ffmpegLocation: executable || null,
+            onProgress: (progress) => {
+              safeEnqueue(JSON.stringify({
+                type: 'progress',
+                percent: progress.percent,
+                downloadedBytes: progress.downloadedBytes,
+                totalBytes: progress.totalBytes,
+              }) + "\n");
+            },
+            signal: workerSignal.signal,
+          });
 
-    const storedFile = await stat(storedPath);
-    const mimeType = getOutputMimeType(output, workerResult.contentType);
-    const fallbackFilename = downloadDisplayName;
-    const encodedFilename = encodeURIComponent(downloadDisplayName);
-    const thumbnailUrl = searchParams.get('thumbnailUrl') || searchParams.get('thumbnail');
+          const safeTitle = workerResult.title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").trim() || `youtube-${id}`;
+          const downloadDisplayName = buildDownloadFilename(`${safeTitle}.${extension}`, category);
+          const storedPath = await createStoredDownloadPath(downloadDisplayName, category);
+          await moveIntoStorage(workerResult.file, storedPath);
+          const storedFile = await stat(storedPath);
 
-    const response = createStreamingResponse(storedPath, storedFile.size, {
+          safeEnqueue(JSON.stringify({
+            type: 'done',
+            contentType: workerResult.contentType,
+            size: storedFile.size,
+            title: workerResult.title,
+          }) + "\n");
+
+          for await (const chunk of createReadStream(storedPath)) {
+            if (req.signal.aborted) return;
+            try {
+              controller.enqueue(chunk as Uint8Array);
+            } catch {
+              return;
+            }
+          }
+          try {
+            controller.close();
+          } catch {
+            // Already closed by the consumer.
+          }
+        } catch (streamError) {
+          const message = streamError instanceof Error ? streamError.message : 'The download failed.';
+          safeEnqueue(JSON.stringify({ type: 'error', message }) + "\n");
+          try {
+            controller.close();
+          } catch {
+            // Already closed by the consumer.
+          }
+        } finally {
+          await cleanupScratch();
+        }
+      },
+      async cancel() {
+        workerSignal.abort();
+        await cleanupScratch();
+      },
+    });
+
+    const response = new Response(stream as unknown as BodyInit, {
       status: 200,
       headers: {
-        "Content-Type": mimeType,
-        "Content-Length": String(storedFile.size),
-        "Content-Disposition": `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodedFilename}`,
-        "X-NSU-Thumbnail-Url": getAudioDownloadThumbnailUrl(thumbnailUrl),
-        "Access-Control-Expose-Headers": "Content-Disposition, Content-Length, X-NSU-Download-Code, X-NSU-Download-Runtime, X-NSU-Thumbnail-Url",
+        "Content-Type": "application/octet-stream",
+        "Access-Control-Expose-Headers": "X-NSU-Download-Code, X-NSU-Download-Runtime",
         "Cache-Control": 'no-store',
       },
-    }, 'python-stream');
-
-    return withCors(response, req);
+    });
+    return withCors(setDiagnosticHeaders(response, 'python-stream'), req);
   } catch (error: unknown) {
     const payload = toDiagnosticPayload(error);
     const status = error instanceof YoutubeDownloadError ? error.status : 500;
@@ -268,14 +236,5 @@ export async function GET(req: Request) {
     const response = NextResponse.json(payload, { status });
     setDiagnosticHeaders(response, payload.code || 'UNKNOWN_DOWNLOAD_ERROR');
     return withCors(response, req);
-  } finally {
-    if (scratchDir) {
-      await rm(scratchDir, { recursive: true, force: true }).catch((error) => {
-        console.error('failed to clean up python download scratch directory', {
-          scratchDir,
-          cause: error instanceof Error ? error.message : String(error),
-        });
-      });
-    }
   }
 }
