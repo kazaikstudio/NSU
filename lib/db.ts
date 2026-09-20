@@ -71,13 +71,13 @@ export function buildDatabasePoolConfig({
         ? { rejectUnauthorized: false }
         : false,
     keepAlive: true,
-    // Railway's database can take a while to wake from a cold start, and
-    // between page loads a too-short idle timeout makes the pool throw away
-    // a perfectly good connection, forcing a slow reconnect on every visit.
-    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS || timeoutMs * 3),
-    idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS || 60000),
-    query_timeout: Number(process.env.QUERY_TIMEOUT_MS || 60000),
-    max: Number(process.env.PGPOOL_MAX || 4),
+    // Fail fast on blocked DB connections instead of letting the whole app sit
+    // behind a hung Postgres socket. Operators can still override these values
+    // explicitly through env vars when a slower upstream is expected.
+    connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS || timeoutMs),
+    idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS || timeoutMs),
+    query_timeout: Number(process.env.QUERY_TIMEOUT_MS || timeoutMs),
+    max: Number(process.env.PGPOOL_MAX || 2),
   };
 }
 
