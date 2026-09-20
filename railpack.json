@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "node",
+  "packages": {
+    "python": "3.13"
+  },
+  "steps": {
+    "python": {
+      "inputs": [{ "step": "packages:mise" }],
+      "commands": [
+        "python3 -m venv /app/.venv",
+        "/app/.venv/bin/pip install --no-cache-dir --disable-pip-version-check -r requirements.txt"
+      ],
+      "deployOutputs": [{ "include": [".venv"] }]
+    }
+  },
+  "deploy": {
+    "paths": ["/app/.venv/bin"],
+    "variables": {
+      "PYTHON_BIN": "/app/.venv/bin/python3"
+    }
+  }
+}
