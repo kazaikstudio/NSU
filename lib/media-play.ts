@@ -2,6 +2,26 @@ import pool, { ensureDatabaseReady } from '@/lib/db';
 
 export type MediaPlayQuery = (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
 
+let downloadRegionsReady: Promise<void> | null = null;
+
+function ensureDownloadRegionsTable(queryFn: MediaPlayQuery) {
+  if (!downloadRegionsReady) {
+    downloadRegionsReady = queryFn(`
+      CREATE TABLE IF NOT EXISTS download_regions (
+        region TEXT PRIMARY KEY,
+        download_count INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `).then(() => undefined);
+    downloadRegionsReady = downloadRegionsReady.catch((error) => {
+      downloadRegionsReady = null;
+      throw error;
+    });
+  }
+
+  return downloadRegionsReady;
+}
+
 export async function getMediaDownloadCount(
   driveFileId: string,
   queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),
@@ -139,13 +159,7 @@ export async function recordDownloadRegion(
   if (!normalizedRegion) return;
 
   await ensureDatabaseReady();
-  await queryFn(`
-    CREATE TABLE IF NOT EXISTS download_regions (
-      region TEXT PRIMARY KEY,
-      download_count INTEGER NOT NULL DEFAULT 0,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  await ensureDownloadRegionsTable(queryFn);
   await queryFn(
     `INSERT INTO download_regions (region, download_count)
      VALUES ($1, 1)
@@ -159,13 +173,7 @@ export async function getDownloadRegions(
   queryFn: MediaPlayQuery = (sql, params) => pool.query(sql, params),
 ) {
   await ensureDatabaseReady();
-  await queryFn(`
-    CREATE TABLE IF NOT EXISTS download_regions (
-      region TEXT PRIMARY KEY,
-      download_count INTEGER NOT NULL DEFAULT 0,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  await ensureDownloadRegionsTable(queryFn);
   const result = await queryFn(
     `SELECT region AS name, download_count AS downloads
      FROM download_regions ORDER BY download_count DESC, region ASC LIMIT 5`,

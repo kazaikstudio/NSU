@@ -163,7 +163,9 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
 
     const loadDashboardData = async () => {
       try {
-        await fetch('/api/dashboard/storage/member-profiles', { method: 'DELETE' });
+        // Legacy member-profile cleanup runs concurrently with the data load
+        // instead of blocking it; it can not fail the dashboard either.
+        void fetch('/api/dashboard/storage/member-profiles', { method: 'DELETE' }).catch(() => null);
         const [artistsResponse, membersResponse, mediaResponse, historyResponse, storageResponse, regionsResponse] = await Promise.all([
           fetch('/api/dashboard/artists'),
           fetch('/api/members'),

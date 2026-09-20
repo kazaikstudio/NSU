@@ -18,75 +18,55 @@ if (connectionString) {
   pool = new Pool({ connectionString });
 }
 
+let storageTablesReady: Promise<void> | null = null;
+
 async function ensureStorageTable() {
   if (!pool) {
     return;
   }
 
-  const client = await pool.connect();
+  if (!storageTablesReady) {
+    storageTablesReady = (async () => {
+      const client = await pool.connect();
 
-  try {
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS storage_items (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        type TEXT NOT NULL,
-        file_url TEXT NOT NULL,
-        drive_file_id TEXT,
-        thumbnail_url TEXT,
-        thumbnail_drive_file_id TEXT,
-        source TEXT NOT NULL DEFAULT 'talk-show',
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
+      try {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS storage_items (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            type TEXT NOT NULL,
+            file_url TEXT NOT NULL,
+            drive_file_id TEXT,
+            thumbnail_url TEXT,
+            thumbnail_drive_file_id TEXT,
+            source TEXT NOT NULL DEFAULT 'talk-show',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
 
-    await client.query(`
-      ALTER TABLE storage_items
-      ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'talk-show'
-    `);
-    await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
-    await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS drive_file_id TEXT`);
-    await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT`);
-  } finally {
-    client.release();
+        await client.query(`
+          ALTER TABLE storage_items
+          ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'talk-show'
+        `);
+        await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT`);
+        await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS drive_file_id TEXT`);
+        await client.query(`ALTER TABLE storage_items ADD COLUMN IF NOT EXISTS thumbnail_drive_file_id TEXT`);
+      } finally {
+        client.release();
+      }
+    })();
+    storageTablesReady = storageTablesReady.catch((error) => {
+      storageTablesReady = null;
+      throw error;
+    });
   }
+
+  await storageTablesReady;
 }
 
-export async function GET(request: Request) {
-  let driveStorage = null;
-  let driveStorageError = '';
-  let driveStorageEntries: Array<{ label: string; used: number; limit: number | null; usedInDrive: number; usedInTrash: number; error?: string }> = [];
-
-  try {
-    driveStorageEntries = await getConfiguredStorageEntries();
-
-    const firstConfiguredEntry = driveStorageEntries.find((entry) => !entry.error && entry.used > 0) ?? driveStorageEntries[0];
-    if (firstConfiguredEntry) {
-      driveStorage = {
-        used: firstConfiguredEntry.used,
-        limit: firstConfiguredEntry.limit,
-        usedInDrive: firstConfiguredEntry.usedInDrive,
-        usedInTrash: firstConfiguredEntry.usedInTrash,
-      };
-    }
-  } catch (error) {
-    driveStorageError = (error as Error).message;
-  }
-
-  const url = new URL(request.url);
-  const sourceFilter = url.searchParams.get('source')?.trim().toLowerCase();
-  const isTalkShowFilter = sourceFilter === 'talk-show';
-  const isPrimaryFilter = sourceFilter === 'primary';
-
-  // Pagination caps on the public lists (home feed, Comedy row) so the browser
-  // never downloads the entire table just to render a row of 5 cards.
+async function loadStorageItems(isTalkShowFilter: boolean, isPrimaryFilter: boolean) {
   if (!pool) {
-    return NextResponse.json({
-      items: getInMemoryStorageItems().slice().reverse(),
-      driveStorage,
-      driveStorageError,
-      driveStorageEntries,
-    });
+    return { items: getInMemoryStorageItems().slice().reverse() };
   }
 
   try {
@@ -105,24 +85,66 @@ export async function GET(request: Request) {
     queryText += `\n      ORDER BY created_at DESC`;
     const { rows } = await pool.query(queryText, queryParams);
 
-    return NextResponse.json({
-        items: rows.map((row) => ({
+    return {
+      items: rows.map((row) => ({
         id: row.id,
         title: row.title,
         type: row.type,
         file_url: row.fileUrl,
         thumbnail_url: row.thumbnailUrl,
-          source: row.source,
+        source: row.source,
         created_at: row.createdAt,
       })),
-      driveStorage,
-      driveStorageError,
-      driveStorageEntries,
-    });
+    };
   } catch (error) {
     console.warn('Falling back to the in-memory storage list because PostgreSQL is unavailable', error);
-    return NextResponse.json({ items: getInMemoryStorageItems().slice().reverse(), driveStorage, driveStorageError, driveStorageEntries });
+    return { items: getInMemoryStorageItems().slice().reverse() };
   }
+}
+
+async function loadDriveStorage() {
+  try {
+    const driveStorageEntries = await getConfiguredStorageEntries();
+
+    const firstConfiguredEntry = driveStorageEntries.find((entry) => !entry.error && entry.used > 0) ?? driveStorageEntries[0];
+    const driveStorage = firstConfiguredEntry
+      ? {
+          used: firstConfiguredEntry.used,
+          limit: firstConfiguredEntry.limit,
+          usedInDrive: firstConfiguredEntry.usedInDrive,
+          usedInTrash: firstConfiguredEntry.usedInTrash,
+        }
+      : null;
+
+    return { driveStorage, driveStorageError: '', driveStorageEntries };
+  } catch (error) {
+    return {
+      driveStorage: null,
+      driveStorageError: (error as Error).message,
+      driveStorageEntries: [],
+    };
+  }
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const sourceFilter = url.searchParams.get('source')?.trim().toLowerCase();
+  const isTalkShowFilter = sourceFilter === 'talk-show';
+  const isPrimaryFilter = sourceFilter === 'primary';
+
+  // Overlap the (potentially slow) bucket usage listing with the storage-items
+  // query instead of running them one after the other.
+  const [storageResult, driveResult] = await Promise.all([
+    loadStorageItems(isTalkShowFilter, isPrimaryFilter),
+    loadDriveStorage(),
+  ]);
+
+  return NextResponse.json({
+    items: storageResult.items,
+    driveStorage: driveResult.driveStorage,
+    driveStorageError: driveResult.driveStorageError,
+    driveStorageEntries: driveResult.driveStorageEntries,
+  });
 }
 
 export async function POST(request: Request) {

@@ -283,14 +283,24 @@ export function isBucketConfigured() {
   }
 }
 
+let cachedStorageEntries: { at: number; entries: ConfiguredStorageEntry[] } | null = null;
+const STORAGE_USAGE_CACHE_MS = Number(process.env.STORAGE_USAGE_CACHE_MS || 60_000);
+
 export async function getConfiguredStorageEntries(): Promise<ConfiguredStorageEntry[]> {
   if (!isBucketConfigured()) {
     return [];
   }
 
+  const cached = cachedStorageEntries;
+  if (cached && Date.now() - cached.at < STORAGE_USAGE_CACHE_MS) {
+    return cached.entries;
+  }
+
   try {
     const storage = await getBucketStorageUsage();
-    return [{ label: 'Railway Bucket', ...storage }];
+    const entries: ConfiguredStorageEntry[] = [{ label: 'Railway Bucket', ...storage }];
+    cachedStorageEntries = { at: Date.now(), entries };
+    return entries;
   } catch (error) {
     return [{
       label: 'Railway Bucket',

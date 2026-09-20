@@ -3,69 +3,79 @@ import pool, { ensureDatabaseReady } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
+let activityTablesReady: Promise<void> | null = null;
+
 async function ensureActivityTable() {
-  await ensureDatabaseReady();
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS activity_logs (
-      id BIGSERIAL PRIMARY KEY,
-      action TEXT NOT NULL,
-      entity_type TEXT NOT NULL,
-      entity_id TEXT,
-      description TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS activity_meta (
-      id INTEGER PRIMARY KEY,
-      initialized_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  if (!activityTablesReady) {
+    activityTablesReady = (async () => {
+      await ensureDatabaseReady();
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS activity_logs (
+          id BIGSERIAL PRIMARY KEY,
+          action TEXT NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_id TEXT,
+          description TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS activity_meta (
+          id INTEGER PRIMARY KEY,
+          initialized_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
 
-  const { rows: markerRows } = await pool.query('SELECT id FROM activity_meta WHERE id = 1');
-  if (markerRows.length > 0) return;
+      const { rows: markerRows } = await pool.query('SELECT id FROM activity_meta WHERE id = 1');
+      if (markerRows.length > 0) return;
 
-  const { rows: countRows } = await pool.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM activity_logs');
-  if (Number(countRows[0]?.count || 0) > 0) {
-    await pool.query('INSERT INTO activity_meta (id) VALUES (1) ON CONFLICT DO NOTHING');
-    return;
+      const { rows: countRows } = await pool.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM activity_logs');
+      if (Number(countRows[0]?.count || 0) > 0) {
+        await pool.query('INSERT INTO activity_meta (id) VALUES (1) ON CONFLICT DO NOTHING');
+        return;
+      }
+
+      await pool.query(`
+        INSERT INTO activity_logs (action, entity_type, entity_id, description, created_at)
+        SELECT 'created', 'artist', id::text, 'Artist record currently exists: ' || name, COALESCE(created_at, NOW())
+        FROM artists
+      `);
+
+      try {
+        await pool.query(`
+          INSERT INTO activity_logs (action, entity_type, entity_id, description, created_at)
+          SELECT CASE WHEN kind = 'track' THEN 'uploaded' ELSE 'created' END,
+                 CASE WHEN kind = 'track' THEN 'track' ELSE 'artist_media' END,
+                 id, 'Existing ' || kind || ' file: ' || file_name, created_at
+          FROM artist_media
+        `);
+      } catch {
+        // The media table is created lazily by the media route.
+      }
+
+      await pool.query(`
+        INSERT INTO activity_logs (action, entity_type, entity_id, description, created_at)
+        SELECT 'created', 'member', id::text, 'Member record currently exists: ' || name, COALESCE(created_at, NOW())
+        FROM members
+      `);
+
+      try {
+        await pool.query(`
+          INSERT INTO activity_logs (action, entity_type, entity_id, description, created_at)
+          SELECT 'created', 'storage_item', id, 'Existing storage record: ' || title, created_at
+          FROM storage_items
+        `);
+      } catch {
+        // The storage table is optional in deployments without legacy storage records.
+      }
+
+      await pool.query('INSERT INTO activity_meta (id) VALUES (1) ON CONFLICT DO NOTHING');
+    })();
+    activityTablesReady = activityTablesReady.catch((error) => {
+      activityTablesReady = null;
+      throw error;
+    });
   }
 
-  await pool.query(`
-    INSERT INTO activity_logs (action, entity_type, entity_id, description, created_at)
-    SELECT 'created', 'artist', id::text, 'Artist record currently exists: ' || name, COALESCE(created_at, NOW())
-    FROM artists
-  `);
-
-  try {
-    await pool.query(`
-      INSERT INTO activity_logs (action, entity_type, entity_id, description, created_at)
-      SELECT CASE WHEN kind = 'track' THEN 'uploaded' ELSE 'created' END,
-             CASE WHEN kind = 'track' THEN 'track' ELSE 'artist_media' END,
-             id, 'Existing ' || kind || ' file: ' || file_name, created_at
-      FROM artist_media
-    `);
-  } catch {
-    // The media table is created lazily by the media route.
-  }
-
-  await pool.query(`
-    INSERT INTO activity_logs (action, entity_type, entity_id, description, created_at)
-    SELECT 'created', 'member', id::text, 'Member record currently exists: ' || name, COALESCE(created_at, NOW())
-    FROM members
-  `);
-
-  try {
-    await pool.query(`
-      INSERT INTO activity_logs (action, entity_type, entity_id, description, created_at)
-      SELECT 'created', 'storage_item', id, 'Existing storage record: ' || title, created_at
-      FROM storage_items
-    `);
-  } catch {
-    // The storage table is optional in deployments without legacy storage records.
-  }
-
-  await pool.query('INSERT INTO activity_meta (id) VALUES (1) ON CONFLICT DO NOTHING');
+  await activityTablesReady;
 }
 
 export async function GET() {
