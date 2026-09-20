@@ -776,7 +776,7 @@ className="-mx-4 overflow-x-auto snap-x snap-mandatory scrollbar-none pb-8 pt-3 
                     <div className="flex justify-between items-center gap-4 w-full">
                       {/* Left: Text & Info */}
                       <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <span className="text-white font-semibold text-base sm:text-lg tracking-tight truncate min-w-0 drop-shadow-sm">
                             {track.title || 'Untitled Track'}
                           </span>
