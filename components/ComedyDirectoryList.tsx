@@ -1,7 +1,7 @@
 'use client';
 
 import type { MouseEvent } from 'react';
-import { Download, Flame } from 'lucide-react';
+import { Download, Flame, Share2 } from 'lucide-react';
 import { registerClientDownload } from '@/lib/download-controls';
 import { extractStoredFileId } from '@/lib/media-url';
 import { sanitizeDownloadFilename } from '@/lib/download';
@@ -20,14 +20,18 @@ type ComedyDirectoryListProps = {
   items: ComedyDirectoryItem[];
   activeItemId?: string | null;
   loading?: boolean;
+  className?: string;
   onSelectAction: (item: ComedyDirectoryItem) => void;
+  onShareAction?: (item: ComedyDirectoryItem) => void;
 };
 
 export default function ComedyDirectoryList({
   items,
   activeItemId,
   loading = false,
+  className,
   onSelectAction,
+  onShareAction,
 }: ComedyDirectoryListProps) {
   const handleDownloadClick = async (event: MouseEvent<HTMLButtonElement>, item: ComedyDirectoryItem) => {
     event.preventDefault();
@@ -118,7 +122,7 @@ export default function ComedyDirectoryList({
   };
 
   return (
-    <aside className="hidden flex-col gap-2 overflow-hidden rounded-3xl border border-card1/20 bg-cardcl/70 p-3 backdrop-blur-md lg:flex lg:col-span-1 lg:sticky lg:top-16 lg:h-[calc(100vh-5rem)] lg:self-start">
+    <aside className={`hidden flex-col gap-2 overflow-hidden rounded-3xl border border-card1/20 bg-cardcl/70 p-3 backdrop-blur-md lg:flex lg:sticky lg:top-16 lg:h-[calc(100vh_-_5rem)] lg:self-start ${className ?? ''}`}>
       <div className="flex shrink-0 items-center justify-between border-b border-card1/20 pb-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-primary">
           <Flame size={18} className="fill-navlink text-navlink" />
@@ -154,12 +158,24 @@ export default function ComedyDirectoryList({
 
                 <button
                   type="button"
+                  onClick={() => onShareAction?.(item)}
+                  aria-label={`Share ${item.title}`}
+                  title="Share"
+                  className="inline-flex h-9 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-navlink/20 bg-navlink/10 px-2.5 text-[10px] font-semibold text-navlink transition hover:border-navlink/40 hover:bg-navlink/20 hover:text-navlink"
+                >
+                  <Share2 size={14} />
+                  <span>Share</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={(event) => void handleDownloadClick(event, item)}
                   aria-label={`Download ${item.title}`}
                   title="Download"
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-navlink/20 bg-navlink/10 text-navlink transition hover:border-navlink/40 hover:bg-navlink/20 hover:text-navlink"
+                  className="inline-flex h-9 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-navlink/20 bg-navlink/10 px-2.5 text-[10px] font-semibold text-navlink transition hover:border-navlink/40 hover:bg-navlink/20 hover:text-navlink"
                 >
-                  <Download size={15} />
+                  <Download size={14} />
+                  <span>Download</span>
                 </button>
 
 

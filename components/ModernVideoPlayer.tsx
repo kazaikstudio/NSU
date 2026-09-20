@@ -7,7 +7,10 @@ import { Maximize, Minimize, Pause, Play, RotateCcw, Volume2, VolumeX } from "lu
 type ModernVideoPlayerProps = {
   src: string;
   loading?: boolean;
+  immersive?: boolean;
   onEndedAction?: () => void;
+  onSurfaceAction?: () => void;
+  onRatioAction?: (width: number, height: number) => void;
 };
 
 type WebkitVideoElement = HTMLVideoElement & {
@@ -27,7 +30,7 @@ function formatTime(timeInSeconds: number) {
   return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 }
 
-export default function ModernVideoPlayer({ src, loading = false, onEndedAction }: ModernVideoPlayerProps) {
+export default function ModernVideoPlayer({ src, loading = false, immersive = false, onEndedAction, onSurfaceAction, onRatioAction }: ModernVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<number | null>(null);
@@ -78,6 +81,7 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
       setDuration(video.duration || 0);
       if (video.videoWidth && video.videoHeight) {
         setVideoRatio(`${video.videoWidth} / ${video.videoHeight}`);
+        onRatioAction?.(video.videoWidth, video.videoHeight);
       }
     };
 
@@ -109,7 +113,7 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
       video.removeEventListener("webkitbeginfullscreen", handleWebkitFullscreenChange);
       video.removeEventListener("webkitendfullscreen", handleWebkitFullscreenChange);
     };
-  }, [src]);
+  }, [src, onRatioAction]);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -163,6 +167,7 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
     const video = videoRef.current;
     if (!video) return;
 
+    onSurfaceAction?.();
     if (video.paused) {
       video.play().then(() => {
         setIsPlaying(true);
@@ -289,19 +294,19 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
 
   const playerStyle: CSSProperties = {
     position: "relative",
-    aspectRatio: computedRatio,
     overflow: "hidden",
-    borderRadius: isFullscreen ? 0 : isMobile ? 22 : 28,
+    borderRadius: isFullscreen || immersive ? 0 : isMobile ? 22 : 28,
     background: "radial-gradient(circle at top, rgba(92, 100, 255, 0.24), transparent 42%), linear-gradient(180deg, #101322 0%, #06070d 100%)",
-    border: "1px solid rgba(255, 255, 255, 0.08)",
-    boxShadow: "0 24px 70px rgba(0, 0, 0, 0.38)",
-    ...(isFullscreen
+    border: isFullscreen || immersive ? 0 : "1px solid rgba(255, 255, 255, 0.08)",
+    boxShadow: isFullscreen || immersive ? "none" : "0 24px 70px rgba(0, 0, 0, 0.38)",
+    ...(isFullscreen || immersive
       ? {
           width: "100%",
           height: "100%",
           maxWidth: "none",
           maxHeight: "none",
           margin: 0,
+          aspectRatio: "auto",
         }
       : {
           width: "auto",
@@ -309,6 +314,7 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
           maxWidth: "100%",
           maxHeight: "calc(100dvh - 140px)",
           margin: "0 auto",
+          aspectRatio: computedRatio,
         }),
   };
 
@@ -384,7 +390,7 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
   const seekTopStyle: CSSProperties = {
     display: "flex",
     alignItems: "center",
-    justifyContent: isMobile ? "flex-start" : "space-between",
+    justifyContent: "space-between",
     marginBottom: isMobile ? 4 : 8,
     fontSize: isMobile ? 9 : 10,
     letterSpacing: "0.16em",
@@ -626,19 +632,15 @@ export default function ModernVideoPlayer({ src, loading = false, onEndedAction 
         <div style={controlsStyle}>
           <div style={seekWrapStyle}>
             <div style={seekTopStyle}>
-              {isMobile ? (
                 <div style={pillStyle}>
                   <span style={timeStyle}>{formatTime(currentTime)}</span>
                   <span style={timeMutedStyle}>/</span>
                   <span style={timeMutedStyle}>{formatTime(duration)}</span>
                 </div>
-              ) : (
-                <>
-                  <span>Playing Now</span>
-                  <span>{Math.round(progress)}%</span>
-                </>
-              )}
-            </div>
+                <span style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+                  {Math.round(progress)}%
+                </span>
+              </div>
             <div style={rangeShellStyle}>
               <div style={rangeFillStyle(`${progress}%`)} />
               <input

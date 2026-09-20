@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, use, useRef } from "react";
+import React, { useState, useEffect, use, useRef, useCallback } from "react";
 import Link from "next/link";
 import ComedyDirectoryList, { type ComedyDirectoryItem } from '@/components/ComedyDirectoryList';
 import ModernVideoPlayer from '@/components/ModernVideoPlayer';
-import { ArrowLeft, Share2, Download, Info, Check } from "lucide-react";
+import { ArrowLeft, Share2, Download, Check } from "lucide-react";
 import { registerClientDownload } from '@/lib/download-controls';
 
 type PlaylistItem = ComedyDirectoryItem;
@@ -35,6 +35,37 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
 
 
   const [copied, setCopied] = useState(false);
+  const [isMobileView, setIsMobileView] = useState<boolean | null>(null);
+  const [chromeHidden, setChromeHidden] = useState(false);
+  const [videoAspect, setVideoAspect] = useState(16 / 9);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 639px)');
+    const update = () => setIsMobileView(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener('change', update);
+    return () => mediaQuery.removeEventListener('change', update);
+  }, []);
+
+  const aspect = videoAspect || 16 / 9;
+  const playerColSpan = aspect >= 1.6 ? 9 : aspect >= 1.3 ? 8 : aspect >= 1 ? 7 : 5;
+  const listColSpan = 12 - playerColSpan;
+  const playerColumnClass = { 9: 'lg:col-span-9', 8: 'lg:col-span-8', 7: 'lg:col-span-7', 5: 'lg:col-span-5' }[playerColSpan];
+  const listColumnClass = { 3: 'lg:col-span-3', 4: 'lg:col-span-4', 5: 'lg:col-span-5', 7: 'lg:col-span-7' }[listColSpan];
+
+  const handleVideoRatio = useCallback((width: number, height: number) => {
+    if (width > 0 && height > 0) setVideoAspect(width / height);
+  }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('nsu-nav-visibility', { detail: { hidden: chromeHidden } }));
+  }, [chromeHidden]);
+
+  useEffect(() => {
+    return () => {
+      window.dispatchEvent(new CustomEvent('nsu-nav-visibility', { detail: { hidden: false } }));
+    };
+  }, []);
 
   useEffect(() => {
     const fetchDirectoryFiles = async () => {
@@ -155,6 +186,24 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  const handleShareItem = async (item: PlaylistItem) => {
+    const shareUrl = `${window.location.origin}/Comedy/${item.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: item.title,
+          url: shareUrl,
+        });
+      } catch (err) {
+        console.log("Share cancelled or failed", err);
+      }
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   const handleDownloadItem = async (item: PlaylistItem) => {
     const safeTitle = (item.title || 'download').trim() || 'download';
     const targetUrl = item.fileUrl || '';
@@ -257,59 +306,63 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
     handleDownloadItem(activeItem);
   };
 
+  const handlePlayerSurface = () => {
+    if (isMobileView !== true) return;
+    setChromeHidden((previous) => !previous);
+  };
+
 
   return (
-    <main className="mt-1 flex min-h-screen flex-col text-Eltext p-1 font-sans sm:p-6" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      <div className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 items-start gap-2 lg:grid-cols-4">
+    <main className="mt-1 flex min-h-screen flex-col text-Eltext p-0 font-sans sm:p-6" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      <div className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 items-start gap-0 lg:grid-cols-12">
 
       {/* Sticky Video Section on desktop screens only */}
-      <section className="sticky top-16 z-20 flex h-fit flex-col gap-1.5 pb-2 sm:top-20 lg:col-span-3">
-          <ModernVideoPlayer
-            src={videoSrc}
-            loading={loading}
-            onEndedAction={handleVideoEnded}
-          />
+      <section className={`flex h-[100dvh] w-full flex-col gap-1.5 sm:h-auto sm:top-20 lg:sticky lg:top-16 ${playerColumnClass} lg:h-fit lg:pb-2`}>
+          <div className="relative min-h-0 flex-1 sm:h-auto sm:flex-none lg:flex-initial">
+            <ModernVideoPlayer
+              src={videoSrc}
+              loading={loading}
+              immersive={isMobileView === true}
+              onEndedAction={handleVideoEnded}
+              onSurfaceAction={handlePlayerSurface}
+              onRatioAction={handleVideoRatio}
+            />
 
-          <section className="w-full max-w-79xl mx-auto flex items-center justify-between">
-            <Link
-              href="/"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-card1/20 bg-cardcl/80 px-4 py-3 text-xs font-semibold text-secondary backdrop-blur-md transition hover:bg-cardcl hover:text-primary active:scale-95 sm:w-auto sm:gap-3 sm:rounded-full sm:px-10 sm:py-2.5"
-            >
-              <ArrowLeft size={14} className="w-4 h-4" />
-              <span>Back</span>
-            </Link>
-          </section>
-
-          <div className="flex flex-col justify-between gap-2 rounded-2xl border border-card1/20 bg-cardcl/70 p-4 backdrop-blur-md sm:flex-row sm:items-center sm:rounded-3xl sm:p-5">
-            <div className="space-y-1 min-w-0">
-              <span className="flex items-center gap-2 truncate text-base font-bold text-primary sm:text-lg">
-                <Info size={18} className="shrink-0 text-navlink" />
-                <span className="truncate">{videoTitle}</span>
-              </span>
-              <p className="max-w-xl text-[11px] leading-relaxed text-secondry sm:text-xs">
-                Powered by <span className="font-semibold text-navlink">Noll Music Ug</span> — your home for premium local beats and high-energy shows.
-              </p>
-            </div>
-
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              <button
-                type="button"
-                onClick={handleShare}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-card1/20 bg-backnav px-4 py-2.5 text-xs font-semibold text-secondary transition active:scale-95 hover:bg-cardcl sm:flex-none sm:rounded-2xl"
+            {isMobileView === true ? (
+              <div
+                className="absolute inset-x-0 top-0 z-30 flex items-center justify-between p-3"
+                style={{
+                  opacity: chromeHidden ? 0 : 1,
+                  pointerEvents: chromeHidden ? 'none' : 'auto',
+                  transition: 'opacity 220ms ease',
+                }}
               >
-                {copied ? <Check size={14} className="text-navlink" /> : <Share2 size={14} />}
-                <span>{copied ? "Copied Link" : "Share"}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  aria-label="Share"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-card1/20 bg-backnav/80 text-primary backdrop-blur-md transition active:scale-95"
+                >
+                  {copied ? <Check size={18} className="text-navlink" /> : <Share2 size={18} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  aria-label="Download"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navlink text-backnav backdrop-blur-md transition active:scale-95"
+                >
+                  <Download size={18} />
+                </button>
+              </div>
+            ) : null}
 
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-navlink px-4 py-2.5 text-xs font-semibold text-backnav transition active:scale-95 hover:opacity-90 sm:flex-none sm:rounded-2xl"
-              >
-                <Download size={14} />
-                <span>Download</span>
-              </button>
-            </div>
+          <Link
+            href="/"
+            aria-label="Back"
+            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-card1/20 bg-backnav/80 text-primary backdrop-blur-md transition hover:bg-cardcl active:scale-95 sm:flex sm:absolute sm:left-3 sm:top-3 sm:z-40"
+          >
+            <ArrowLeft size={16} className="w-4 h-4" />
+          </Link>
           </div>
       </section>
 
@@ -317,7 +370,9 @@ export default function ComedyVideoPage({ params }: { params: Promise<{ id: stri
         items={playlist}
         activeItemId={activeItem?.id ?? null}
         loading={loading}
+        className={listColumnClass}
         onSelectAction={selectVideo}
+        onShareAction={handleShareItem}
       />
 
       </div>

@@ -24,6 +24,7 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [downloadEntries, setDownloadEntries] = useState<DownloadEntry[]>([]);
   const [isDark, setIsDark] = useState(false);
+  const [isChromeHidden, setIsChromeHidden] = useState(false);
   const navRef = useRef<HTMLHeadingElement>(null);
   const pathname = usePathname();
   const router = useRouter();
@@ -31,6 +32,15 @@ const Navbar = () => {
   useClickOutside(navRef, () => {
     if (isOpen) setIsOpen(false);
   });
+
+  useEffect(() => {
+    const handleNavVisibility = (event: Event) => {
+      const detail = (event as CustomEvent<{ hidden?: boolean }>).detail;
+      if (detail && typeof detail.hidden === 'boolean') setIsChromeHidden(detail.hidden);
+    };
+    window.addEventListener('nsu-nav-visibility', handleNavVisibility);
+    return () => window.removeEventListener('nsu-nav-visibility', handleNavVisibility);
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -134,6 +144,12 @@ const Navbar = () => {
       className="sticky top-1 z-50 w-[97%] mx-auto rounded-xl border-b border-slate-500 bg-backnav/80
       text-primary shadow-2xl shadow-zinc-300/20 backdrop-blur-xl
       dark:border-zinc-800/80 dark:shadow-zinc-950/50"
+      style={{
+        height: isChromeHidden ? 0 : undefined,
+        marginTop: isChromeHidden ? 0 : undefined,
+        overflow: isChromeHidden ? 'hidden' : undefined,
+        transition: 'height 300ms ease, margin 300ms ease',
+      }}
     >
       <nav className="flex h-12 items-center justify-between px-4 sm:px-6 max-w-7xl mx-auto">
         {/* Logo & Brand Name */}
