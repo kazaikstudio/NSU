@@ -1247,7 +1247,11 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
                       <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-400">
                         <span className="flex items-center gap-2">
                           <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                          {uploading ? 'Uploading media file...' : 'Upload complete'}
+                          {uploading
+                            ? uploadProgress >= 100
+                              ? 'Optimizing video for fast playback…'
+                              : 'Uploading media file...'
+                            : 'Upload complete'}
                         </span>
                         <span className="font-bold text-indigo-400">{uploadProgress}%</span>
                       </div>

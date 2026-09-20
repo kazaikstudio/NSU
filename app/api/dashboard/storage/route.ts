@@ -5,8 +5,10 @@ import { getConfiguredStorageEntries, uploadToBucket } from '@/lib/railway-stora
 import { recordActivity } from '@/lib/activity';
 import { getInMemoryStorageItems, pushInMemoryStorageItem } from '@/lib/storage-items';
 import { getDatabaseConnectionString } from '@/lib/db';
+import { shouldTranscodeVideo, transcodeVideoToStreamable } from '@/lib/video-transcode';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 const connectionString = getDatabaseConnectionString();
 
@@ -172,13 +174,25 @@ export async function POST(request: Request) {
   let uploadError: string | null = null;
 
   if (uploadedFile) {
-    const storageName = title || uploadedFile.name;
+    const originalBytes = await uploadedFile.arrayBuffer();
+    let storageName = title || uploadedFile.name;
+    let mimeType = uploadedFile.type || 'application/octet-stream';
+    let bytesToStore: ArrayBuffer = originalBytes;
+
+    if (shouldTranscodeVideo(uploadedFile.name, uploadedFile.type, originalBytes.byteLength)) {
+      const transcodedVideo = await transcodeVideoToStreamable(originalBytes, storageName);
+      if (transcodedVideo) {
+        storageName = transcodedVideo.name;
+        mimeType = transcodedVideo.mimeType;
+        bytesToStore = transcodedVideo.bytes.slice().buffer as ArrayBuffer;
+      }
+    }
 
     try {
       const storageFile = await uploadToBucket({
         name: storageName,
-        mimeType: uploadedFile.type || 'application/octet-stream',
-        bytes: await uploadedFile.arrayBuffer(),
+        mimeType,
+        bytes: bytesToStore,
       });
 
       publicUrl = storageFile.publicUrl;
@@ -188,8 +202,8 @@ export async function POST(request: Request) {
       console.warn('Bucket upload failed, falling back to local storage', uploadError);
       const localFile = await saveFileLocally({
         name: storageName,
-        mimeType: uploadedFile.type || 'application/octet-stream',
-        bytes: await uploadedFile.arrayBuffer(),
+        mimeType,
+        bytes: bytesToStore,
       });
       publicUrl = localFile.publicUrl;
     }
