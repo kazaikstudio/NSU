@@ -328,7 +328,7 @@ function DownloadForm() {
         onProgress: ({ downloadedBytes, totalBytes, progress }) => {
           emitDownloadHistory({
             status: 'downloading',
-            title: buildDirectDownloadFilename(serverProvidedName || historyTitle),
+            title: buildDirectDownloadFilename(serverFileName || historyTitle),
             progress,
             downloadedBytes,
             totalBytes: totalBytes ?? downloadedBytes,
