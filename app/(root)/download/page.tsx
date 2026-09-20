@@ -8,6 +8,7 @@ import DockBar from '../../../components/DockBar'
 import { useClickOutside } from '../../../components/useClickOutside'
 import { startYoutubeDownload } from '@/lib/youtube-download-manager'
 import { startDirectUrlDownload } from '@/lib/direct-url-download'
+import { buildDirectDownloadFilename } from '@/lib/download'
 
 const SAVED_DOWNLOAD_LINK_KEY = 'nsu-download-link'
 
@@ -320,13 +321,14 @@ function DownloadForm() {
       paused: false,
       sourceUrl: directUrl,
     })
+    let serverFileName: string | undefined
     try {
-      const { blob } = await startDirectUrlDownload({
+      const { blob, serverFileName: serverProvidedName } = await startDirectUrlDownload({
         sourceUrl: directUrl,
         onProgress: ({ downloadedBytes, totalBytes, progress }) => {
           emitDownloadHistory({
             status: 'downloading',
-            title: historyTitle,
+            title: buildDirectDownloadFilename(serverProvidedName || historyTitle),
             progress,
             downloadedBytes,
             totalBytes: totalBytes ?? downloadedBytes,
@@ -335,10 +337,12 @@ function DownloadForm() {
           })
         },
       })
+      serverFileName = serverProvidedName
 
+      const downloadFileName = buildDirectDownloadFilename(serverFileName || historyTitle)
       const anchor = document.createElement('a')
       anchor.href = URL.createObjectURL(blob)
-      anchor.download = historyTitle
+      anchor.download = downloadFileName
       document.body.appendChild(anchor)
       anchor.click()
       anchor.remove()
@@ -346,7 +350,7 @@ function DownloadForm() {
 
       emitDownloadHistory({
         status: 'done',
-        title: historyTitle,
+        title: downloadFileName,
         progress: 100,
         downloadedBytes: blob.size,
         totalBytes: blob.size,
@@ -357,7 +361,7 @@ function DownloadForm() {
       if (downloadError instanceof Error && downloadError.name === 'AbortError') {
         emitDownloadHistory({
           status: 'downloading',
-          title: historyTitle,
+          title: buildDirectDownloadFilename(serverFileName || historyTitle),
           paused: true,
           sourceUrl: directUrl,
         })
@@ -365,7 +369,7 @@ function DownloadForm() {
       }
       emitDownloadHistory({
         status: 'error',
-        title: historyTitle,
+        title: buildDirectDownloadFilename(serverFileName || historyTitle),
         paused: false,
         sourceUrl: directUrl,
       })

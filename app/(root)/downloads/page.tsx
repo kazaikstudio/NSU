@@ -6,6 +6,7 @@ import DownloadRow, { DownloadEntry } from '../../../components/DownloadRow';
 import { controlYoutubeDownload, startYoutubeDownload } from '@/lib/youtube-download-manager';
 import { startDirectUrlDownload } from '@/lib/direct-url-download';
 import { getPartialOffset } from '@/lib/direct-download-store';
+import { buildDirectDownloadFilename } from '@/lib/download';
 
 interface DownloadNotice {
   status: 'downloading' | 'done' | 'error';
@@ -503,7 +504,7 @@ export default function DownloadsPage() {
     abortControllerRef.current = controller;
 
     try {
-      const { blob } = await startDirectUrlDownload({
+      const { blob, serverFileName } = await startDirectUrlDownload({
         sourceUrl: entry.sourceUrl,
         signal: controller.signal,
         onProgress: ({ downloadedBytes, totalBytes: total, progress }) => {
@@ -537,7 +538,7 @@ export default function DownloadsPage() {
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = objectUrl;
-      anchor.download = entry.fileName || entry.title;
+      anchor.download = buildDirectDownloadFilename(serverFileName || entry.fileName || entry.title || 'download');
       anchor.style.display = 'none';
       document.body.appendChild(anchor);
       anchor.click();
@@ -551,6 +552,7 @@ export default function DownloadsPage() {
               status: 'done' as const,
               paused: false,
               progress: 100,
+              fileName: buildDirectDownloadFilename(serverFileName || entry.fileName || entry.title || 'download'),
               downloadedBytes: blob.size,
               totalBytes: blob.size,
               updatedAt: new Date().toISOString(),
