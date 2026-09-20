@@ -1,102 +1,25 @@
 import { NextResponse } from "next/server";
-import { ClientType, Innertube } from "youtubei.js";
 import ffmpegPath from "ffmpeg-static";
 import { existsSync } from "node:fs";
+import { createReadStream } from "node:fs";
+import { copyFile, mkdir, mkdtemp, rename, rm, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
-import { Readable } from "node:stream";
-import { spawn } from "node:child_process";
-import {
-  ensureDownloadStoragePath,
-  getDownloadStorageDiagnostics,
-  teeStreamToFile,
-} from "@/lib/download-storage";
-import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from '@/lib/download';
-import { resolveAllowedOrigin } from '@/lib/request-origin';
-import { configureYoutubeEvaluator, getYoutubeSessionConfig, YOUTUBE_CLIENT_TYPES } from '@/lib/youtube-client';
-import { getYoutubePageInfo, type YoutubePageInfo } from '@/lib/youtube-page';
-import { getYoutubeDlpInfo, type DlpInfo } from '@/lib/youtube-dlp';
+import { ensureDownloadStoragePath } from "@/lib/download-storage";
+import { buildDownloadFilename, getAudioDownloadThumbnailUrl } from "@/lib/download";
+import { resolveAllowedOrigin } from "@/lib/request-origin";
+import { downloadWithPython } from "@/lib/youtube-python";
 import {
   YoutubeDownloadError,
   getFfmpegDiagnostics,
   getRuntimeDiagnostics,
   toDiagnosticPayload,
-} from '@/lib/youtube-download-diagnostics';
+} from "@/lib/youtube-download-diagnostics";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
-configureYoutubeEvaluator();
-
-async function getYoutubeVideoInfo(videoId: string) {
-  let lastError: unknown;
-
-  try {
-    const info = await getYoutubeDlpInfo(videoId);
-    return { youtube: undefined, info, clientType: 'yt-dlp' as const };
-  } catch (error) {
-    lastError = error;
-  }
-
-  try {
-    const pageInfo = await getYoutubePageInfo(videoId);
-    const pageFormats = [
-      ...pageInfo.streaming_data.formats,
-      ...pageInfo.streaming_data.adaptive_formats,
-    ];
-    if (pageFormats.some((format) => format.url)) {
-      return { youtube: undefined, info: pageInfo, clientType: 'watch-page' as const };
-    }
-  } catch (error) {
-    lastError = error;
-  }
-
-  for (const clientType of YOUTUBE_CLIENT_TYPES) {
-    try {
-      const youtube = await Innertube.create({
-        ...getYoutubeSessionConfig(),
-        client_type: clientType,
-        retrieve_player: true,
-      });
-      const info = await youtube.getBasicInfo(videoId);
-      const formatCount = (info.streaming_data?.formats?.length ?? 0) + (info.streaming_data?.adaptive_formats?.length ?? 0);
-      if (formatCount > 0) {
-        const formats = [...(info.streaming_data?.formats || []), ...(info.streaming_data?.adaptive_formats || [])];
-        if (formats.some((format) => format.url)) {
-          return { youtube, info, clientType };
-        }
-        try {
-          return { youtube: undefined, info: await getYoutubePageInfo(videoId), clientType: 'watch-page' as const };
-        } catch {
-          return { youtube, info, clientType };
-        }
-      }
-
-      lastError = new Error(`No playable stream metadata for ${videoId}`);
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  if (lastError) {
-    try {
-      return { youtube: undefined, info: await getYoutubePageInfo(videoId), clientType: 'watch-page' as const };
-    } catch {
-      throw lastError;
-    }
-  }
-
-  throw new Error(`Unable to fetch YouTube metadata for ${videoId}`);
-}
-
-async function getYoutubeInfoForClient(videoId: string, clientType: ClientType) {
-  const youtube = await Innertube.create({
-    ...getYoutubeSessionConfig(),
-    client_type: clientType,
-    retrieve_player: true,
-  });
-  return youtube.getBasicInfo(videoId);
-}
+const AUDIO_OUTPUTS = new Set(["mp3", "wav", "m4a", "aac"]);
 
 function getFfmpegPath() {
   const localPath = join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg");
@@ -124,177 +47,82 @@ function getRequestDiagnostics(id: string, itag: number, output: string) {
 
 function setDiagnosticHeaders(response: Response, diagnosticCode: string) {
   response.headers.set('X-NSU-Download-Code', diagnosticCode);
-  response.headers.set('X-NSU-Download-Runtime', process.env.RAILWAY_PUBLIC_DOMAIN ? 'railway' : 'nodejs');
+  response.headers.set('X-NSU-Download-Runtime', process.env.RAILWAY_PUBLIC_DOMAIN ? 'railway-python' : 'python');
   return response;
 }
 
-function getStreamingPot(info: { streaming_data?: unknown }): string | undefined {
-  try {
-    const data = info.streaming_data as { pot?: unknown } | undefined;
-    return typeof data?.pot === 'string' ? data.pot : undefined;
-  } catch {
-    return undefined;
-  }
-}
+function createCancelSafeWebStream(streamPath: string): ReadableStream<Uint8Array> {
+  const source = createReadStream(streamPath);
+  let cancelled = false;
 
-function buildStreamUrl(url: string, pot?: string) {
-  const parsed = new URL(url);
-  if (pot && !parsed.searchParams.get('pot')) parsed.searchParams.set('pot', pot);
-  return parsed.toString();
-}
-
-function getStreamRequestHeaders(videoId: string) {
-  return {
-    'User-Agent':
-      process.env.YOUTUBE_USER_AGENT ||
-      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    Origin: 'https://www.youtube.com',
-    Referer: `https://www.youtube.com/watch?v=${videoId}`,
-  };
-}
-
-const STREAM_SEGMENT_COUNT = 4;
-const STREAM_SEGMENT_MIN_BYTES = 4 * 1024 * 1024;
-
-async function openSegmentedStream(url: string, headers: Record<string, string>, totalBytes: number, segmentCount = STREAM_SEGMENT_COUNT): Promise<ReadableStream<Uint8Array>> {
-  segmentCount = Math.max(1, segmentCount);
-  const segmentSize = Math.ceil(totalBytes / segmentCount);
-  const ranges = Array.from({ length: segmentCount }, (_, index) => {
-    const start = index * segmentSize;
-    const end = Math.min(totalBytes - 1, start + segmentSize - 1);
-    return { start, end };
-  });
-
-  const readers = await Promise.all(
-    ranges.map(async ({ start, end }) => {
-      const response = await fetch(url, {
-        headers: { ...headers, Range: `bytes=${start}-${end}` },
-        redirect: 'follow',
-      });
-      if (!response.ok || !response.body) {
-        throw new Error(`YouTube stream segment ${start}-${end} returned ${response.status}`);
-      }
-      return response.body.getReader();
-    }),
-  );
-
-  let index = 0;
   return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      if (index >= readers.length) {
-        controller.close();
-        return;
-      }
-      const { done, value } = await readers[index].read();
-      if (value) controller.enqueue(value);
-      if (done) {
-        await readers[index].releaseLock();
-        index += 1;
-      }
+    start(controller) {
+      source.on("data", (chunk) => {
+        if (cancelled) return;
+        try {
+          controller.enqueue(chunk as Uint8Array);
+        } catch {
+          cancelled = true;
+          source.destroy();
+          return;
+        }
+        if (controller.desiredSize != null && controller.desiredSize <= 0) {
+          source.pause();
+        }
+      });
+      source.on("end", () => {
+        if (cancelled) return;
+        try {
+          controller.close();
+        } catch {
+          cancelled = true;
+        }
+      });
+      source.on("error", (error) => {
+        console.error("download stream pipeline failed", {
+          path: streamPath,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+        if (cancelled) return;
+        try {
+          controller.error(error);
+        } catch {
+          cancelled = true;
+        }
+      });
+    },
+    pull() {
+      if (!cancelled && source.isPaused()) source.resume();
     },
     cancel() {
-      for (const reader of readers) void reader.cancel().catch(() => {});
-      return Promise.resolve();
+      cancelled = true;
+      source.destroy();
     },
   });
 }
 
-async function openYouTubeStream(url: string, headers: Record<string, string>): Promise<ReadableStream<Uint8Array> | undefined> {
-  let probeResponse: Response | null = null;
-  try {
-    probeResponse = await fetch(url, {
-      headers: { ...headers, Range: 'bytes=0-0' },
-      redirect: 'follow',
-    });
-    if (!probeResponse.ok) {
-      await probeResponse.body?.cancel().catch(() => {});
-      return undefined;
-    }
-
-    const contentRange = probeResponse.headers.get('content-range') || '';
-    const totalMatch = contentRange.match(/bytes\s+\d+-\d+\/(\d+)/);
-    const totalBytes = Number(totalMatch?.[1]);
-
-    if (probeResponse.status === 206 && Number.isFinite(totalBytes) && totalBytes >= 1) {
-      await probeResponse.arrayBuffer().catch(() => new ArrayBuffer(0));
-      const segmentCount = totalBytes >= STREAM_SEGMENT_MIN_BYTES ? STREAM_SEGMENT_COUNT : 1;
-      return openSegmentedStream(url, headers, totalBytes, segmentCount);
-    }
-
-    if (probeResponse.status === 200 && probeResponse.body) {
-      return probeResponse.body;
-    }
-
-    await probeResponse.body?.cancel().catch(() => {});
-  } catch {
-    await probeResponse?.body?.cancel().catch(() => {});
-  }
-  return undefined;
+function createStreamingResponse(streamPath: string, size: number, init: ResponseInit, diagnosticCode: string) {
+  const body = createCancelSafeWebStream(streamPath);
+  const response = new Response(body as unknown as BodyInit, init);
+  return setDiagnosticHeaders(response, diagnosticCode);
 }
 
-async function downloadViaInnertubeFallback(itag: number, videoId: string): Promise<ReadableStream<Uint8Array>> {
-  let lastError: unknown;
-
-  for (const clientType of YOUTUBE_CLIENT_TYPES) {
-    try {
-      const youtube = await Innertube.create({
-        ...getYoutubeSessionConfig(),
-        client_type: clientType,
-        retrieve_player: true,
-      });
-      const info = await youtube.getBasicInfo(videoId);
-      const candidateFormats = [
-        ...(info.streaming_data?.formats || []),
-        ...(info.streaming_data?.adaptive_formats || []),
-      ];
-      const format = candidateFormats.find((candidate) => candidate.itag === itag);
-      if (!format) continue;
-
-      if (format.url) {
-        const open = await openYouTubeStream(
-          buildStreamUrl(format.url, getStreamingPot(info as { streaming_data?: unknown })),
-          getStreamRequestHeaders(videoId),
-        );
-        if (open) return open;
-      }
-
-      if ('download' in info) return info.download({ itag });
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  if (lastError) throw lastError;
-  throw new Error(`No fallback streamer could open itag ${itag} for ${videoId}.`);
+function getOutputMimeType(output: string, videoMimeType: string) {
+  if (output === "mp3") return "audio/mpeg";
+  if (output === "wav") return "audio/wav";
+  if (output === "aac") return "audio/mp4";
+  if (output === "m4a") return "audio/mp4";
+  return videoMimeType;
 }
 
-async function downloadSelectedFormat(info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo | DlpInfo, selectedFormat: { itag: number; url?: string }, videoId: string) {
-  const pot = 'streaming_data' in info ? getStreamingPot(info) : undefined;
-  if (selectedFormat.url) {
-    const url = buildStreamUrl(selectedFormat.url, pot);
-    const headers = getStreamRequestHeaders(videoId);
-    console.log('[youtube-download] openYouTubeStream-start', { itag: selectedFormat.itag, urlPrefix: url.slice(0, 120), pot: Boolean(pot) });
-    try {
-      const open = await openYouTubeStream(url, headers);
-      console.log('[youtube-download] openYouTubeStream-result', { itag: selectedFormat.itag, ok: Boolean(open), type: open ? typeof open : 'none' });
-      if (open) {
-        console.log('[youtube-download] returning open stream', { itag: selectedFormat.itag });
-        return open;
-      }
-    } catch (error) {
-      console.error('[youtube-download] openYouTubeStream-error', { itag: selectedFormat.itag, error: error instanceof Error ? error.message : String(error) });
-      // Fall through to the client-native downloader below.
+function moveIntoStorage(source: string, targetPath: string) {
+  return rename(source, targetPath).catch((error) => {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EXDEV") {
+      return copyFile(source, targetPath).then(() => unlink(source));
     }
-  }
-
-  if ('download' in info) {
-    try {
-      return info.download({ itag: selectedFormat.itag });
-    } catch {
-      // Fall through to the cross-client fallback below.
-    }
-  }
-  return downloadViaInnertubeFallback(selectedFormat.itag, videoId);
+    throw error;
+  });
 }
 
 async function createStoredDownloadPath(filename: string, category: "audio" | "video") {
@@ -305,56 +133,11 @@ async function createStoredDownloadPath(filename: string, category: "audio" | "v
       code: 'DOWNLOAD_STORAGE_FAILED',
       message: 'Download storage is unavailable on this server.',
       details: {
-        storage: getDownloadStorageDiagnostics(category),
+        category,
         cause: error instanceof Error ? error.message : String(error),
       },
     });
   }
-}
-
-function createReadableStreamResponse(stream: Readable, init: ResponseInit, diagnosticCode: string) {
-  try {
-    const response = new Response(Readable.toWeb(stream as unknown as Readable) as unknown as BodyInit, init);
-    return setDiagnosticHeaders(response, diagnosticCode);
-  } catch (error) {
-    throw new YoutubeDownloadError(500, {
-      code: 'STREAM_RESPONSE_FAILED',
-      message: 'The server could not stream the download response.',
-      details: {
-        diagnosticCode,
-        cause: error instanceof Error ? error.message : String(error),
-      },
-    });
-  }
-}
-
-function collectProcessStderr(proc: NodeJS.ReadableStream | null | undefined, sink: string[]) {
-  if (!proc) return;
-  proc.on('data', (chunk) => {
-    sink.push(chunk.toString());
-  });
-}
-
-function registerProcessFailureHandlers(
-  processName: 'ffmpeg-convert' | 'ffmpeg-merge',
-  child: ReturnType<typeof spawn>,
-  stderrBuffer: string[],
-  context: Record<string, unknown>,
-) {
-  child.once('error', (error) => {
-    console.error(`${processName} spawn failed`, error, context);
-  });
-
-  child.once('close', (code, signal) => {
-    if (code && code !== 0) {
-      console.error(`${processName} exited with non-zero status`, {
-        ...context,
-        code,
-        signal,
-        stderr: stderrBuffer.join('').trim().slice(0, 4000),
-      });
-    }
-  });
 }
 
 export async function OPTIONS(req: Request) {
@@ -377,6 +160,7 @@ export async function GET(req: Request) {
     );
   }
 
+  let scratchDir = "";
   try {
     if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) {
       throw new YoutubeDownloadError(400, {
@@ -386,353 +170,112 @@ export async function GET(req: Request) {
       });
     }
 
-    let info: Awaited<ReturnType<Innertube['getBasicInfo']>> | YoutubePageInfo | DlpInfo;
-    try {
-      ({ info } = await getYoutubeVideoInfo(id));
-    } catch (error) {
-      throw new YoutubeDownloadError(502, {
-        code: 'YOUTUBE_INFO_FAILED',
-        message: 'Unable to fetch YouTube video details from the server runtime.',
-        details: {
-          ...getRequestDiagnostics(id, itag, output),
-          cause: error instanceof Error ? error.message : String(error),
-          clientFallbacks: YOUTUBE_CLIENT_TYPES,
-        },
-      });
-    }
-
-    const availableFormats = [
-      ...(info.streaming_data?.formats || []),
-      ...(info.streaming_data?.adaptive_formats || []),
-    ];
-
-    if (availableFormats.length === 0) {
-      throw new YoutubeDownloadError(404, {
-        code: 'NO_STREAMS_AVAILABLE',
-        message: 'This YouTube video is not currently returning playable streams from the server runtime.',
-        details: {
-          ...getRequestDiagnostics(id, itag, output),
-          clientFallbacks: YOUTUBE_CLIENT_TYPES,
-          title: info.basic_info?.title || `YouTube video ${id}`,
-        },
-      });
-    }
-
-    let selectedFormat = availableFormats.find((format) => format.itag === itag);
-    const ffmpegAvailable = Boolean(getFfmpegPath());
-    const audioOutput = ["mp3", "wav", "m4a", "aac"].includes(output);
-
-    if (!selectedFormat) {
-      throw new YoutubeDownloadError(404, {
-        code: 'FORMAT_NOT_FOUND',
-        message: 'The requested format is no longer available.',
-        details: {
-          ...getRequestDiagnostics(id, itag, output),
-          availableItags: availableFormats.map((format) => format.itag),
-        },
-      });
-    }
-
-    if (audioOutput && !selectedFormat.url) {
-      const playableAudio = availableFormats
-        .filter((format) => format.has_audio && !format.has_video && !format.has_text && format.url)
-        .sort((left, right) => right.bitrate - left.bitrate)[0];
-      if (playableAudio) selectedFormat = playableAudio;
-    }
-
-    let stream: ReadableStream<Uint8Array> | undefined;
-    try {
-      stream = await downloadSelectedFormat(info, selectedFormat, id);
-    } catch (error) {
-      let retryError: unknown = error;
-      let recovered = false;
-
-      for (const clientType of YOUTUBE_CLIENT_TYPES) {
-        try {
-          const retryInfo = await getYoutubeInfoForClient(id, clientType);
-          const retryFormat = [
-            ...(retryInfo.streaming_data?.formats || []),
-            ...(retryInfo.streaming_data?.adaptive_formats || []),
-          ].find((format) => format.itag === itag);
-          if (!retryFormat) continue;
-
-          stream = await downloadSelectedFormat(retryInfo, retryFormat, id);
-          info = retryInfo;
-          selectedFormat = retryFormat;
-          recovered = true;
-          break;
-        } catch (retryFailure) {
-          retryError = retryFailure;
-        }
-      }
-
-      if (!recovered) {
-        throw new YoutubeDownloadError(502, {
-          code: 'YOUTUBE_STREAM_FAILED',
-          message: 'The selected YouTube format could not be opened. Please refresh formats and try again.',
-          details: {
-            ...getRequestDiagnostics(id, itag, output),
-            cause: retryError instanceof Error ? retryError.message : String(retryError),
-            hasProofOfOriginToken: Boolean(process.env.YOUTUBE_PO_TOKEN),
-            hasVisitorData: Boolean(process.env.YOUTUBE_VISITOR_DATA),
-            hasCookie: Boolean(process.env.YOUTUBE_COOKIE),
-            selectedFormat: {
-              itag: selectedFormat.itag,
-              mimeType: selectedFormat.mime_type,
-              hasAudio: selectedFormat.has_audio,
-              hasVideo: selectedFormat.has_video,
-              bitrate: selectedFormat.bitrate,
-            },
-          },
-        });
-      }
-    }
-
-    if (!stream) {
-      throw new YoutubeDownloadError(502, {
-        code: 'YOUTUBE_STREAM_FAILED',
-        message: 'The selected YouTube format did not produce a readable stream.',
+    if (output !== "mp4" && !AUDIO_OUTPUTS.has(output)) {
+      throw new YoutubeDownloadError(400, {
+        code: 'INVALID_VIDEO_ID',
+        message: 'Unsupported download output format.',
         details: getRequestDiagnostics(id, itag, output),
       });
     }
 
-    const title = info.basic_info.title || `youtube-${id}`;
-    const safeTitle = title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").trim() || `youtube-${id}`;
+    const audioOutput = AUDIO_OUTPUTS.has(output);
     const extension = audioOutput ? output : "mp4";
-    const mimeType = output === "mp3"
-      ? "audio/mpeg"
-      : output === "wav"
-        ? "audio/wav"
-        : output === "m4a"
-          ? "audio/mp4"
-          : selectedFormat?.mime_type?.split(';')[0] || "video/mp4";
-    const downloadCategory = audioOutput ? "audio" : "video";
-    const downloadDisplayName = buildDownloadFilename(`${safeTitle}.${extension}`, downloadCategory);
-    const encodedFilename = encodeURIComponent(downloadDisplayName);
-    const fallbackFilename = downloadDisplayName;
-    const downloadFilename = downloadDisplayName;
-    const downloadPath = await createStoredDownloadPath(downloadFilename, downloadCategory);
+    const category = audioOutput ? "audio" as const : "video" as const;
 
-    if (audioOutput && !ffmpegAvailable) {
+    const executable = getFfmpegPath();
+    if (audioOutput && !executable) {
       throw new YoutubeDownloadError(503, {
         code: 'FFMPEG_NOT_FOUND',
         message: 'Audio downloads are temporarily unavailable on this server.',
         details: {
           ...getRequestDiagnostics(id, itag, output),
-          ffmpeg: getFfmpegDiagnostics(getFfmpegPath()),
+          ffmpeg: getFfmpegDiagnostics(executable),
         },
       });
     }
 
-    if (!audioOutput && !selectedFormat.has_audio && !ffmpegAvailable) {
-      throw new YoutubeDownloadError(503, {
-        code: 'FFMPEG_NOT_FOUND',
-        message: 'This video quality requires server-side merging, which is unavailable on this server. Please choose a standard MP4 option.',
+    const scratchRoot = join(process.cwd(), "downloads", ".tmp");
+    await mkdir(scratchRoot, { recursive: true });
+    scratchDir = await mkdtemp(join(scratchRoot, "ydl-"));
+
+    let workerResult;
+    try {
+      workerResult = await downloadWithPython({
+        videoId: id,
+        itag,
+        output,
+        bitrate,
+        outPrefix: join(scratchDir, "download"),
+        ffmpegLocation: executable || null,
+      });
+    } catch (workerError) {
+      throw new YoutubeDownloadError(502, {
+        code: 'YOUTUBE_STREAM_FAILED',
+        message: workerError instanceof Error ? workerError.message : 'The Python download worker failed to produce the requested media.',
         details: {
           ...getRequestDiagnostics(id, itag, output),
-          selectedFormat: {
-            itag: selectedFormat.itag,
-            mimeType: selectedFormat.mime_type,
-            hasAudio: selectedFormat.has_audio,
-            hasVideo: selectedFormat.has_video,
-            bitrate: selectedFormat.bitrate,
-          },
+          cause: workerError instanceof Error ? workerError.message : String(workerError),
+          workerDetail: (workerError as Error & { detail?: string }).detail || undefined,
+          ffmpeg: getFfmpegDiagnostics(executable),
         },
       });
     }
 
-    const isDirectPlayableAudio = audioOutput && selectedFormat.has_audio && !selectedFormat.has_video;
-    if (audioOutput && (isDirectPlayableAudio || !ffmpegAvailable)) {
-      const outputStream = teeStreamToFile(Readable.fromWeb(stream as never), downloadPath);
-      outputStream.once('error', (error) => {
-        console.error('direct audio stream failed', {
-          videoId: id,
-          itag,
-          output,
-          cause: error instanceof Error ? error.message : String(error),
-        });
-      });
-      const response = createReadableStreamResponse(outputStream, {
-        status: 200,
-        headers: {
-          "Content-Type": mimeType,
-          "Content-Disposition": `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodedFilename}`,
-          "X-NSU-Thumbnail-Url": getAudioDownloadThumbnailUrl(new URL(req.url).searchParams.get('thumbnailUrl') || new URL(req.url).searchParams.get('thumbnail')),
-          "Access-Control-Expose-Headers": "Content-Disposition, X-NSU-Download-Code, X-NSU-Download-Runtime, X-NSU-Thumbnail-Url",
-          "Cache-Control": 'no-store',
+    const safeTitle = workerResult.title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").trim() || `youtube-${id}`;
+    const downloadDisplayName = buildDownloadFilename(`${safeTitle}.${extension}`, category);
+    const storedPath = await createStoredDownloadPath(downloadDisplayName, category);
+
+    try {
+      await moveIntoStorage(workerResult.file, storedPath);
+    } catch (moveError) {
+      throw new YoutubeDownloadError(500, {
+        code: 'DOWNLOAD_STORAGE_FAILED',
+        message: 'The downloaded media could not be stored on this server.',
+        details: {
+          ...getRequestDiagnostics(id, itag, output),
+          cause: moveError instanceof Error ? moveError.message : String(moveError),
         },
-      }, 'audio-direct');
-      return withCors(response, req);
+      });
     }
 
-    if (audioOutput) {
-      const executable = getFfmpegPath();
-      if (!executable) {
-        throw new YoutubeDownloadError(503, {
-          code: 'FFMPEG_NOT_FOUND',
-          message: 'Audio conversion is unavailable on this server.',
-          details: {
-            ...getRequestDiagnostics(id, itag, output),
-            ffmpeg: getFfmpegDiagnostics(executable),
-          },
-        });
-      }
+    const storedFile = await stat(storedPath);
+    const mimeType = getOutputMimeType(output, workerResult.contentType);
+    const fallbackFilename = downloadDisplayName;
+    const encodedFilename = encodeURIComponent(downloadDisplayName);
+    const thumbnailUrl = searchParams.get('thumbnailUrl') || searchParams.get('thumbnail');
 
-      const input = Readable.fromWeb(stream as never);
-      const codecArgs = output === "mp3"
-        ? ["-codec:a", "libmp3lame", "-b:a", `${bitrate}k`, "-f", "mp3"]
-        : output === "wav"
-          ? ["-codec:a", "pcm_s16le", "-f", "wav"]
-          : ["-codec:a", "aac", "-b:a", "192k", "-f", "ipod"];
-      const fragmentedMp4Args = output === "m4a" ? ["-movflags", "frag_keyframe+empty_moov"] : [];
-      const ffmpegArgs = ["-loglevel", "error", "-i", "pipe:0", "-vn", ...codecArgs, ...fragmentedMp4Args, "pipe:1"];
-      const converter = spawn(executable, ffmpegArgs, { stdio: ["pipe", "pipe", "pipe"] });
-      const stderrBuffer: string[] = [];
-      collectProcessStderr(converter.stderr, stderrBuffer);
-      registerProcessFailureHandlers('ffmpeg-convert', converter, stderrBuffer, {
-        videoId: id,
-        itag,
-        output,
-        ffmpegPath: executable,
-      });
-      input.pipe(converter.stdin);
-      const outputStream = teeStreamToFile(converter.stdout, downloadPath);
-      outputStream.once('error', (error) => {
-        console.error('audio stream pipeline failed', {
-          videoId: id,
-          itag,
-          output,
-          ffmpegPath: executable,
-          stderr: stderrBuffer.join('').trim().slice(0, 4000),
-          cause: error instanceof Error ? error.message : String(error),
-        });
-      });
-      const response = createReadableStreamResponse(outputStream, {
-        status: 200,
-        headers: {
-          "Content-Type": mimeType,
-          "Content-Disposition": `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodedFilename}`,
-          "X-NSU-Thumbnail-Url": getAudioDownloadThumbnailUrl(new URL(req.url).searchParams.get('thumbnailUrl') || new URL(req.url).searchParams.get('thumbnail')),
-          "Access-Control-Expose-Headers": "Content-Disposition, X-NSU-Download-Code, X-NSU-Download-Runtime, X-NSU-Thumbnail-Url",
-          "Cache-Control": 'no-store',
-        },
-      }, 'audio-convert');
-      return withCors(response, req);
-    }
-
-    if (selectedFormat.has_video && !selectedFormat.has_audio) {
-      const executable = getFfmpegPath();
-      if (!executable) {
-        throw new YoutubeDownloadError(503, {
-          code: 'FFMPEG_NOT_FOUND',
-          message: 'Video merging is unavailable on this server.',
-          details: {
-            ...getRequestDiagnostics(id, itag, output),
-            ffmpeg: getFfmpegDiagnostics(executable),
-          },
-        });
-      }
-
-      const audioSource = availableFormats
-        .filter((format) => format.has_audio && !format.has_video && !format.has_text)
-        .sort((left, right) => right.bitrate - left.bitrate)[0];
-      if (!audioSource) {
-        throw new YoutubeDownloadError(404, {
-          code: 'AUDIO_SOURCE_NOT_FOUND',
-          message: 'An audio stream is unavailable for this video.',
-          details: {
-            ...getRequestDiagnostics(id, itag, output),
-            selectedFormatItag: selectedFormat.itag,
-          },
-        });
-      }
-
-      let audioStream: ReadableStream<Uint8Array>;
-      try {
-        audioStream = await downloadSelectedFormat(info, audioSource, id);
-      } catch (error) {
-        throw new YoutubeDownloadError(502, {
-          code: 'YOUTUBE_STREAM_FAILED',
-          message: 'The companion audio stream could not be opened on this server.',
-          details: {
-            ...getRequestDiagnostics(id, itag, output),
-            audioItag: audioSource.itag,
-            cause: error instanceof Error ? error.message : String(error),
-          },
-        });
-      }
-
-      const videoInput = Readable.fromWeb(stream as never);
-      const audioInput = Readable.fromWeb(audioStream as never);
-      const merger = spawn(executable, [
-        "-loglevel", "error", "-i", "pipe:3", "-i", "pipe:4",
-        "-map", "0:v:0", "-map", "1:a:0", "-c", "copy", "-movflags", "frag_keyframe+empty_moov", "-f", "mp4", "pipe:1",
-      ], { stdio: ["ignore", "pipe", "pipe", "pipe", "pipe"] });
-      const stderrBuffer: string[] = [];
-      collectProcessStderr(merger.stderr, stderrBuffer);
-      registerProcessFailureHandlers('ffmpeg-merge', merger, stderrBuffer, {
-        videoId: id,
-        itag,
-        output,
-        audioItag: audioSource.itag,
-        ffmpegPath: executable,
-      });
-      videoInput.pipe(merger.stdio[3] as NodeJS.WritableStream);
-      audioInput.pipe(merger.stdio[4] as NodeJS.WritableStream);
-
-      const outputStream = teeStreamToFile(merger.stdout!, downloadPath);
-      outputStream.once('error', (error) => {
-        console.error('video merge pipeline failed', {
-          videoId: id,
-          itag,
-          output,
-          audioItag: audioSource.itag,
-          ffmpegPath: executable,
-          stderr: stderrBuffer.join('').trim().slice(0, 4000),
-          cause: error instanceof Error ? error.message : String(error),
-        });
-      });
-      const response = createReadableStreamResponse(outputStream, {
-        status: 200,
-        headers: {
-          "Content-Type": "video/mp4",
-          "Content-Disposition": `attachment; filename="video.mp4"; filename*=UTF-8''${encodeURIComponent(`${safeTitle}.mp4`)}`,
-          "Access-Control-Expose-Headers": "Content-Disposition, X-NSU-Download-Code, X-NSU-Download-Runtime",
-          "Cache-Control": 'no-store',
-        },
-      }, 'video-merge');
-      return withCors(response, req);
-    }
-
-    const outputStream = teeStreamToFile(Readable.fromWeb(stream as never), downloadPath);
-    outputStream.once('error', (error) => {
-      console.error('direct stream pipeline failed', {
-        videoId: id,
-        itag,
-        output,
-        cause: error instanceof Error ? error.message : String(error),
-      });
-    });
-    const response = createReadableStreamResponse(outputStream, {
+    const response = createStreamingResponse(storedPath, storedFile.size, {
       status: 200,
       headers: {
         "Content-Type": mimeType,
+        "Content-Length": String(storedFile.size),
         "Content-Disposition": `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodedFilename}`,
-        "Access-Control-Expose-Headers": "Content-Disposition, X-NSU-Download-Code, X-NSU-Download-Runtime",
+        "X-NSU-Thumbnail-Url": getAudioDownloadThumbnailUrl(thumbnailUrl),
+        "Access-Control-Expose-Headers": "Content-Disposition, Content-Length, X-NSU-Download-Code, X-NSU-Download-Runtime, X-NSU-Thumbnail-Url",
         "Cache-Control": 'no-store',
       },
-    }, 'direct-stream');
+    }, 'python-stream');
 
     return withCors(response, req);
   } catch (error: unknown) {
     const payload = toDiagnosticPayload(error);
     const status = error instanceof YoutubeDownloadError ? error.status : 500;
-    console.error("Download route error:", {
+    const errorText = typeof payload.error === 'string' ? payload.error : 'Unknown download error';
+    console.error(`Download route error [${payload.code}]: ${errorText}`, {
       status,
       ...payload,
     });
     const response = NextResponse.json(payload, { status });
     setDiagnosticHeaders(response, payload.code || 'UNKNOWN_DOWNLOAD_ERROR');
     return withCors(response, req);
+  } finally {
+    if (scratchDir) {
+      await rm(scratchDir, { recursive: true, force: true }).catch((error) => {
+        console.error('failed to clean up python download scratch directory', {
+          scratchDir,
+          cause: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
   }
 }

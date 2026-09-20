@@ -30,7 +30,6 @@
     "shadcn": "^4.15.0",
     "tailwind-merge": "^3.6.0",
     "three": "^0.186.0",
-    "youtube-dl-exec": "^3.1.14",
     "youtubei.js": "^18.0.0"
   },
   "devDependencies": {
