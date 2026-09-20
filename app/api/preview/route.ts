@@ -39,27 +39,34 @@ export async function GET(request: Request) {
     });
 
     const effectiveUrl = probe.url || target.toString();
-    const contentType = probe.headers.get('content-type') || '';
+    const contentType = (probe.headers.get('content-type') || '').toLowerCase();
     const contentLength = probe.headers.get('content-length');
     const status = probe.status;
+    const needsRangeFallback = !probe.ok
+      || status === 405
+      || status === 501
+      || !contentType
+      || contentType === 'application/octet-stream'
+      || contentType === 'binary/octet-stream'
+      || contentType.startsWith('text/plain');
 
-    if (status === 405 || status === 501) {
-      const rangeProbe = await fetch(target, {
-        cache: 'no-store',
-        redirect: 'follow',
-        method: 'GET',
-        headers: { Accept: 'image/*, audio/*, video/*, application/pdf, */*', Range: 'bytes=0-0' },
-        signal: AbortSignal.timeout(15_000),
-      });
-      return NextResponse.json({
-        effectiveUrl: rangeProbe.url || target.toString(),
-        contentType: rangeProbe.headers.get('content-type') || '',
-        contentLength: rangeProbe.headers.get('content-length'),
-        status: rangeProbe.status,
-      });
+    if (!needsRangeFallback) {
+      return NextResponse.json({ effectiveUrl, contentType, contentLength, status });
     }
 
-    return NextResponse.json({ effectiveUrl, contentType, contentLength, status });
+    const rangeProbe = await fetch(target, {
+      cache: 'no-store',
+      redirect: 'follow',
+      method: 'GET',
+      headers: { Accept: 'image/*, audio/*, video/*, application/pdf, */*', Range: 'bytes=0-0' },
+      signal: AbortSignal.timeout(15_000),
+    });
+    return NextResponse.json({
+      effectiveUrl: rangeProbe.url || target.toString(),
+      contentType: (rangeProbe.headers.get('content-type') || '').toLowerCase(),
+      contentLength: rangeProbe.headers.get('content-length'),
+      status: rangeProbe.status,
+    });
   } catch {
     return NextResponse.json({ error: 'Unable to probe that URL.' }, { status: 502 });
   }

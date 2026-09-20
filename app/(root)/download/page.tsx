@@ -55,16 +55,37 @@ type PreviewProbe = {
 
 type PreviewKind = 'audio' | 'video' | 'image' | 'document' | 'unsupported'
 
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'ico', 'apng', 'heic', 'heif', 'tiff', 'tif', 'jfif', 'jpe'])
+const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'm4b', 'aac', 'ogg', 'oga', 'opus', 'wav', 'flac', 'weba', 'wma'])
+const VIDEO_EXTENSIONS = new Set(['mp4', 'm4v', 'webm', 'mkv', 'mov', 'avi', 'ogv', '3gp', 'mpeg', 'mpg', 'ts'])
+const DOCUMENT_EXTENSIONS = new Set(['pdf'])
+
+function extensionFromUrl(value: string) {
+  try {
+    const pathname = new URL(value).pathname
+    const lastSegment = pathname.split('/').pop() || ''
+    const match = lastSegment.match(/\.([a-z0-9]+)$/i)
+    return match ? match[1].toLowerCase() : ''
+  } catch {
+    return ''
+  }
+}
+
+function kindFromExtension(value: string): PreviewKind {
+  if (IMAGE_EXTENSIONS.has(value)) return 'image'
+  if (AUDIO_EXTENSIONS.has(value)) return 'audio'
+  if (VIDEO_EXTENSIONS.has(value)) return 'video'
+  if (DOCUMENT_EXTENSIONS.has(value)) return 'document'
+  return 'unsupported'
+}
+
 function kindFromContentType(contentType: string, url: string): PreviewKind {
   const normalized = contentType.toLowerCase()
-  if (normalized.startsWith('image/')) {
-    if (normalized.includes('svg')) return 'unsupported'
-    return 'image'
-  }
+  if (normalized.startsWith('image/')) return 'image'
   if (normalized.startsWith('audio/')) return 'audio'
   if (normalized.startsWith('video/')) return 'video'
   if (normalized === 'application/pdf') return 'document'
-  return 'unsupported'
+  return kindFromExtension(extensionFromUrl(url))
 }
 
 function MediaPreview({ url }: { url: string }) {
