@@ -156,8 +156,8 @@ function getStreamRequestHeaders(videoId: string) {
 const STREAM_SEGMENT_COUNT = 4;
 const STREAM_SEGMENT_MIN_BYTES = 4 * 1024 * 1024;
 
-async function openSegmentedStream(url: string, headers: Record<string, string>, totalBytes: number): Promise<ReadableStream<Uint8Array>> {
-  const segmentCount = Math.max(1, STREAM_SEGMENT_COUNT);
+async function openSegmentedStream(url: string, headers: Record<string, string>, totalBytes: number, segmentCount = STREAM_SEGMENT_COUNT): Promise<ReadableStream<Uint8Array>> {
+  segmentCount = Math.max(1, segmentCount);
   const segmentSize = Math.ceil(totalBytes / segmentCount);
   const ranges = Array.from({ length: segmentCount }, (_, index) => {
     const start = index * segmentSize;
@@ -215,9 +215,10 @@ async function openYouTubeStream(url: string, headers: Record<string, string>): 
     const totalMatch = contentRange.match(/bytes\s+\d+-\d+\/(\d+)/);
     const totalBytes = Number(totalMatch?.[1]);
 
-    if (probeResponse.status === 206 && Number.isFinite(totalBytes) && totalBytes >= STREAM_SEGMENT_MIN_BYTES) {
+    if (probeResponse.status === 206 && Number.isFinite(totalBytes) && totalBytes >= 1) {
       await probeResponse.arrayBuffer().catch(() => new ArrayBuffer(0));
-      return openSegmentedStream(url, headers, totalBytes);
+      const segmentCount = totalBytes >= STREAM_SEGMENT_MIN_BYTES ? STREAM_SEGMENT_COUNT : 1;
+      return openSegmentedStream(url, headers, totalBytes, segmentCount);
     }
 
     if (probeResponse.status === 200 && probeResponse.body) {

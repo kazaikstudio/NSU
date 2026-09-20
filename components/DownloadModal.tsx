@@ -120,36 +120,38 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
     };
   }, [open, videoId, anchor, position]);
 
-  useLayoutEffect(() => {
+  const loadFormats = useCallback(async () => {
     if (!open || !videoId) return;
 
-    let cancelled = false;
-    const loadFormats = async () => {
+    safeSetState(() => {
       setLoadingFormats(true);
       setError("");
       setFormats([]);
+    });
 
-      try {
-        const response = await fetch(`/api/youtube/formats?id=${encodeURIComponent(videoId)}`);
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || "Unable to fetch formats.");
-        if (!cancelled) {
-          setTitle(payload.title);
-          setFormats(payload.formats);
-        }
-      } catch (loadError: unknown) {
-        if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Unable to fetch formats.");
-      } finally {
-        if (!cancelled) setLoadingFormats(false);
+    try {
+      const response = await fetch(`/api/youtube/formats?id=${encodeURIComponent(videoId)}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Unable to fetch formats.");
+      safeSetState(() => {
+        setTitle(payload.title);
+        setFormats(payload.formats);
+      });
+    } catch (loadError: unknown) {
+      if (isMountedRef.current) {
+        safeSetState(() => setError(loadError instanceof Error ? loadError.message : "Unable to fetch formats."));
       }
-    };
-
-    void loadFormats();
-
-    return () => {
-      cancelled = true;
-    };
+    } finally {
+      if (isMountedRef.current) {
+        safeSetState(() => setLoadingFormats(false));
+      }
+    }
   }, [open, videoId]);
+
+  useLayoutEffect(() => {
+    if (!open || !videoId) return;
+    void loadFormats();
+  }, [open, videoId, loadFormats]);
 
   const handleClose = useCallback(() => {
     if (abortControllerRef.current) {
@@ -427,6 +429,15 @@ const DownloadModal = ({ open = false, videoId, position, anchor, onClose }: Dow
         <div className="relative z-10 max-h-[min(72vh,32rem)] space-y-3 overflow-y-auto pr-1">
           {loadingFormats && <p className="py-4 text-center text-sm text-slate-400">Checking available formats...</p>}
           {error && <p className="py-2 text-sm text-red-400" role="alert">{error}</p>}
+          {error && !loadingFormats && (
+            <button
+              type="button"
+              onClick={() => void loadFormats()}
+              className="w-full rounded-lg bg-slate-700/60 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700"
+            >
+              Refresh formats
+            </button>
+          )}
           {!loadingFormats && !error && (["audio", "video"] as const).map((section) => {
             const sectionFormats = formats.filter((format) => section === "audio" ? !format.kind.includes("video") : format.kind.includes("video"));
             if (!sectionFormats.length) return null;

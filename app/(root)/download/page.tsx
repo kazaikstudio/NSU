@@ -63,7 +63,16 @@ type DownloadRetryDetail = {
 
 function DownloadForm() {
   const searchParams = useSearchParams()
-  const [source, setSource] = useState(() => searchParams.get('video') || '')
+  const queryVideoId = searchParams.get('video')
+  const [source, setSource] = useState(() => {
+    if (typeof window === 'undefined') return queryVideoId || ''
+    return queryVideoId || window.localStorage.getItem(SAVED_DOWNLOAD_LINK_KEY) || ''
+  })
+  const [previousQueryVideoId, setPreviousQueryVideoId] = useState(queryVideoId)
+  if (previousQueryVideoId !== queryVideoId) {
+    setPreviousQueryVideoId(queryVideoId)
+    if (queryVideoId) setSource(queryVideoId)
+  }
   const [error, setError] = useState('')
   const [title, setTitle] = useState('')
   const [formats, setFormats] = useState<DownloadFormat[]>([])
@@ -103,16 +112,6 @@ function DownloadForm() {
       setLoadingFormats(false)
     }
   }
-
-  useEffect(() => {
-    const querySource = searchParams.get('video')
-    const savedSource = typeof window !== 'undefined' ? window.localStorage.getItem(SAVED_DOWNLOAD_LINK_KEY) || '' : ''
-    const initialSource = querySource || savedSource
-
-    if (initialSource && !source) {
-      setSource(initialSource)
-    }
-  }, [searchParams, source])
 
   useEffect(() => {
     const videoId = getVideoId(source)
@@ -331,6 +330,16 @@ function DownloadForm() {
         {/* Status messages */}
         {error && (
           <p id="download-error" className="text-xs sm:text-sm text-red-400" role="alert">{error}</p>
+        )}
+        {error && videoId && !loadingFormats && (
+          <button
+            type="button"
+            onClick={() => void fetchFormats(videoId)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-navlink px-5 py-3 text-xs sm:text-sm font-semibold text-Eltext backdrop-blur-sm transition hover:text-primary hover:ring-card1/40 cursor-pointer"
+          >
+            <Download size={14} aria-hidden="true" />
+            Refresh formats
+          </button>
         )}
         {loadingFormats && (
           <div className="flex items-center gap-2.5 text-xs sm:text-sm text-secondry">
