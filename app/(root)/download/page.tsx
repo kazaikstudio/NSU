@@ -1,6 +1,7 @@
 'use client'
 
 import { FormEvent, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { Check, ChevronDown, Download, Link as LinkIcon, X } from 'lucide-react'
 import DockBar from '../../../components/DockBar'
@@ -95,9 +96,6 @@ function MediaPreview({ url }: { url: string }) {
 
   useEffect(() => {
     let cancelled = false
-    setPreviewError('')
-    setKind(null)
-    setEffectiveUrl(url)
 
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
@@ -163,7 +161,7 @@ function MediaPreview({ url }: { url: string }) {
 
       {kind === 'image' && (
         <div className="flex items-center justify-center">
-          <img src={effectiveUrl} alt="" loading="lazy" className="max-h-72 w-auto max-w-full" onError={() => setPreviewError('This image link could not be previewed.')} />
+          <Image src={effectiveUrl} alt="" unoptimized width={1200} height={675} className="max-h-72 w-auto max-w-full" onError={() => setPreviewError('This image link could not be previewed.')} style={{ objectFit: 'contain' }} />
         </div>
       )}
 
@@ -506,7 +504,7 @@ function DownloadForm() {
 
         {/* Direct media preview */}
         {!videoId && getDirectUrl(source) && (
-          <MediaPreview url={getDirectUrl(source)} />
+          <MediaPreview key={getDirectUrl(source)} url={getDirectUrl(source)} />
         )}
 
         {/* Direct URL download */}
