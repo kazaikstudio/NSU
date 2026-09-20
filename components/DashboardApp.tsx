@@ -794,60 +794,9 @@ export default function DashboardApp({ user }: { user: DashboardUser }) {
 
           {activePage === 'dashboard' && (
             <div className="space-y-6">
-              {/* Metric Cards Grid */}
-              <div className="grid gap-6 md:grid-cols-3">
-                {/* Total Artists Card */}
-                <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30 hover:border-slate-700' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50 hover:border-slate-300'}`}>
-                  <div className="flex items-center justify-between">
-                    <p className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Artists</p>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shadow-sm">
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                      </svg>
-                    </div>
-                  </div>
-                  <p className={`mt-4 text-3xl font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{artists.length}</p>
-                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-emerald-400">
-                    <span className="inline-flex items-center rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5">Active Noll Artists</span>
-                  </div>
-                </div>
-
-                {/* Total Uploads Card */}
-                <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30 hover:border-slate-700' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50 hover:border-slate-300'}`}>
-                  <div className="flex items-center justify-between">
-                    <p className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Uploads</p>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shadow-sm">
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                      </svg>
-                    </div>
-                  </div>
-                  <p className={`mt-4 text-3xl font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{totalUploads}</p>
-                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-indigo-400">
-                    <span className="inline-flex items-center rounded-md bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5">Cloud Media files</span>
-                  </div>
-                </div>
-
-                {/* Total Members Card */}
-                <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30 hover:border-slate-700' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50 hover:border-slate-300'}`}>
-                  <div className="flex items-center justify-between">
-                    <p className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Total Members</p>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shadow-sm">
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <p className={`mt-4 text-3xl font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{members.length}</p>
-                  <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-emerald-400">
-                    <span className="inline-flex items-center rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5">Platform Community</span>
-                  </div>
-                </div>
-              </div>
-
               {/* Charts Section */}
               <div className={`rounded-2xl border p-6 backdrop-blur-xl transition-all duration-300 ${isDarkMode ? 'border-slate-800/80 bg-slate-900/85 shadow-xl shadow-black/30' : 'border-slate-200/80 bg-white/85 shadow-lg shadow-slate-200/50'}`}>
-                <DashboardCharts isDarkMode={isDarkMode} artists={artists} downloadRegions={downloadRegions} />
+                <DashboardCharts isDarkMode={isDarkMode} artists={artists} downloadRegions={downloadRegions} totalUploads={totalUploads} membersCount={members.length} />
               </div>
             </div>
           )}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { Music, Upload, Users } from 'lucide-react';
 
 interface ChartThemeProps {
   isDarkMode: boolean;
@@ -9,6 +10,8 @@ interface ChartThemeProps {
 interface DashboardChartsProps extends ChartThemeProps {
   artists: Array<{ name: string; totalDownloads?: number }>;
   downloadRegions?: Array<{ name: string; downloads: number }>;
+  totalUploads?: number;
+  membersCount?: number;
 }
 
 interface RegionChartProps extends ChartThemeProps {
@@ -16,7 +19,7 @@ interface RegionChartProps extends ChartThemeProps {
 }
 
 
-function Graph1({ isDarkMode }: ChartThemeProps) {
+function Graph1({ isDarkMode, artistsCount, totalUploads, membersCount }: ChartThemeProps & { artistsCount: number; totalUploads: number; membersCount: number }) {
   const [timeframe, setTimeframe] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
   const [isOpen, setIsOpen] = useState(false);
   const [showClicks, setShowClicks] = useState(true);
@@ -86,79 +89,70 @@ function Graph1({ isDarkMode }: ChartThemeProps) {
         <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-1.5 rounded-2xl border flex-1 ${
           isDarkMode ? 'border-gray-800 bg-gray-900/50' : 'border-gray-100 bg-gray-50/80'
         }`}>
-          {/* Total Clicks */}
+          {/* Total Artists */}
           <div
-            onClick={() => setShowClicks(!showClicks)}
-            className={`p-4 rounded-xl cursor-pointer relative transition-all duration-200 border ${
-              showClicks
-                ? isDarkMode
-                  ? 'bg-blue-950/30 border-blue-500/30 shadow-lg shadow-blue-950/50'
-                  : 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
-                : isDarkMode
-                  ? 'bg-gray-900/20 border-transparent opacity-60 hover:opacity-100'
-                  : 'bg-transparent border-transparent opacity-60 hover:opacity-100'
+            className={`p-4 rounded-xl relative transition-all duration-200 border ${
+              isDarkMode
+                ? 'bg-blue-950/30 border-blue-500/30 shadow-lg shadow-blue-950/50'
+                : 'bg-white border-blue-200 shadow-md shadow-blue-500/5'
             }`}
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2.5">
                 <div className={`w-3 h-3 rounded-full transition-transform ${showClicks ? 'bg-blue-500 scale-110 shadow-sm shadow-blue-500' : 'bg-gray-400'}`} />
-                <span className={`text-xs font-semibold uppercase tracking-wider ${showClicks ? (isDarkMode ? 'text-blue-400' : 'text-blue-600') : 'text-gray-400'}`}>
-                  Total clicks
+                <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                  Total Artists
                 </span>
               </div>
-              <span className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors">ⓘ</span>
+              <span className="text-gray-400 transition-colors">
+                <Music className="h-4 w-4" />
+              </span>
             </div>
-            <div className="text-3xl font-bold tracking-tight">32</div>
+            <div className="text-3xl font-bold tracking-tight">{artistsCount}</div>
           </div>
 
-          {/* Total Impressions */}
+          {/* Total Uploads */}
           <div
-            onClick={() => setShowImpressions(!showImpressions)}
-            className={`p-4 rounded-xl cursor-pointer relative transition-all duration-200 border ${
-              showImpressions
-                ? isDarkMode
-                  ? 'bg-indigo-950/30 border-indigo-500/30 shadow-lg shadow-indigo-950/50'
-                  : 'bg-white border-indigo-200 shadow-md shadow-indigo-500/5'
-                : isDarkMode
-                  ? 'bg-gray-900/20 border-transparent opacity-60 hover:opacity-100'
-                  : 'bg-transparent border-transparent opacity-60 hover:opacity-100'
+            className={`p-4 rounded-xl relative transition-all duration-200 border ${
+              isDarkMode
+                ? 'bg-indigo-950/30 border-indigo-500/30 shadow-lg shadow-indigo-950/50'
+                : 'bg-white border-indigo-200 shadow-md shadow-indigo-500/5'
             }`}
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2.5">
                 <div className={`w-3 h-3 rounded-full transition-transform ${showImpressions ? 'bg-indigo-500 scale-110 shadow-sm shadow-indigo-500' : 'bg-gray-400'}`} />
-                <span className={`text-xs font-semibold uppercase tracking-wider ${showImpressions ? (isDarkMode ? 'text-indigo-400' : 'text-indigo-600') : 'text-gray-400'}`}>
-                  Impressions
+                <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                  Total Uploads
                 </span>
               </div>
-              <span className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors">ⓘ</span>
+              <span className="text-gray-400 transition-colors">
+                <Upload className="h-4 w-4" />
+              </span>
             </div>
-            <div className="text-3xl font-bold tracking-tight">72</div>
+            <div className="text-3xl font-bold tracking-tight">{totalUploads}</div>
           </div>
 
-          {/* Average CTR */}
+          {/* Total Members */}
           <div
-            onClick={() => setShowCtr(!showCtr)}
-            className={`p-4 rounded-xl cursor-pointer relative transition-all duration-200 border ${
-              showCtr
-                ? isDarkMode
-                  ? 'bg-emerald-950/30 border-emerald-500/30 shadow-lg shadow-emerald-950/50'
-                  : 'bg-white border-emerald-200 shadow-md shadow-emerald-500/5'
-                : isDarkMode
-                  ? 'bg-gray-900/20 border-transparent opacity-60 hover:opacity-100'
-                  : 'bg-transparent border-transparent opacity-60 hover:opacity-100'
+            className={`p-4 rounded-xl relative transition-all duration-200 border ${
+              isDarkMode
+                ? 'bg-emerald-950/30 border-emerald-500/30 shadow-lg shadow-emerald-950/50'
+                : 'bg-white border-emerald-200 shadow-md shadow-emerald-500/5'
             }`}
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2.5">
-                <div className={`w-3 h-3 rounded-full transition-transform ${showCtr ? 'bg-emerald-500 scale-110 shadow-sm shadow-emerald-500' : 'bg-gray-400'}`} />
-                <span className={`text-xs font-semibold uppercase tracking-wider ${showCtr ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600') : 'text-gray-400'}`}>
-                  Average CTR
+                <div className="w-3 h-3 rounded-full bg-emerald-500 scale-110 shadow-sm shadow-emerald-500" />
+                <span className={`text-xs font-semibold uppercase tracking-wider ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                  Total Members
                 </span>
               </div>
-              <span className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors">ⓘ</span>
+              <span className="text-gray-400 transition-colors">
+                <Users className="h-4 w-4" />
+              </span>
             </div>
-            <div className="text-3xl font-bold tracking-tight">44.4%</div>
+            <div className="text-3xl font-bold tracking-tight">{membersCount}</div>
           </div>
 
           {/* Average Position */}
@@ -474,12 +468,12 @@ function Graph3({ isDarkMode, downloadRegions = [] }: RegionChartProps) {
   );
 }
 
-export default function DashboardCharts({ isDarkMode, artists, downloadRegions }: DashboardChartsProps) {
+export default function DashboardCharts({ isDarkMode, artists, downloadRegions, totalUploads = 0, membersCount = 0 }: DashboardChartsProps) {
   return (
     <div className="grid grid-cols-1 gap-4">
       {/* Row 1: Full-width Graph1 */}
       <div className="w-full">
-        <Graph1 isDarkMode={isDarkMode} />
+        <Graph1 isDarkMode={isDarkMode} artistsCount={artists.length} totalUploads={totalUploads} membersCount={membersCount} />
       </div>
 
       {/* Row 2: Graph2 and Graph3 side by side */}
