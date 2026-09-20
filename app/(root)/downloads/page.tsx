@@ -17,6 +17,7 @@ interface DownloadNotice {
   sourceItag?: number;
   sourceExtension?: string;
   sourceOutputBitrate?: number;
+  sourceUrl?: string;
 }
 
 interface RetryDetail {
@@ -45,6 +46,7 @@ export default function DownloadsPage() {
   const [formatsError, setFormatsError] = useState('');
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeRetryRef = useRef<RetryDetail | null>(null);
+  const activeUrlRef = useRef<{ title: string; url: string; fileName?: string } | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -86,6 +88,7 @@ export default function DownloadsPage() {
           sourceItag: detail.sourceItag ?? previousEntries.find((entry) => entry.title === detail.title)?.sourceItag,
           sourceExtension: detail.sourceExtension ?? previousEntries.find((entry) => entry.title === detail.title)?.sourceExtension,
           sourceOutputBitrate: detail.sourceOutputBitrate ?? previousEntries.find((entry) => entry.title === detail.title)?.sourceOutputBitrate,
+          sourceUrl: detail.sourceUrl ?? previousEntries.find((entry) => entry.title === detail.title)?.sourceUrl,
           createdAt: previousEntries.find((entry) => entry.title === detail.title)?.createdAt ?? now,
           updatedAt: now,
         };
@@ -371,6 +374,7 @@ export default function DownloadsPage() {
     });
 
     const activeRetry = activeRetryRef.current;
+    const activeUrl = activeUrlRef.current;
     if (activeRetry?.title === entry.title) {
       if (nextPaused) {
         abortControllerRef.current?.abort();
@@ -381,6 +385,13 @@ export default function DownloadsPage() {
       setDownloadNotice((current) => current && current.title === entry.title
         ? { ...current, paused: nextPaused, progress: entry.progress }
         : current);
+    }
+    if (activeUrl?.title === entry.title) {
+      if (nextPaused) {
+        abortControllerRef.current?.abort();
+      } else {
+        void handleUrlDownload(entry);
+      }
     }
 
     const action = nextPaused ? 'pause' : 'resume';
@@ -393,6 +404,10 @@ export default function DownloadsPage() {
   const handleCancelDownload = (entry: DownloadEntry) => {
     if (activeRetryRef.current?.title === entry.title) {
       activeRetryRef.current = null;
+      abortControllerRef.current?.abort();
+    }
+    if (activeUrlRef.current?.title === entry.title) {
+      activeUrlRef.current = null;
       abortControllerRef.current?.abort();
     }
     controlYoutubeDownload(entry.title, 'cancel');
@@ -457,6 +472,98 @@ export default function DownloadsPage() {
     setDownloadEntries([]);
     setDownloadNotice(null);
     window.localStorage.removeItem('nsu-download-history');
+  };
+
+  const handleUrlDownload = async (entry: DownloadEntry) => {
+    if (!entry.sourceUrl) return;
+
+    activeUrlRef.current = { title: entry.title, url: entry.sourceUrl, fileName: entry.fileName };
+
+    setDownloadEntries((previousEntries) => {
+      const nextEntries = previousEntries.map((item) => item.id === entry.id
+        ? {
+            ...item,
+            status: 'downloading' as const,
+            paused: false,
+            progress: 0,
+            downloadedBytes: 0,
+            updatedAt: new Date().toISOString(),
+          }
+        : item);
+      window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+      return nextEntries;
+    });
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const response = await fetch(`/api/download?url=${encodeURIComponent(entry.sourceUrl)}`, { signal: controller.signal, cache: 'no-store' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(payload.error || 'Unable to download this file.');
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = entry.fileName || entry.title;
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      setDownloadEntries((previousEntries) => {
+        const nextEntries = previousEntries.map((item) => item.id === entry.id
+          ? {
+              ...item,
+              status: 'done' as const,
+              paused: false,
+              progress: 100,
+              downloadedBytes: blob.size,
+              totalBytes: blob.size,
+              updatedAt: new Date().toISOString(),
+            }
+          : item);
+        window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+        return nextEntries;
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        setDownloadEntries((previousEntries) => {
+          const nextEntries = previousEntries.map((item) => item.id === entry.id
+            ? {
+                ...item,
+                paused: true,
+                updatedAt: new Date().toISOString(),
+              }
+            : item);
+          window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+          return nextEntries;
+        });
+        return;
+      }
+      setDownloadEntries((previousEntries) => {
+        const nextEntries = previousEntries.map((item) => item.id === entry.id
+          ? {
+              ...item,
+              status: 'error' as const,
+              paused: false,
+              updatedAt: new Date().toISOString(),
+            }
+          : item);
+        window.localStorage.setItem('nsu-download-history', JSON.stringify(nextEntries));
+        return nextEntries;
+      });
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      if (activeUrlRef.current?.title === entry.title) {
+        activeUrlRef.current = null;
+      }
+    }
   };
 
   return (
@@ -585,6 +692,7 @@ export default function DownloadsPage() {
                           onRetry={handleRetry}
                           onRemove={handleRemoveEntry}
                           onFormats={handleFormats}
+                          onDownload={handleUrlDownload}
                         />
                         {renderFormats(entry)}
                       </div>

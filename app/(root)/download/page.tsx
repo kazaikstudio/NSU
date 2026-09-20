@@ -244,6 +244,7 @@ function DownloadForm() {
     sourceItag?: number
     sourceExtension?: string
     sourceOutputBitrate?: number
+    sourceUrl?: string
   }) => {
     if (typeof window === 'undefined') return
     window.dispatchEvent(new CustomEvent('nsu-download-status', { detail: payload }))
@@ -309,6 +310,15 @@ function DownloadForm() {
 
     setLoadingDirectDownload(true)
     setError('')
+    const historyTitle = new URL(directUrl).pathname.split('/').pop() || 'download'
+    emitDownloadHistory({
+      status: 'downloading',
+      title: historyTitle,
+      progress: 0,
+      downloadedBytes: 0,
+      paused: false,
+      sourceUrl: directUrl,
+    })
     try {
       const response = await fetch(`/api/download?url=${encodeURIComponent(directUrl)}`, { cache: 'no-store' })
       if (!response.ok) {
@@ -324,7 +334,23 @@ function DownloadForm() {
       anchor.click()
       anchor.remove()
       URL.revokeObjectURL(anchor.href)
+
+      emitDownloadHistory({
+        status: 'done',
+        title: historyTitle,
+        progress: 100,
+        downloadedBytes: blob.size,
+        totalBytes: blob.size,
+        paused: false,
+        sourceUrl: directUrl,
+      })
     } catch (downloadError) {
+      emitDownloadHistory({
+        status: 'error',
+        title: historyTitle,
+        paused: false,
+        sourceUrl: directUrl,
+      })
       setError(downloadError instanceof Error ? downloadError.message : 'Unable to download this file.')
     } finally {
       setLoadingDirectDownload(false)

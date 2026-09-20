@@ -16,6 +16,7 @@ interface DownloadEntry {
   sourceItag?: number;
   sourceExtension?: string;
   sourceOutputBitrate?: number;
+  sourceUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -107,6 +108,7 @@ const Navbar = () => {
           sourceItag: detail.sourceItag ?? previousEntry?.sourceItag,
           sourceExtension: detail.sourceExtension ?? previousEntry?.sourceExtension,
           sourceOutputBitrate: detail.sourceOutputBitrate ?? previousEntry?.sourceOutputBitrate,
+          sourceUrl: detail.sourceUrl ?? previousEntry?.sourceUrl,
           createdAt: previousEntry?.createdAt ?? now,
           updatedAt: now,
         };

@@ -13,6 +13,7 @@ export interface DownloadEntry {
   sourceItag?: number;
   sourceExtension?: string;
   sourceOutputBitrate?: number;
+  sourceUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,9 +40,10 @@ interface DownloadRowProps {
   onRemove?: (entry: DownloadEntry) => void;
   onRetry?: (entry: DownloadEntry) => void;
   onFormats?: (entry: DownloadEntry) => void;
+  onDownload?: (entry: DownloadEntry) => void;
 }
 
-export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, onRetry, onFormats }: DownloadRowProps) {
+export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, onRetry, onFormats, onDownload }: DownloadRowProps) {
   const progressValue = typeof entry.progress === 'number' ? Math.max(0, Math.min(100, entry.progress)) : undefined;
   const isActive = entry.status === 'downloading';
   const progressLabel = entry.paused ? 'Paused' : typeof progressValue === 'number' ? `${Math.round(progressValue)}%` : 'Preparing...';
@@ -150,7 +152,7 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
           </p>
         ) : null}
       </div>
-      {entry.status === 'error' && onRetry ? (
+      {entry.status === 'error' && onRetry && entry.sourceVideoId ? (
         <button
           type="button"
           onClick={(event) => {
@@ -163,6 +165,21 @@ export default function DownloadRow({ entry, onTogglePause, onCancel, onRemove, 
         >
           <RotateCcw size={13} className="sm:h-3.5 sm:w-3.5" />
           <span className="hidden sm:inline">Retry</span>
+        </button>
+      ) : null}
+      {entry.status !== 'downloading' && entry.sourceUrl && onDownload ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDownload(entry);
+          }}
+          aria-label={entry.status === 'error' ? 'Retry download' : 'Download again'}
+          title={entry.status === 'error' ? 'Retry' : 'Download again'}
+          className="inline-flex shrink-0 items-center justify-center gap-1 rounded-lg border border-rose-500/20 bg-rose-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-rose-300 transition-all duration-200 hover:border-rose-500/40 hover:bg-rose-500/20 hover:text-rose-200 sm:px-3"
+        >
+          {entry.status === 'error' ? <RotateCcw size={13} className="sm:h-3.5 sm:w-3.5" /> : <Download size={13} className="sm:h-3.5 sm:w-3.5" />}
+          <span className="hidden sm:inline">{entry.status === 'error' ? 'Retry' : 'Download'}</span>
         </button>
       ) : null}
       {entry.status !== 'downloading' && onRemove ? (
