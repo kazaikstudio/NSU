@@ -45,46 +45,93 @@ function getDirectUrl(value: string) {
   }
 }
 
-const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'm4b', 'aac', 'ogg', 'oga', 'opus', 'wav', 'flac', 'weba', 'wma'])
-const VIDEO_EXTENSIONS = new Set(['mp4', 'm4v', 'webm', 'mkv', 'mov', 'avi', 'ogv', '3gp', 'mpeg', 'mpg', 'ts'])
-const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'ico', 'apng', 'heic', 'heif', 'tiff', 'tif', 'jfif'])
-const DOCUMENT_EXTENSIONS = new Set(['pdf'])
-
-function getUrlExtension(value: string) {
-  try {
-    const pathname = new URL(value).pathname
-    const match = pathname.split('.').pop()
-    return match && match.split('/').pop() ? match.split('/').pop()!.toLowerCase() : ''
-  } catch {
-    return ''
-  }
+type PreviewProbe = {
+  effectiveUrl?: string
+  contentType?: string
+  contentLength?: string
+  status?: number
+  error?: string
 }
 
-function getContentType(value: string) {
-  const extension = getUrlExtension(value)
-  if (AUDIO_EXTENSIONS.has(extension)) return 'audio'
-  if (VIDEO_EXTENSIONS.has(extension)) return 'video'
-  if (IMAGE_EXTENSIONS.has(extension)) return 'image'
-  if (DOCUMENT_EXTENSIONS.has(extension)) return 'document'
-  return null
+type PreviewKind = 'audio' | 'video' | 'image' | 'document' | 'unsupported'
+
+function kindFromContentType(contentType: string, url: string): PreviewKind {
+  const normalized = contentType.toLowerCase()
+  if (normalized.startsWith('image/')) {
+    if (normalized.includes('svg')) return 'unsupported'
+    return 'image'
+  }
+  if (normalized.startsWith('audio/')) return 'audio'
+  if (normalized.startsWith('video/')) return 'video'
+  if (normalized === 'application/pdf') return 'document'
+  return 'unsupported'
 }
 
 function MediaPreview({ url }: { url: string }) {
   const [previewError, setPreviewError] = useState('')
-  const contentType = getContentType(url)
-  if (!contentType) return null
+  const [kind, setKind] = useState<PreviewKind | null>(null)
+  const [effectiveUrl, setEffectiveUrl] = useState(url)
+
+  useEffect(() => {
+    let cancelled = false
+    setPreviewError('')
+    setKind(null)
+    setEffectiveUrl(url)
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const response = await fetch(`/api/preview?url=${encodeURIComponent(url)}`, { signal: controller.signal, cache: 'no-store' })
+          const payload = await response.json() as PreviewProbe
+          if (cancelled) return
+          if (!response.ok || payload.error || !payload.contentType) {
+            setKind('unsupported')
+            setPreviewError(payload.error || 'This link does not appear to be a previewable media file.')
+            return
+          }
+          const detectedKind = kindFromContentType(payload.contentType, payload.effectiveUrl || url)
+          setKind(detectedKind)
+          if (payload.effectiveUrl) setEffectiveUrl(payload.effectiveUrl)
+          if (detectedKind === 'unsupported') {
+            setPreviewError('This link cannot be previewed as a media file.')
+          }
+        } catch {
+          if (cancelled) return
+          setKind('unsupported')
+          setPreviewError('Unable to probe this link.')
+        }
+      })()
+    }, 300)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [url])
+
+  if (kind === null) return null
+
+  if (kind === 'unsupported') {
+    return previewError ? (
+      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-300">
+        {previewError}
+      </div>
+    ) : null
+  }
 
   return (
     <div className="overflow-hidden rounded-2xl bg-black shadow-xl shadow-black/30">
-      {contentType === 'audio' && (
+      {kind === 'audio' && (
         <div className="flex items-center gap-3 px-4 py-6">
-          <audio src={url} controls preload="metadata" className="w-full" onError={() => setPreviewError('This audio link cannot be played in the browser.')} />
+          <audio src={effectiveUrl} controls preload="metadata" className="w-full" onError={() => setPreviewError('This audio link cannot be played in the browser.')} />
         </div>
       )}
 
-      {contentType === 'video' && (
+      {kind === 'video' && (
         <video
-          src={url}
+          src={effectiveUrl}
           controls
           preload="metadata"
           playsInline
@@ -93,18 +140,17 @@ function MediaPreview({ url }: { url: string }) {
         />
       )}
 
-      {contentType === 'image' && (
+      {kind === 'image' && (
         <div className="flex items-center justify-center">
-          <img src={url} alt="" loading="lazy" className="max-h-72 w-auto max-w-full" onError={() => setPreviewError('This image link could not be previewed.')} />
+          <img src={effectiveUrl} alt="" loading="lazy" className="max-h-72 w-auto max-w-full" onError={() => setPreviewError('This image link could not be previewed.')} />
         </div>
       )}
 
-      {contentType === 'document' && (
+      {kind === 'document' && (
         <iframe
-          src={url}
+          src={effectiveUrl}
           title="Document preview"
           className="h-72 w-full"
-          onError={() => setPreviewError('This document link cannot be previewed.')}
         />
       )}
 
